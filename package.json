@@ -1,0 +1,29 @@
+{
+  "name": "ultra-git",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react-swc": "^4.3.0",
+    "electron": "^41.0.3",
+    "electron-vite": "^5.0.0",
+    "vite": "^8.0.1"
+  },
+  "dependencies": {
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "simple-git": "^3.33.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

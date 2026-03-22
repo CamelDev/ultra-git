@@ -1,0 +1,258 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap');
+
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2d2d2d;
+  --accent: #3794ff;
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --border: #333333;
+  --hover: #2a2d2e;
+  --tab-active: #1e1e1e;
+  --tab-inactive: #2d2d2d;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  user-select: none;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+.app-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.title-bar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  padding: 0 10px;
+}
+
+.tabs-container {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  background-color: var(--tab-inactive);
+  border-right: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.tab.active {
+  background-color: var(--tab-active);
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--accent);
+}
+
+.tab-close {
+  margin-left: 8px;
+  opacity: 0.5;
+}
+
+.tab-close:hover {
+  opacity: 1;
+}
+
+.sidebar {
+  width: 260px;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar-section {
+  padding: 10px 0;
+}
+
+.sidebar-header {
+  padding: 5px 15px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.sidebar-item {
+  padding: 6px 15px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.sidebar-item:hover {
+  background-color: var(--hover);
+}
+
+.sidebar-item.active {
+  background-color: var(--hover);
+  color: var(--accent);
+}
+
+.sidebar-item-icon {
+  margin-right: 8px;
+  width: 16px;
+  height: 16px;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+.toolbar {
+  height: 45px;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  gap: 15px;
+}
+
+.toolbar-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.toolbar-button:hover {
+  background-color: var(--hover);
+  color: var(--text-primary);
+}
+
+.toolbar-icon {
+  width: 20px;
+  height: 20px;
+  margin-bottom: 2px;
+}
+
+.graph-container {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+}
+
+.commit-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.commit-item {
+  display: flex;
+  align-items: center;
+  height: 35px;
+  border-bottom: 1px solid #1a1a1a;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.commit-item:hover {
+  background-color: var(--hover);
+}
+
+.commit-graph-area {
+  width: 60px;
+}
+
+.commit-message {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 10px;
+}
+
+.commit-author {
+  width: 150px;
+  color: var(--text-secondary);
+}
+
+.commit-date {
+  width: 100px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.details-panel {
+  width: 350px;
+  background-color: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.details-header {
+  padding: 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.details-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.file-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.file-item {
+  padding: 5px 15px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+
+.file-item:hover {
+  background-color: var(--hover);
+}
+
+.file-status {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-m { color: #e2c08d; } /* Modified */
+.status-a { color: #a1e3ad; } /* Added */
+.status-d { color: #e3a1a1; } /* Deleted */
