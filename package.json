@@ -1,19 +1,26 @@
 {
   "name": "ultra-git",
+  "version": "1.0.0",
+  "description": "UltraGIT - The ultimate git client",
+  "author": "Kamil",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "test:e2e": "playwright test",
+    "build:all": "electron-vite build && electron-builder"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@playwright/test": "^1.58.2",
     "@types/bun": "latest",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.3.0",
     "electron": "^41.0.3",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "vite": "^8.0.1"
   },

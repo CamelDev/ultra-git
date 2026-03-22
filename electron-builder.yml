@@ -1,0 +1,14 @@
+appId: com.electron.ultragit
+productName: UltraGIT
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out
+  - resources
+mac:
+  target: dmg
+win:
+  target: nsis
+linux:
+  target: AppImage
