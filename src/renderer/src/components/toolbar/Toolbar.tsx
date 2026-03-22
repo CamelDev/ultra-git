@@ -8,10 +8,16 @@ import {
   Plus, 
   Terminal as TerminalIcon 
 } from 'lucide-react'
-import { useGitStore } from '../../store/useGitStore'
+import { useRepoStore } from '../../store/useRepoStore'
 
 const Toolbar: React.FC = () => {
-  const { refreshStatus, refreshLog } = useGitStore()
+  const { activeId, refreshRepo } = useRepoStore()
+
+  const handleFetch = () => {
+    if (activeId) {
+      refreshRepo(activeId)
+    }
+  }
 
   return (
     <div className="toolbar">
@@ -24,7 +30,7 @@ const Toolbar: React.FC = () => {
         <span>Redo</span>
       </div>
       <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border)' }} />
-      <div className="toolbar-button" onClick={() => { refreshStatus(); refreshLog(); }}>
+      <div className="toolbar-button" onClick={handleFetch}>
         <Download className="toolbar-icon" />
         <span>Fetch</span>
       </div>

@@ -1,9 +1,13 @@
 import React from 'react'
 import { GitBranch, Layers, Clock, Tag, ChevronDown } from 'lucide-react'
-import { useGitStore } from '../../store/useGitStore'
+import { useRepoStore } from '../../store/useRepoStore'
 
 const Sidebar: React.FC = () => {
-  const { branch, status } = useGitStore()
+  const { getActiveRepo } = useRepoStore()
+  const activeRepo = getActiveRepo()
+  
+  const branch = activeRepo?.branch || 'main'
+  const status = activeRepo?.status
 
   return (
     <div className="sidebar">

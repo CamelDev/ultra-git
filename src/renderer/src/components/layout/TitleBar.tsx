@@ -1,34 +1,41 @@
 import React from 'react'
 import { Plus, X } from 'lucide-react'
+import { useRepoStore } from '../../store/useRepoStore'
 
-interface Tab {
-  id: number;
-  name: string;
-  branch: string;
-}
+const TitleBar: React.FC = () => {
+  const { repositories, activeId, setActiveId, removeRepo, addRepo } = useRepoStore()
 
-interface TitleBarProps {
-  tabs: Tab[];
-  activeTab: number;
-  setActiveTab: (index: number) => void;
-}
+  const handleAddRepo = async () => {
+    console.log('Renderer: Requesting openDirectory dialog');
+    const result = await window.api.app.openDirectory()
+    if (!result.canceled && result.path) {
+      await addRepo(result.path)
+    }
+  }
 
-const TitleBar: React.FC<TitleBarProps> = ({ tabs, activeTab, setActiveTab }) => {
+  const handleCloseTab = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    removeRepo(id)
+  }
   return (
     <div className="title-bar">
       <div className="tabs-container">
-        {tabs.map((tab, index) => (
+        {repositories.map((tab) => (
           <div 
             key={tab.id} 
-            className={`tab ${activeTab === index ? 'active' : ''}`}
-            onClick={() => setActiveTab(index)}
+            className={`tab ${activeId === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveId(tab.id)}
           >
             <span>{tab.name}</span>
-            <X className="tab-close" size={12} />
+            <X 
+              className="tab-close" 
+              size={12} 
+              onClick={(e) => handleCloseTab(e, tab.id)}
+            />
           </div>
         ))}
-        <div className="tab">
-          <Plus size={14} />
+        <div className="add-tab-btn" onClick={handleAddRepo} title="Open Repository" data-testid="add-repo-btn">
+          <Plus size={16} />
         </div>
       </div>
     </div>

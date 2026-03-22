@@ -1,8 +1,10 @@
 import React from 'react'
-import { useGitStore } from '../../store/useGitStore'
+import { useRepoStore } from '../../store/useRepoStore'
 
 const GraphView: React.FC = () => {
-  const { commits } = useGitStore()
+  const { getActiveRepo } = useRepoStore()
+  const activeRepo = getActiveRepo()
+  const commits = activeRepo?.commits || []
 
   return (
     <div className="graph-container">

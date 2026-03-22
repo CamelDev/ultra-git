@@ -50,9 +50,9 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron. I
 - [x] Integrate a Git library (e.g., `simple-git`) in the main process and expose a Git API (fetch, status, log) to the frontend via IPC.
 
 ### Phase 2: Multi-Repo & Tab System
-- [ ] Implement the Tab System in the UI header to handle opening and closing distinct repository paths.
-- [ ] Build the repository opening flow (native file picker to select a local repository directory).
-- [ ] Manage isolated state per tab to switch active repositories quickly without losing UI state.
+- [x] Implement the Tab System in the UI header to handle opening and closing distinct repository paths.
+- [x] Build the repository opening flow (native file picker to select a local repository directory).
+- [x] Manage isolated state per tab to switch active repositories quickly without losing UI state.
 
 ### Phase 3: The Left Sidebar & Core Actions
 - [ ] Fetch and display the list of Local and Remote branches in the sidebar.

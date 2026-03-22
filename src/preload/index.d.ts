@@ -16,6 +16,9 @@ declare global {
         log: (repoPath: string, maxCount?: number) => Promise<IpcResponse<any>>;
         fetch: (repoPath: string) => Promise<IpcResponse<void>>;
         checkout: (repoPath: string, branchName: string) => Promise<IpcResponse<any>>;
+      },
+      app: {
+        openDirectory: () => Promise<{ canceled: boolean, path?: string }>;
       }
     }
   }

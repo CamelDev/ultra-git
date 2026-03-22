@@ -103,6 +103,24 @@ body {
   opacity: 1;
 }
 
+.add-tab-btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 100%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  border-right: 1px solid var(--border);
+  transition: all 0.2s;
+}
+
+.add-tab-btn:hover {
+  background-color: var(--hover);
+  color: var(--accent-light);
+}
+
 /* Sidebar */
 .sidebar {
   width: 280px;

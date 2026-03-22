@@ -8,6 +8,9 @@ const api = {
     log: (repoPath: string, maxCount?: number) => ipcRenderer.invoke('git:log', repoPath, maxCount),
     fetch: (repoPath: string) => ipcRenderer.invoke('git:fetch', repoPath),
     checkout: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:checkout', repoPath, branchName)
+  },
+  app: {
+    openDirectory: () => ipcRenderer.invoke('dialog:openDirectory')
   }
 }
 
