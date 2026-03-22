@@ -43,11 +43,11 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron. I
 ## Development Tasks / Roadmap
 
 ### Phase 1: Foundation & Project Setup
-- [ ] Initialize the Electron + TypeScript + React boilerplate using Bun (`bun create ext ...` or custom setup).
-- [ ] Define and configure IPC (Inter-Process Communication) between the main Electron process and the React renderer.
-- [ ] Set up the UI shell: Top bar (Tabs), Left Sidebar, Main Graph View, Right Panel.
-- [ ] Create the application icon and global styles (colors, typography).
-- [ ] Integrate a Git library (e.g., \`simple-git\`) in the main process and expose a Git API (fetch, status, log) to the frontend via IPC.
+- [x] Initialize the Electron + TypeScript + React boilerplate using Bun (`bun create ext ...` or custom setup).
+- [x] Define and configure IPC (Inter-Process Communication) between the main Electron process and the React renderer.
+- [x] Set up the UI shell: Top bar (Tabs), Left Sidebar, Main Graph View, Right Panel.
+- [x] Create the application icon and global styles (colors, typography).
+- [x] Integrate a Git library (e.g., `simple-git`) in the main process and expose a Git API (fetch, status, log) to the frontend via IPC.
 
 ### Phase 2: Multi-Repo & Tab System
 - [ ] Implement the Tab System in the UI header to handle opening and closing distinct repository paths.
@@ -79,4 +79,4 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron. I
 - [ ] Refine the dark mode theme to ensure premium application feel (smooth gradients, proper contrast, micro-animations on interactive elements).
 - [ ] Optimize Git operations for huge repositories (e.g., lazy loading commits as the user scrolls the graph).
 - [ ] Implement comprehensive keyboard shortcuts (Ctrl+Z, Ctrl+Shift+P, etc.) and a command palette.
-- [ ] Setup packaging and build workflows for Windows, macOS, and Linux.
+- [x] Setup packaging and build workflows for Windows, macOS, and Linux.

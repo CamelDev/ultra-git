@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { gitService } from './git'
 
 function createWindow(): void {
   // Create the browser window.
@@ -10,7 +11,7 @@ function createWindow(): void {
     height: 800,
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -47,6 +48,43 @@ app.whenReady().then(() => {
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+  })
+
+  // Register Git IPC Handlers
+  ipcMain.handle('git:status', async (_, repoPath) => {
+    try {
+      const data = await gitService.status(repoPath)
+      return { success: true, data: JSON.parse(JSON.stringify(data)) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:log', async (_, repoPath, maxCount) => {
+    try {
+      const data = await gitService.log(repoPath, maxCount)
+      return { success: true, data: JSON.parse(JSON.stringify(data)) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:fetch', async (_, repoPath) => {
+    try {
+      await gitService.fetch(repoPath)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:checkout', async (_, repoPath, branchName) => {
+    try {
+      const data = await gitService.checkout(repoPath, branchName)
+      return { success: true, data: JSON.parse(JSON.stringify(data)) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
   })
 
   createWindow()

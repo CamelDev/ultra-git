@@ -1,26 +1,30 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono&display=swap');
 
 :root {
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #252526;
-  --bg-tertiary: #2d2d2d;
-  --accent: #3794ff;
-  --text-primary: #ffffff;
-  --text-secondary: #aaaaaa;
-  --border: #333333;
-  --hover: #2a2d2e;
-  --tab-active: #1e1e1e;
-  --tab-inactive: #2d2d2d;
+  --bg-primary: #0f1115;
+  --bg-secondary: #161920;
+  --bg-tertiary: #1c2128;
+  --accent: #6366f1;
+  --accent-light: #818cf8;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --border: #33415544;
+  --hover: #1e293b;
+  --tab-active: #0f1115;
+  --tab-inactive: #161920;
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --glass: blur(12px) saturate(180%);
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   overflow: hidden;
   user-select: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
@@ -36,14 +40,16 @@ body {
   overflow: hidden;
 }
 
+/* Title Bar & Tabs */
 .title-bar {
   display: flex;
   align-items: center;
-  height: 40px;
+  height: 48px;
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
-  padding: 0 10px;
+  padding: 0 16px;
+  z-index: 100;
 }
 
 .tabs-container {
@@ -56,31 +62,50 @@ body {
 .tab {
   display: flex;
   align-items: center;
-  padding: 0 15px;
-  background-color: var(--tab-inactive);
-  border-right: 1px solid var(--border);
+  padding: 0 20px;
+  background-color: transparent;
   font-size: 13px;
+  font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  border-right: 1px solid var(--border);
+}
+
+.tab:hover {
+  background-color: var(--hover);
+  color: var(--text-primary);
 }
 
 .tab.active {
-  background-color: var(--tab-active);
+  background-color: var(--bg-primary);
   color: var(--text-primary);
-  border-bottom: 2px solid var(--accent);
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
 }
 
 .tab-close {
-  margin-left: 8px;
-  opacity: 0.5;
+  margin-left: 12px;
+  opacity: 0.4;
+  transition: opacity 0.2s;
 }
 
 .tab-close:hover {
   opacity: 1;
 }
 
+/* Sidebar */
 .sidebar {
-  width: 260px;
+  width: 280px;
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;
@@ -89,26 +114,29 @@ body {
 }
 
 .sidebar-section {
-  padding: 10px 0;
+  padding: 12px 0;
 }
 
 .sidebar-header {
-  padding: 5px 15px;
+  padding: 8px 20px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
   display: flex;
   justify-content: space-between;
 }
 
 .sidebar-item {
-  padding: 6px 15px;
-  font-size: 13px;
+  padding: 8px 20px;
+  font-size: 14px;
   display: flex;
   align-items: center;
   cursor: pointer;
+  margin: 2px 8px;
+  border-radius: 6px;
+  transition: background-color 0.15s;
 }
 
 .sidebar-item:hover {
@@ -116,16 +144,18 @@ body {
 }
 
 .sidebar-item.active {
-  background-color: var(--hover);
-  color: var(--accent);
+  background-color: #6366f122;
+  color: var(--accent-light);
+  font-weight: 600;
 }
 
 .sidebar-item-icon {
-  margin-right: 8px;
-  width: 16px;
-  height: 16px;
+  margin-right: 12px;
+  width: 18px;
+  height: 18px;
 }
 
+/* Main Content */
 .main-content {
   flex: 1;
   display: flex;
@@ -134,13 +164,13 @@ body {
 }
 
 .toolbar {
-  height: 45px;
+  height: 56px;
   background-color: var(--bg-primary);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 15px;
-  gap: 15px;
+  padding: 0 20px;
+  gap: 20px;
 }
 
 .toolbar-button {
@@ -148,27 +178,38 @@ body {
   flex-direction: column;
   align-items: center;
   font-size: 10px;
+  font-weight: 600;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 5px;
-  border-radius: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  min-width: 50px;
 }
 
 .toolbar-button:hover {
   background-color: var(--hover);
   color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.toolbar-button:active {
+  transform: translateY(0);
 }
 
 .toolbar-icon {
-  width: 20px;
-  height: 20px;
-  margin-bottom: 2px;
+  width: 22px;
+  height: 22px;
+  margin-bottom: 4px;
 }
 
+/* Graph / Commit List */
 .graph-container {
   flex: 1;
   overflow-y: auto;
   position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 .commit-list {
@@ -179,10 +220,11 @@ body {
 .commit-item {
   display: flex;
   align-items: center;
-  height: 35px;
-  border-bottom: 1px solid #1a1a1a;
-  padding: 0 10px;
-  font-size: 13px;
+  height: 42px;
+  border-bottom: 1px solid #1a1a1a44;
+  padding: 0 20px;
+  font-size: 13.5px;
+  transition: background-color 0.1s;
 }
 
 .commit-item:hover {
@@ -190,7 +232,7 @@ body {
 }
 
 .commit-graph-area {
-  width: 60px;
+  width: 70px;
 }
 
 .commit-message {
@@ -198,22 +240,26 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 10px;
+  padding: 0 15px;
+  font-weight: 500;
 }
 
 .commit-author {
-  width: 150px;
+  width: 160px;
   color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .commit-date {
-  width: 100px;
+  width: 120px;
   color: var(--text-secondary);
   text-align: right;
+  font-size: 12px;
 }
 
+/* Details Panel */
 .details-panel {
-  width: 350px;
+  width: 380px;
   background-color: var(--bg-secondary);
   border-left: 1px solid var(--border);
   display: flex;
@@ -221,26 +267,31 @@ body {
 }
 
 .details-header {
-  padding: 15px;
+  padding: 20px;
   border-bottom: 1px solid var(--border);
 }
 
 .details-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 5px;
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text-primary);
 }
 
 .file-list {
   flex: 1;
   overflow-y: auto;
+  padding: 10px 0;
 }
 
 .file-item {
-  padding: 5px 15px;
+  padding: 8px 20px;
   font-size: 13px;
   display: flex;
   align-items: center;
+  margin: 2px 10px;
+  border-radius: 6px;
+  transition: background-color 0.15s;
 }
 
 .file-item:hover {
@@ -250,9 +301,13 @@ body {
 .file-status {
   margin-left: auto;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: #ffffff0a;
 }
 
-.status-m { color: #e2c08d; } /* Modified */
-.status-a { color: #a1e3ad; } /* Added */
-.status-d { color: #e3a1a1; } /* Deleted */
+.status-m { color: #fbbf24; } /* yellow-400 */
+.status-a { color: #34d399; } /* emerald-400 */
+.status-d { color: #f87171; } /* red-400 */
+
