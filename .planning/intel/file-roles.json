@@ -1,0 +1,153 @@
+{
+  "_meta": {
+    "updated_at": "2026-06-21T20:12:39.761Z",
+    "version": 2
+  },
+  "entries": {
+    "src/main/index.ts": {
+      "exports": [],
+      "imports": [
+        "electron",
+        "path",
+        "@electron-toolkit/utils",
+        "resources/icon.png",
+        "./git"
+      ],
+      "type": "entry-point"
+    },
+    "src/main/git.ts": {
+      "exports": [
+        "gitService"
+      ],
+      "imports": [
+        "simple-git"
+      ],
+      "type": "module"
+    },
+    "src/preload/index.ts": {
+      "exports": [],
+      "imports": [
+        "electron",
+        "@electron-toolkit/preload"
+      ],
+      "type": "entry-point"
+    },
+    "src/preload/index.d.ts": {
+      "exports": [],
+      "imports": [
+        "@electron-toolkit/preload"
+      ],
+      "type": "type-def"
+    },
+    "src/renderer/src/main.tsx": {
+      "exports": [],
+      "imports": [
+        "react",
+        "react-dom/client",
+        "./App",
+        "./assets/main.css"
+      ],
+      "type": "entry-point"
+    },
+    "src/renderer/src/App.tsx": {
+      "exports": [
+        "default"
+      ],
+      "imports": [
+        "react",
+        "./components/layout/TitleBar",
+        "./components/sidebar/Sidebar",
+        "./components/toolbar/Toolbar",
+        "./components/graph/GraphView",
+        "./components/details/DetailsPanel",
+        "./store/useRepoStore"
+      ],
+      "type": "module"
+    },
+    "src/renderer/src/store/useRepoStore.ts": {
+      "exports": [
+        "useRepoStore"
+      ],
+      "imports": [
+        "zustand"
+      ],
+      "type": "module"
+    },
+    "src/renderer/src/components/details/DetailsPanel.tsx": {
+      "exports": [
+        "default"
+      ],
+      "imports": [
+        "react",
+        "lucide-react"
+      ],
+      "type": "module"
+    },
+    "src/renderer/src/components/graph/GraphView.tsx": {
+      "exports": [
+        "default"
+      ],
+      "imports": [
+        "react",
+        "../../store/useRepoStore"
+      ],
+      "type": "module"
+    },
+    "src/renderer/src/components/layout/TitleBar.tsx": {
+      "exports": [
+        "default"
+      ],
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../store/useRepoStore"
+      ],
+      "type": "module"
+    },
+    "src/renderer/src/components/sidebar/Sidebar.tsx": {
+      "exports": [
+        "default"
+      ],
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../store/useRepoStore"
+      ],
+      "type": "module"
+    },
+    "src/renderer/src/components/toolbar/Toolbar.tsx": {
+      "exports": [
+        "default"
+      ],
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../store/useRepoStore"
+      ],
+      "type": "module"
+    },
+    "src/renderer/src/store/__tests__/useRepoStore.test.ts": {
+      "exports": [],
+      "imports": [
+        "vitest",
+        "../useRepoStore"
+      ],
+      "type": "test"
+    },
+    "e2e/example.spec.ts": {
+      "exports": [],
+      "imports": [
+        "@playwright/test",
+        "path"
+      ],
+      "type": "test"
+    },
+    "e2e/tabs.spec.ts": {
+      "exports": [],
+      "imports": [
+        "@playwright/test"
+      ],
+      "type": "test"
+    }
+  }
+}

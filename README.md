@@ -40,6 +40,26 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron. I
 - **Git Integration**: Direct interaction with the system Git binary via spawned child processes (e.g., `simple-git`) for performance, or `nodegit` for native Node bindings.
 - **State Management**: Zustand or Redux to handle complex state like UI layouts, active tabs, selected commits, and configuration.
 
+## Developer Setup
+
+Before starting development, ensure you have the required agent collaboration frameworks set up:
+
+1. **GSD (Git-based Software Development) Installation:**
+   If the `.agents/` directory is missing or you need to initialize GSD on your local system, run:
+   ```bash
+   npx @opengsd/gsd-core@latest
+   ```
+
+2. **Install Dependencies:**
+   ```bash
+   bun install
+   ```
+
+3. **Run Development Server:**
+   ```bash
+   bun run dev
+   ```
+
 ## Development Tasks / Roadmap
 
 ### Phase 1: Foundation & Project Setup

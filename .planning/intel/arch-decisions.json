@@ -1,0 +1,41 @@
+{
+  "_meta": {
+    "updated_at": "2026-06-21T20:12:40.177Z",
+    "version": 2
+  },
+  "entries": {
+    "overview": {
+      "pattern": "Electron Multi-Process Architecture",
+      "description": "分离主进程（Node.js / Bun）用于进行 OS 文件、进程和 Git 的本地调用，与渲染进程（React / TypeScript / CSS）实现用户界面的展示。使用 secure preload bridge 和 IPC 进行主进程和渲染进程的通信隔离。"
+    },
+    "data-flow": {
+      "flow": "React Component -> Zustand Store -> Preload API -> ipcRenderer.invoke -> ipcMain.handle -> gitService (simple-git) -> OS Git CLI -> UI re-render",
+      "description": "所有渲染层操作都会经由 Zustand Store 调用 preload 暴露的安全 IPC 通信接口。主进程处理完成后将结果返回给渲染层 store，激活组件重新渲染。"
+    },
+    "conventions": {
+      "naming": "PascalCase for React components, camelCase for store and main files, kebab-case for config files.",
+      "file-organization": "Electron src/ folders containing main, preload, and renderer directories.",
+      "imports": "Standard modules import first, path aliases @renderer, followed by local components and assets."
+    },
+    "component:gitService": {
+      "path": "src/main/git.ts",
+      "responsibility": "Executes git binary operations using simple-git, caching active repository simple-git instances in-memory to prevent re-initialization overhead."
+    },
+    "component:useRepoStore": {
+      "path": "src/renderer/src/store/useRepoStore.ts",
+      "responsibility": "Zustand central state store that handles multi-tab repositories tracking, switches workspace context, manages loading states, and registers error diagnostics."
+    },
+    "component:TitleBar": {
+      "path": "src/renderer/src/components/layout/TitleBar.tsx",
+      "responsibility": "Tab bar headers layout displaying opened repos list and triggering openDirectory folders Dialog pickers."
+    },
+    "component:Sidebar": {
+      "path": "src/renderer/src/components/sidebar/Sidebar.tsx",
+      "responsibility": "Navigation sidebar displaying active branches list and repository tag collapsibles."
+    },
+    "component:GraphView": {
+      "path": "src/renderer/src/components/graph/GraphView.tsx",
+      "responsibility": "Interactive commit log graph view rendering history logs list with visual nodes."
+    }
+  }
+}

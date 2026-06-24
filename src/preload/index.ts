@@ -10,7 +10,8 @@ const api = {
     checkout: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:checkout', repoPath, branchName)
   },
   app: {
-    openDirectory: () => ipcRenderer.invoke('dialog:openDirectory')
+    openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
+    resolvePath: (repoPath: string) => ipcRenderer.invoke('app:resolvePath', repoPath)
   }
 }
 

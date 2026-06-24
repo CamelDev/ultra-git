@@ -32,3 +32,28 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# Antigravity & Gemini CLI local directories
+.gemini/
+.antigravitycli/
+
+# GSD local/machine-specific configurations
+.agents/settings.json
+.agents/package.json
+.agents/settings.local.json
+.agents/gsd-install-state.json
+.agents/gsd-file-manifest.json
+.agents/gsd-core/
+.agents/agents/gsd-*
+.agents/scripts/*
+.agents/hooks/*
+.agents/skills/gsd-ns-*
+.agents/.gsd-profile
+.agents/**/*.log
+.agents/worktrees/
+.agents/node_modules/
+
+# Playwright test results and reports
+test-results/
+playwright-report/
+

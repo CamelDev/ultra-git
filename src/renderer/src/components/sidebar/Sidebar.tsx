@@ -10,7 +10,7 @@ const Sidebar: React.FC = () => {
   const status = activeRepo?.status
 
   return (
-    <div className="sidebar">
+    <div className="sidebar" data-testid="sidebar">
       <div style={{ padding: '15px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
           <span style={{ fontWeight: 600, fontSize: '14px' }}>UltraGIT</span>
@@ -18,7 +18,7 @@ const Sidebar: React.FC = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)', fontSize: '12px' }}>
           <GitBranch size={12} style={{ marginRight: '5px' }} />
-          <span>{branch}</span>
+          <span data-testid="sidebar-branch-name">{branch}</span>
         </div>
       </div>
 
@@ -29,7 +29,7 @@ const Sidebar: React.FC = () => {
         </div>
         <div className="sidebar-item active">
           <GitBranch className="sidebar-item-icon" size={14} />
-          <span>{branch}</span>
+          <span data-testid="sidebar-active-branch">{branch}</span>
         </div>
       </div>
 

@@ -30,7 +30,7 @@ const Toolbar: React.FC = () => {
         <span>Redo</span>
       </div>
       <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border)' }} />
-      <div className="toolbar-button" onClick={handleFetch}>
+      <div className="toolbar-button" onClick={handleFetch} data-testid="toolbar-fetch-btn">
         <Download className="toolbar-icon" />
         <span>Fetch</span>
       </div>

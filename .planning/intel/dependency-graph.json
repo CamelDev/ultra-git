@@ -1,0 +1,84 @@
+{
+  "_meta": {
+    "updated_at": "2026-06-21T20:12:40.033Z",
+    "version": 2
+  },
+  "entries": {
+    "electron": {
+      "version": "^41.0.3",
+      "type": "production",
+      "invocation": "require",
+      "used_by": [
+        "src/main/index.ts",
+        "src/preload/index.ts"
+      ]
+    },
+    "simple-git": {
+      "version": "^3.33.0",
+      "type": "production",
+      "invocation": "require",
+      "used_by": [
+        "src/main/git.ts"
+      ]
+    },
+    "react": {
+      "version": "^19.2.4",
+      "type": "production",
+      "invocation": "require",
+      "used_by": [
+        "src/renderer/src/main.tsx",
+        "src/renderer/src/App.tsx",
+        "src/renderer/src/components/"
+      ]
+    },
+    "react-dom": {
+      "version": "^19.2.4",
+      "type": "production",
+      "invocation": "require",
+      "used_by": [
+        "src/renderer/src/main.tsx",
+        "src/renderer/src/App.tsx"
+      ]
+    },
+    "zustand": {
+      "version": "^5.0.12",
+      "type": "production",
+      "invocation": "require",
+      "used_by": [
+        "src/renderer/src/store/useRepoStore.ts"
+      ]
+    },
+    "lucide-react": {
+      "version": "^0.577.0",
+      "type": "production",
+      "invocation": "require",
+      "used_by": [
+        "src/renderer/src/components/"
+      ]
+    },
+    "electron-vite": {
+      "version": "^5.0.0",
+      "type": "development",
+      "invocation": "npm run dev / npm run build",
+      "used_by": [
+        "package.json"
+      ]
+    },
+    "vite": {
+      "version": "^8.0.1",
+      "type": "development",
+      "invocation": "implicit",
+      "used_by": [
+        "package.json"
+      ]
+    },
+    "@playwright/test": {
+      "version": "^1.58.2",
+      "type": "development",
+      "invocation": "npm run test:e2e",
+      "used_by": [
+        "e2e/"
+      ]
+    }
+  }
+}

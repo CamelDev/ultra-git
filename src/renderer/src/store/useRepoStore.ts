@@ -41,19 +41,29 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   addRepo: async (path: string) => {
     const { repositories } = get();
     
+    let resolvedPath = path;
+    try {
+      const res = await window.api.app.resolvePath(path);
+      if (res.success && res.path) {
+        resolvedPath = res.path;
+      }
+    } catch (e) {
+      console.error('Failed to resolve path', e);
+    }
+    
     // Check if already open
-    if (repositories.find(r => r.path === path)) {
-      const existing = repositories.find(r => r.path === path)!;
+    if (repositories.find(r => r.path === resolvedPath)) {
+      const existing = repositories.find(r => r.path === resolvedPath)!;
       set({ activeId: existing.id });
       return;
     }
 
-    const name = path.split(/[\\/]/).pop() || path;
+    const name = resolvedPath.split(/[\\/]/).pop() || resolvedPath;
     const id = Math.random().toString(36).substring(7);
 
     const newRepo: Repository = {
       id,
-      path,
+      path: resolvedPath,
       name,
       branch: 'main',
       status: null,

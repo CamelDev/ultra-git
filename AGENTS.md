@@ -33,3 +33,9 @@ This document defines the specialized roles and guidelines for the AI agents col
 - Any deviations from the initial tech stack (Bun, Electron, React) require review.
 - All Git operations should be designed for maximum transparency and user safety (Undo/Redo, visual diffs).
 - All new features must be covered by appropriate unit tests and end-to-end (E2E) tests, ideally using Playwright.
+
+## Prerequisites
+- GSD (Git-based Software Development) framework must be initialized in the workspace. If the `.agents/` directory is missing, install it first using:
+  ```bash
+  npx @opengsd/gsd-core@latest
+  ```

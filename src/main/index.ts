@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { gitService } from './git'
@@ -98,6 +98,14 @@ app.whenReady().then(() => {
       return { canceled: true }
     } else {
       return { canceled: false, path: result.filePaths[0] }
+    }
+  })
+
+  ipcMain.handle('app:resolvePath', async (_, repoPath) => {
+    try {
+      return { success: true, path: resolve(repoPath) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
     }
   })
 

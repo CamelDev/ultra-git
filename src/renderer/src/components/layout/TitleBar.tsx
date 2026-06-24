@@ -25,12 +25,14 @@ const TitleBar: React.FC = () => {
             key={tab.id} 
             className={`tab ${activeId === tab.id ? 'active' : ''}`}
             onClick={() => setActiveId(tab.id)}
+            data-testid="repo-tab"
           >
             <span>{tab.name}</span>
             <X 
               className="tab-close" 
               size={12} 
               onClick={(e) => handleCloseTab(e, tab.id)}
+              data-testid="close-tab-btn"
             />
           </div>
         ))}

@@ -1,0 +1,29 @@
+{
+  "_meta": {
+    "updated_at": "2026-06-21T20:12:39.604Z",
+    "version": 2
+  },
+  "languages": [
+    "TypeScript",
+    "JavaScript",
+    "HTML5",
+    "CSS3"
+  ],
+  "frameworks": [
+    "Electron",
+    "React"
+  ],
+  "tools": [
+    "electron-vite",
+    "vite",
+    "Playwright",
+    "Bun Test"
+  ],
+  "build_system": "bun run build",
+  "test_framework": "Bun Test & Playwright",
+  "package_manager": "Bun",
+  "content_formats": [
+    "Markdown (documentation, GSD skills/workflows)",
+    "JSON (configs, lockfile)"
+  ]
+}

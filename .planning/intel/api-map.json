@@ -1,0 +1,53 @@
+{
+  "_meta": {
+    "updated_at": "2026-06-21T20:12:39.897Z",
+    "version": 2
+  },
+  "entries": {
+    "IPC git:status": {
+      "method": "IPC",
+      "path": "git:status",
+      "params": [
+        "repoPath"
+      ],
+      "file": "src/main/index.ts",
+      "description": "Retrieves the working tree status of a Git repository path."
+    },
+    "IPC git:log": {
+      "method": "IPC",
+      "path": "git:log",
+      "params": [
+        "repoPath",
+        "maxCount"
+      ],
+      "file": "src/main/index.ts",
+      "description": "Retrieves commit log history list from a Git repository path."
+    },
+    "IPC git:fetch": {
+      "method": "IPC",
+      "path": "git:fetch",
+      "params": [
+        "repoPath"
+      ],
+      "file": "src/main/index.ts",
+      "description": "Executes git fetch on the targeted Git repository path."
+    },
+    "IPC git:checkout": {
+      "method": "IPC",
+      "path": "git:checkout",
+      "params": [
+        "repoPath",
+        "branchName"
+      ],
+      "file": "src/main/index.ts",
+      "description": "Checks out a specific branch in the targeted Git repository path."
+    },
+    "IPC dialog:openDirectory": {
+      "method": "IPC",
+      "path": "dialog:openDirectory",
+      "params": [],
+      "file": "src/main/index.ts",
+      "description": "Launches native window directory selection dialog to pick a folder."
+    }
+  }
+}
