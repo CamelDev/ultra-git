@@ -1,22 +1,17 @@
-import { test, expect, _electron as electron } from '@playwright/test';
-import path from 'path';
+import { test, expect } from '@playwright/test';
+import { launchElectronApp } from './helpers/launcher';
 
 test('Application launches successfully', async () => {
-  const electronApp = await electron.launch({
-    args: [path.join(__dirname, '../out/main/index.js')]
-  });
+  const { app, page } = await launchElectronApp();
 
-  const isPackaged = await electronApp.evaluate(async ({ app }) => {
+  const isPackaged = await app.evaluate(async ({ app }) => {
     return app.isPackaged;
   });
 
   expect(isPackaged).toBe(false);
 
-  const window = await electronApp.firstWindow();
-  await window.waitForLoadState('domcontentloaded');
-
-  const title = await window.title();
+  const title = await page.title();
   expect(title).toBeTruthy();
 
-  await electronApp.close();
+  await app.close();
 });

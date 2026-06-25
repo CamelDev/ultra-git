@@ -37,8 +37,9 @@ test.describe('Resizable Details Panel', () => {
         
         await page.mouse.move(currentX, currentY);
         await page.mouse.down();
-        await page.mouse.move(currentX + deltaX, currentY);
+        await page.mouse.move(currentX + deltaX, currentY, { steps: 10 });
         await page.mouse.up();
+        await page.waitForTimeout(200); // Allow layout to settle
       };
 
       // 2. Drag left by 100px (should increase details panel width to 480px)

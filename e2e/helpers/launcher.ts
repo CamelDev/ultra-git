@@ -14,7 +14,7 @@ export async function launchElectronApp(): Promise<LaunchedApp> {
   const mainPath = path.join(__dirname, '../../out/main/index.js');
   
   const app = await electron.launch({
-    args: [mainPath],
+    args: [mainPath, '--no-sandbox'],
   });
 
   const page = await app.firstWindow();

@@ -35,8 +35,9 @@ test.describe('Resizable Left Sidebar', () => {
         
         await page.mouse.move(currentX, currentY);
         await page.mouse.down();
-        await page.mouse.move(currentX + deltaX, currentY);
+        await page.mouse.move(currentX + deltaX, currentY, { steps: 10 });
         await page.mouse.up();
+        await page.waitForTimeout(200); // Allow layout to settle
       };
 
       // 2. Locate the resizer and drag it right by 100px (to 380px)
