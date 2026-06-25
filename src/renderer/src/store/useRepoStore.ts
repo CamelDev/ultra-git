@@ -41,6 +41,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const repo = get().repositories.find(r => r.id === id);
     const latestHash = (repo && repo.commits.length > 0) ? repo.commits[0].hash : null;
     set({ activeId: id, selectedCommitHash: latestHash });
+    get().refreshRepo(id).catch(err => console.error('Failed to refresh repo on switch', err));
   },
 
   setSelectedCommitHash: (hash: string | null) => {

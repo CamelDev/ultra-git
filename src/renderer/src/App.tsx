@@ -5,9 +5,12 @@ import Toolbar from './components/toolbar/Toolbar'
 import GraphView from './components/graph/GraphView'
 import DetailsPanel from './components/details/DetailsPanel'
 import { useRepoStore } from './store/useRepoStore'
+import { ActiveChanges } from './components/active-changes/ActiveChanges'
 
 function App() {
-  const { addRepo } = useRepoStore()
+  const { addRepo, getActiveRepo } = useRepoStore()
+  const activeRepo = getActiveRepo()
+  const hasActiveChanges = !!(activeRepo?.status?.files && activeRepo.status.files.length > 0)
   
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebar-width')
@@ -21,6 +24,12 @@ function App() {
   })
   const [isDetailsDragging, setIsDetailsDragging] = useState(false)
 
+  const [activeChangesHeight, setActiveChangesHeight] = useState(() => {
+    const saved = localStorage.getItem('active-changes-height')
+    return saved ? parseInt(saved, 10) : window.innerHeight / 2
+  })
+  const [isActiveChangesDragging, setIsActiveChangesDragging] = useState(false)
+
   // Use a ref to access the active width inside listeners without re-binding them
   const sidebarWidthRef = useRef(sidebarWidth)
   useEffect(() => {
@@ -31,6 +40,11 @@ function App() {
   useEffect(() => {
     detailsWidthRef.current = detailsWidth
   }, [detailsWidth])
+
+  const activeChangesHeightRef = useRef(activeChangesHeight)
+  useEffect(() => {
+    activeChangesHeightRef.current = activeChangesHeight
+  }, [activeChangesHeight])
 
   const startResize = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
@@ -87,6 +101,33 @@ function App() {
     document.body.style.userSelect = 'none'
   }, [])
 
+  const startActiveChangesResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    setIsActiveChangesDragging(true)
+    const startY = e.clientY
+    const activeChangesEl = document.querySelector('.active-changes-panel')
+    const startHeight = activeChangesEl ? activeChangesEl.getBoundingClientRect().height : activeChangesHeightRef.current
+
+    const doResize = (moveEvent: PointerEvent) => {
+      const deltaY = moveEvent.clientY - startY
+      const newHeight = Math.max(100, Math.min(window.innerHeight - 200, startHeight + deltaY))
+      setActiveChangesHeight(newHeight)
+    }
+
+    const stopResize = () => {
+      setIsActiveChangesDragging(false)
+      document.removeEventListener('pointermove', doResize)
+      document.removeEventListener('pointerup', stopResize)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.addEventListener('pointermove', doResize)
+    document.addEventListener('pointerup', stopResize)
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
+
   useEffect(() => {
     localStorage.setItem('sidebar-width', sidebarWidth.toString())
   }, [sidebarWidth])
@@ -94,6 +135,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('details-width', detailsWidth.toString())
   }, [detailsWidth])
+
+  useEffect(() => {
+    localStorage.setItem('active-changes-height', activeChangesHeight.toString())
+  }, [activeChangesHeight])
 
   useEffect(() => {
     // Initial repo load
@@ -108,7 +153,8 @@ function App() {
         className="app-container"
         style={{ 
           '--sidebar-width': `${sidebarWidth}px`,
-          '--details-width': `${detailsWidth}px`
+          '--details-width': `${detailsWidth}px`,
+          '--active-changes-height': `${activeChangesHeight}px`
         } as React.CSSProperties}
       >
         <Sidebar />
@@ -121,16 +167,26 @@ function App() {
 
         <div className="main-content">
           <Toolbar />
-          <GraphView />
+          {hasActiveChanges && (
+            <>
+              <ActiveChanges />
+              <div 
+                className={`active-changes-resizer ${isActiveChangesDragging ? 'is-dragging' : ''}`}
+                onPointerDown={startActiveChangesResize}
+                data-testid="active-changes-resizer"
+              />
+            </>
+          )}
+          <div className="git-log-and-details">
+            <GraphView />
+            <div 
+              className={`details-resizer ${isDetailsDragging ? 'is-dragging' : ''}`}
+              onPointerDown={startDetailsResize}
+              data-testid="details-resizer"
+            />
+            <DetailsPanel />
+          </div>
         </div>
-
-        <div 
-          className={`details-resizer ${isDetailsDragging ? 'is-dragging' : ''}`}
-          onPointerDown={startDetailsResize}
-          data-testid="details-resizer"
-        />
-
-        <DetailsPanel />
       </div>
     </>
   )

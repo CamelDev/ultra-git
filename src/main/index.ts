@@ -115,6 +115,51 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:add', async (_, repoPath, filePath) => {
+    try {
+      await gitService.add(repoPath, filePath)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:reset', async (_, repoPath, filePath) => {
+    try {
+      await gitService.reset(repoPath, filePath)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:addAll', async (_, repoPath) => {
+    try {
+      await gitService.addAll(repoPath)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:resetAll', async (_, repoPath) => {
+    try {
+      await gitService.resetAll(repoPath)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getActiveFileDiff', async (_, repoPath, filePath, isStaged, oldPath) => {
+    try {
+      const data = await gitService.getActiveFileDiff(repoPath, filePath, isStaged, oldPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('dialog:openDirectory', async () => {
     console.log('Main Process: Received dialog:openDirectory request');
     const result = await dialog.showOpenDialog(mainWindow!, {

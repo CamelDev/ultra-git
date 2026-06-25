@@ -7,8 +7,10 @@ interface DiffModalProps {
   filePath: string
   oldPath?: string
   status: string
-  commitHash: string
+  commitHash?: string | null
   repoPath: string
+  isActiveChange?: boolean
+  isStaged?: boolean
 }
 
 interface DiffItem {
@@ -129,7 +131,9 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   oldPath,
   status,
   commitHash,
-  repoPath
+  repoPath,
+  isActiveChange,
+  isStaged
 }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -159,8 +163,11 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     setLoading(true)
     setError(null)
 
-    window.api.git
-      .getCommitFileDiff(repoPath, commitHash, filePath, oldPath, status)
+    const fetchDiff = isActiveChange
+      ? window.api.git.getActiveFileDiff(repoPath, filePath, !!isStaged, oldPath)
+      : window.api.git.getCommitFileDiff(repoPath, commitHash!, filePath, oldPath, status)
+
+    fetchDiff
       .then((res) => {
         if (!isMounted) return
         if (res.success && res.data) {
@@ -186,7 +193,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     return () => {
       isMounted = false
     }
-  }, [isOpen, filePath, commitHash, repoPath])
+  }, [isOpen, filePath, commitHash, repoPath, isActiveChange, isStaged, oldPath, status])
 
   // 2. Scroll to the first diff position after loading
   useEffect(() => {
@@ -231,7 +238,11 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               <div style={{ fontWeight: 600, fontSize: '15px', wordBreak: 'break-all' }}>{filePath}</div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                 {status === 'R' ? `Renamed from ${oldPath} | ` : ''}
-                Commit: <span style={{ fontFamily: 'monospace' }}>{commitHash.substring(0, 8)}</span>
+                {isActiveChange ? (
+                  <span>{isStaged ? 'Staged changes' : 'Unstaged changes'}</span>
+                ) : (
+                  <>Commit: <span style={{ fontFamily: 'monospace' }}>{commitHash?.substring(0, 8)}</span></>
+                )}
               </div>
             </div>
           </div>

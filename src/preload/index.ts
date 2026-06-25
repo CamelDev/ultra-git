@@ -10,7 +10,13 @@ const api = {
     checkout: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:checkout', repoPath, branchName),
     getCommitFiles: (repoPath: string, commitHash: string) => ipcRenderer.invoke('git:getCommitFiles', repoPath, commitHash),
     getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => 
-      ipcRenderer.invoke('git:getCommitFileDiff', repoPath, commitHash, filePath, oldPath, status)
+      ipcRenderer.invoke('git:getCommitFileDiff', repoPath, commitHash, filePath, oldPath, status),
+    add: (repoPath: string, filePath: string) => ipcRenderer.invoke('git:add', repoPath, filePath),
+    reset: (repoPath: string, filePath: string) => ipcRenderer.invoke('git:reset', repoPath, filePath),
+    addAll: (repoPath: string) => ipcRenderer.invoke('git:addAll', repoPath),
+    resetAll: (repoPath: string) => ipcRenderer.invoke('git:resetAll', repoPath),
+    getActiveFileDiff: (repoPath: string, filePath: string, isStaged: boolean, oldPath?: string) => 
+      ipcRenderer.invoke('git:getActiveFileDiff', repoPath, filePath, isStaged, oldPath)
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),

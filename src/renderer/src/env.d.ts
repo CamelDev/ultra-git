@@ -10,10 +10,18 @@ declare global {
         log: (repoPath: string, maxCount?: number) => Promise<{ success: boolean; data?: any; error?: string }>;
         fetch: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         checkout: (repoPath: string, branchName: string) => Promise<{ success: boolean; data?: any; error?: string }>;
-      },
+        getCommitFiles: (repoPath: string, commitHash: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+        getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+        add: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
+        reset: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
+        addAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        resetAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        getActiveFileDiff: (repoPath: string, filePath: string, isStaged: boolean, oldPath?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+      };
       app: {
         openDirectory: () => Promise<{ canceled: boolean; path?: string }>;
-      }
+        resolvePath: (repoPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+      };
     }
   }
 }

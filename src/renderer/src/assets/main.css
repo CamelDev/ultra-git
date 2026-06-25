@@ -597,3 +597,166 @@ body {
   to { transform: scale(1); opacity: 1; }
 }
 
+/* Active Changes Panel */
+.active-changes-panel {
+  display: flex;
+  flex-direction: column;
+  height: var(--active-changes-height, 400px);
+  min-height: 100px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.active-changes-header {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.active-changes-columns {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.active-changes-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.active-changes-column:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.column-header {
+  padding: 8px 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.active-file-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.active-changes-footer {
+  padding: 8px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  background-color: var(--bg-secondary);
+}
+
+.btn-primary {
+  background-color: var(--accent);
+  color: var(--text-primary);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-light);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+/* Small Stage/Unstage buttons inside file list */
+.action-btn {
+  opacity: 0;
+  background-color: var(--hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s, background-color 0.2s;
+  margin-left: 8px;
+}
+
+.file-item:hover .action-btn {
+  opacity: 1;
+}
+
+.action-btn:hover {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Active changes resizer */
+.active-changes-resizer {
+  height: 4px;
+  cursor: row-resize;
+  background-color: transparent;
+  z-index: 50;
+  position: relative;
+  margin-top: -2px;
+  margin-bottom: -2px;
+  flex-shrink: 0;
+}
+
+.active-changes-resizer::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 1px;
+  height: 2px;
+  background-color: transparent;
+  transition: background-color 0.15s ease;
+}
+
+.active-changes-resizer:hover::after,
+.active-changes-resizer.is-dragging::after {
+  background-color: var(--accent-light);
+}
+
+/* Status colors */
+.status-q {
+  color: #38bdf8; /* sky-400 for untracked */
+}
+
+.git-log-and-details {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+

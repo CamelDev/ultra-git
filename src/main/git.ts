@@ -1,4 +1,6 @@
 import simpleGit, { SimpleGit, SimpleGitOptions } from 'simple-git';
+import fs from 'fs';
+import { join } from 'path';
 
 // Manage simple-git instances per repository path
 const gitInstances = new Map<string, SimpleGit>();
@@ -94,6 +96,83 @@ export const gitService = {
         }
       } catch (e) {
         console.warn(`Could not get parent content for ${filePath} at ${commitHash}`, e);
+      }
+    }
+
+    const isBinaryString = (str: string) => {
+      for (let i = 0; i < Math.min(str.length, 1000); i++) {
+        if (str.charCodeAt(i) === 0) return true;
+      }
+      return false;
+    };
+
+    const isBinary = isBinaryString(before) || isBinaryString(after);
+
+    return { 
+      before: isBinary ? '' : before, 
+      after: isBinary ? '' : after, 
+      isBinary 
+    };
+  },
+
+  add: async (repoPath: string, filePath: string) => {
+    const git = getGitInstance(repoPath);
+    return await git.add(filePath);
+  },
+
+  reset: async (repoPath: string, filePath: string) => {
+    const git = getGitInstance(repoPath);
+    return await git.reset(['--', filePath]);
+  },
+
+  addAll: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    return await git.add('.');
+  },
+
+  resetAll: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    return await git.reset(['HEAD']);
+  },
+
+  getActiveFileDiff: async (
+    repoPath: string,
+    filePath: string,
+    isStaged: boolean,
+    oldPath?: string
+  ) => {
+    const git = getGitInstance(repoPath);
+    let before = '';
+    let after = '';
+
+    if (isStaged) {
+      // Staged file diff: before is HEAD version, after is Index version
+      try {
+        before = await git.show([`HEAD:${oldPath || filePath}`]);
+      } catch (e) {
+        before = '';
+      }
+      try {
+        after = await git.show([`:${filePath}`]);
+      } catch (e) {
+        after = '';
+      }
+    } else {
+      // Unstaged file diff: before is Index version (or HEAD if not in index), after is Working Tree version
+      try {
+        before = await git.show([`:${filePath}`]);
+      } catch (e) {
+        try {
+          before = await git.show([`HEAD:${filePath}`]);
+        } catch (e2) {
+          before = '';
+        }
+      }
+      try {
+        const fullPath = join(repoPath, filePath);
+        after = await fs.promises.readFile(fullPath, 'utf8');
+      } catch (e) {
+        after = '';
       }
     }
 

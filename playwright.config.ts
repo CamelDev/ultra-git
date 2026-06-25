@@ -10,6 +10,7 @@ export default defineConfig({
   },
   reporter: 'html',
   use: {
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
+    screenshot: 'on',
   },
 });
