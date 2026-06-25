@@ -16,6 +16,7 @@ declare global {
         reset: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
         addAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         resetAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        commit: (repoPath: string, message: string) => Promise<{ success: boolean; error?: string }>;
         getActiveFileDiff: (repoPath: string, filePath: string, isStaged: boolean, oldPath?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
       };
       app: {

@@ -15,6 +15,7 @@ const api = {
     reset: (repoPath: string, filePath: string) => ipcRenderer.invoke('git:reset', repoPath, filePath),
     addAll: (repoPath: string) => ipcRenderer.invoke('git:addAll', repoPath),
     resetAll: (repoPath: string) => ipcRenderer.invoke('git:resetAll', repoPath),
+    commit: (repoPath: string, message: string) => ipcRenderer.invoke('git:commit', repoPath, message),
     getActiveFileDiff: (repoPath: string, filePath: string, isStaged: boolean, oldPath?: string) => 
       ipcRenderer.invoke('git:getActiveFileDiff', repoPath, filePath, isStaged, oldPath)
   },

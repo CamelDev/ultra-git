@@ -14,6 +14,8 @@ export const ActiveChanges: React.FC = () => {
     isStaged: boolean
   } | null>(null)
 
+  const [commitMessage, setCommitMessage] = useState('')
+
   if (!activeRepo || !activeRepo.status || !activeRepo.status.files) {
     return null
   }
@@ -79,6 +81,21 @@ export const ActiveChanges: React.FC = () => {
       }
     } catch (err) {
       console.error('Error unstaging all files:', err)
+    }
+  }
+
+  const handleCommit = async () => {
+    if (commitMessage.trim().length <= 2) return
+    try {
+      const res = await window.api.git.commit(activeRepo.path, commitMessage)
+      if (res.success) {
+        setCommitMessage('')
+        await refreshRepo(activeRepo.id)
+      } else {
+        console.error('Failed to commit:', res.error)
+      }
+    } catch (err) {
+      console.error('Error committing changes:', err)
     }
   }
 
@@ -244,6 +261,26 @@ export const ActiveChanges: React.FC = () => {
         >
           Unstage all
         </button>
+
+        <div className="commit-section">
+          <input
+            type="text"
+            className="commit-input"
+            placeholder="Commit message..."
+            value={commitMessage}
+            onChange={(e) => setCommitMessage(e.target.value)}
+            data-testid="commit-message-input"
+          />
+          <button
+            className="btn-primary"
+            onClick={handleCommit}
+            disabled={commitMessage.trim().length <= 2}
+            style={{ opacity: commitMessage.trim().length <= 2 ? 0.5 : 1, cursor: commitMessage.trim().length <= 2 ? 'not-allowed' : 'pointer' }}
+            data-testid="commit-btn"
+          >
+            Commit
+          </button>
+        </div>
       </div>
 
       {selectedFileForDiff && (

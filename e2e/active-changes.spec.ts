@@ -129,6 +129,33 @@ test.describe('Active Changes Panel', () => {
       await expect(stagedItems).toHaveCount(0)
       await expect(unstagedItems).toHaveCount(2)
 
+      // 8. Commit functionality verification
+      const commitInput = panel.locator('[data-testid="commit-message-input"]')
+      const commitBtn = panel.locator('[data-testid="commit-btn"]')
+
+      // Commit button should be disabled initially (empty message)
+      await expect(commitBtn).toBeDisabled()
+
+      // Type a 2-character message and verify it is still disabled
+      await commitInput.fill('ab')
+      await expect(commitBtn).toBeDisabled()
+
+      // Stage the files first so there is something to commit
+      await stageAllBtn.click()
+      await page.waitForTimeout(500)
+      await expect(stagedItems).toHaveCount(2)
+
+      // Type a valid commit message (> 2 chars) and verify it is enabled
+      await commitInput.fill('xyz')
+      await expect(commitBtn).toBeEnabled()
+
+      // Click commit
+      await commitBtn.click()
+      await page.waitForTimeout(1000)
+
+      // Active changes panel should disappear because files are committed (no active changes left)
+      await expect(panel).not.toBeVisible()
+
     } finally {
       await app.close()
     }

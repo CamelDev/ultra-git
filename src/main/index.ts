@@ -151,6 +151,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:commit', async (_, repoPath, message) => {
+    try {
+      await gitService.commit(repoPath, message)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:getActiveFileDiff', async (_, repoPath, filePath, isStaged, oldPath) => {
     try {
       const data = await gitService.getActiveFileDiff(repoPath, filePath, isStaged, oldPath)

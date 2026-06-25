@@ -135,6 +135,11 @@ export const gitService = {
     return await git.reset(['HEAD']);
   },
 
+  commit: async (repoPath: string, message: string) => {
+    const git = getGitInstance(repoPath);
+    return await git.commit(message);
+  },
+
   getActiveFileDiff: async (
     repoPath: string,
     filePath: string,
