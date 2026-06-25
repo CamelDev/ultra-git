@@ -14,6 +14,14 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     icon,
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'win32' ? {
+      titleBarOverlay: {
+        color: '#161920',
+        symbolColor: '#94a3b8',
+        height: 48
+      }
+    } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -84,6 +92,24 @@ app.whenReady().then(() => {
     try {
       const data = await gitService.checkout(repoPath, branchName)
       return { success: true, data: JSON.parse(JSON.stringify(data)) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getCommitFiles', async (_, repoPath, commitHash) => {
+    try {
+      const data = await gitService.getCommitFiles(repoPath, commitHash)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getCommitFileDiff', async (_, repoPath, commitHash, filePath, oldPath, status) => {
+    try {
+      const data = await gitService.getCommitFileDiff(repoPath, commitHash, filePath, oldPath, status)
+      return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
     }

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Plus, X } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import logoIcon from '../../assets/icon.png'
 
 const TitleBar: React.FC = () => {
   const { repositories, activeId, setActiveId, removeRepo, addRepo } = useRepoStore()
@@ -17,8 +18,22 @@ const TitleBar: React.FC = () => {
     e.stopPropagation()
     removeRepo(id)
   }
+
+  const isMac = navigator.userAgent.includes('Mac')
+  const isWindows = navigator.userAgent.includes('Win')
+
   return (
-    <div className="title-bar">
+    <div 
+      className="title-bar"
+      style={{
+        paddingLeft: isMac ? '80px' : '16px',
+        paddingRight: isWindows ? '140px' : '16px'
+      }}
+    >
+      <div className="title-bar-brand">
+        <img src={logoIcon} alt="UltraGIT" className="brand-logo" />
+        <span className="brand-name">UltraGIT</span>
+      </div>
       <div className="tabs-container">
         {repositories.map((tab) => (
           <div 

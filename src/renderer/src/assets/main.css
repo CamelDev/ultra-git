@@ -50,6 +50,30 @@ body {
   -webkit-app-region: drag;
   padding: 0 16px;
   z-index: 100;
+  box-sizing: border-box;
+}
+
+.title-bar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 24px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.brand-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  display: block;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
 }
 
 .tabs-container {
@@ -264,6 +288,10 @@ body {
   scrollbar-color: var(--border) transparent;
 }
 
+.graph-container:focus {
+  outline: none;
+}
+
 .commit-list {
   display: flex;
   flex-direction: column;
@@ -393,4 +421,179 @@ body {
 .status-m { color: #fbbf24; } /* yellow-400 */
 .status-a { color: #34d399; } /* emerald-400 */
 .status-d { color: #f87171; } /* red-400 */
+.status-r { color: #818cf8; } /* indigo-400 */
+
+/* Commit Highlighting */
+.commit-item.active {
+  background-color: #6366f11c;
+  color: var(--text-primary);
+  border-left: 3px solid var(--accent);
+}
+
+/* Diff Modal Styles */
+.diff-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 17, 21, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.diff-modal-content {
+  width: 90vw;
+  height: 85vh;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+  overflow: hidden;
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.diff-modal-header {
+  padding: 16px 24px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.diff-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.diff-modal-close:hover {
+  background-color: var(--hover);
+  color: var(--text-primary);
+  transform: rotate(90deg);
+}
+
+.diff-modal-body {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+.diff-modal-scroll {
+  flex: 1;
+  overflow: auto;
+}
+
+.diff-overview-ruler {
+  width: 14px;
+  min-width: 14px;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-left: 1px solid var(--border);
+  position: relative;
+  height: 100%;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.diff-ruler-marker {
+  pointer-events: none;
+}
+
+.diff-table {
+  display: flex;
+  flex-direction: column;
+  min-width: 100%;
+}
+
+.diff-row {
+  display: flex;
+  width: 100%;
+}
+
+.diff-col {
+  width: 50%;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.diff-col.left {
+  border-right: 1px solid var(--border);
+}
+
+.diff-line-number {
+  width: 50px;
+  min-width: 50px;
+  text-align: right;
+  padding-right: 12px;
+  color: var(--text-secondary);
+  opacity: 0.4;
+  user-select: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  margin-right: 8px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.diff-line-content {
+  margin: 0;
+  padding: 4px 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.diff-row.type-delete {
+  background-color: rgba(239, 68, 68, 0.08);
+}
+.diff-row.type-delete .diff-col.left {
+  background-color: rgba(239, 68, 68, 0.15);
+}
+.diff-row.type-delete .diff-col.left .diff-line-content {
+  color: #f87171;
+}
+
+.diff-row.type-add {
+  background-color: rgba(16, 185, 129, 0.08);
+}
+.diff-row.type-add .diff-col.right {
+  background-color: rgba(16, 185, 129, 0.15);
+}
+.diff-row.type-add .diff-col.right .diff-line-content {
+  color: #34d399;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
 

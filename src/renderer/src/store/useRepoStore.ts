@@ -14,12 +14,14 @@ export interface Repository {
 interface RepoState {
   repositories: Repository[];
   activeId: string | null;
+  selectedCommitHash: string | null;
   
   // Actions
   addRepo: (path: string) => Promise<void>;
   removeRepo: (id: string) => void;
   setActiveId: (id: string) => void;
   refreshRepo: (id: string) => Promise<void>;
+  setSelectedCommitHash: (hash: string | null) => void;
   
   // Helper to get active repo
   getActiveRepo: () => Repository | undefined;
@@ -28,6 +30,7 @@ interface RepoState {
 export const useRepoStore = create<RepoState>((set, get) => ({
   repositories: [],
   activeId: null,
+  selectedCommitHash: null,
 
   getActiveRepo: () => {
     const { repositories, activeId } = get();
@@ -35,7 +38,13 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   },
 
   setActiveId: (id: string) => {
-    set({ activeId: id });
+    const repo = get().repositories.find(r => r.id === id);
+    const latestHash = (repo && repo.commits.length > 0) ? repo.commits[0].hash : null;
+    set({ activeId: id, selectedCommitHash: latestHash });
+  },
+
+  setSelectedCommitHash: (hash: string | null) => {
+    set({ selectedCommitHash: hash });
   },
 
   addRepo: async (path: string) => {
@@ -54,7 +63,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     // Check if already open
     if (repositories.find(r => r.path === resolvedPath)) {
       const existing = repositories.find(r => r.path === resolvedPath)!;
-      set({ activeId: existing.id });
+      const latestHash = existing.commits.length > 0 ? existing.commits[0].hash : null;
+      set({ activeId: existing.id, selectedCommitHash: latestHash });
       return;
     }
 
@@ -74,7 +84,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     set({ 
       repositories: [...repositories, newRepo],
-      activeId: id
+      activeId: id,
+      selectedCommitHash: null
     });
 
     await get().refreshRepo(id);
@@ -89,7 +100,10 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       newActiveId = newRepos.length > 0 ? newRepos[newRepos.length - 1].id : null;
     }
 
-    set({ repositories: newRepos, activeId: newActiveId });
+    const nextActiveRepo = newRepos.find(r => r.id === newActiveId);
+    const latestHash = (nextActiveRepo && nextActiveRepo.commits.length > 0) ? nextActiveRepo.commits[0].hash : null;
+
+    set({ repositories: newRepos, activeId: newActiveId, selectedCommitHash: latestHash });
   },
 
   refreshRepo: async (id: string) => {
@@ -110,21 +124,32 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         window.api.git.log(repo.path)
       ]);
 
-      set((state) => ({
-        repositories: state.repositories.map(r => {
+      set((state) => {
+        const commits = logRes.success ? logRes.data.all : [];
+        const updatedRepos = state.repositories.map(r => {
           if (r.id === id) {
             return {
               ...r,
               status: statusRes.success ? statusRes.data : null,
               branch: statusRes.success ? statusRes.data.current : r.branch,
-              commits: logRes.success ? logRes.data.all : [],
+              commits,
               error: statusRes.success ? null : (statusRes.error ?? 'Unknown error'),
               isLoading: false
             };
           }
           return r;
-        })
-      }));
+        });
+
+        let newSelectedHash = state.selectedCommitHash;
+        if (state.activeId === id && !state.selectedCommitHash && commits.length > 0) {
+          newSelectedHash = commits[0].hash;
+        }
+
+        return {
+          repositories: updatedRepos,
+          selectedCommitHash: newSelectedHash
+        };
+      });
     } catch (err: any) {
       set((state) => ({
         repositories: state.repositories.map(r => 

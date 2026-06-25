@@ -1,5 +1,5 @@
 import React from 'react'
-import { GitBranch, Layers, Clock, Tag, ChevronDown } from 'lucide-react'
+import { GitBranch, Layers } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 
 const Sidebar: React.FC = () => {
@@ -11,17 +11,6 @@ const Sidebar: React.FC = () => {
 
   return (
     <div className="sidebar" data-testid="sidebar">
-      <div style={{ padding: '15px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
-          <span style={{ fontWeight: 600, fontSize: '14px' }}>UltraGIT</span>
-          <ChevronDown size={14} style={{ marginLeft: '5px' }} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)', fontSize: '12px' }}>
-          <GitBranch size={12} style={{ marginRight: '5px' }} />
-          <span data-testid="sidebar-branch-name">{branch}</span>
-        </div>
-      </div>
-
       <div className="sidebar-section">
         <div className="sidebar-header">
           <span>Local</span>

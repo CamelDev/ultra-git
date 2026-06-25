@@ -7,7 +7,10 @@ const api = {
     status: (repoPath: string) => ipcRenderer.invoke('git:status', repoPath),
     log: (repoPath: string, maxCount?: number) => ipcRenderer.invoke('git:log', repoPath, maxCount),
     fetch: (repoPath: string) => ipcRenderer.invoke('git:fetch', repoPath),
-    checkout: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:checkout', repoPath, branchName)
+    checkout: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:checkout', repoPath, branchName),
+    getCommitFiles: (repoPath: string, commitHash: string) => ipcRenderer.invoke('git:getCommitFiles', repoPath, commitHash),
+    getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => 
+      ipcRenderer.invoke('git:getCommitFileDiff', repoPath, commitHash, filePath, oldPath, status)
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),

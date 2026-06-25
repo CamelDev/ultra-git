@@ -56,4 +56,3 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Playwright test results and reports
 test-results/
 playwright-report/
-

@@ -59,9 +59,6 @@ test.describe('Multi-Repo Tab System', () => {
       await expect(sidebarActiveBranch).toBeVisible();
       await expect(sidebarActiveBranch).toContainText('feature/e2e-tabs');
 
-      const sidebarBranchIndicator = page.locator('[data-testid="sidebar-branch-name"]');
-      await expect(sidebarBranchIndicator).toContainText('feature/e2e-tabs');
-
       // 10. Close the newly added tab
       const closeBtn = initialTabs.last().locator('[data-testid="close-tab-btn"]');
       await closeBtn.click();
