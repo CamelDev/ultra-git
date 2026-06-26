@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { FileText } from 'lucide-react'
+import { FileText, Copy, Check } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { DiffModal } from './DiffModal'
 
@@ -11,8 +11,20 @@ const DetailsPanel: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedFileForDiff, setSelectedFileForDiff] = useState<any | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const commit = activeRepo?.commits.find((c) => c.hash === selectedCommitHash)
+
+  // Reset copied state when selected commit changes
+  useEffect(() => {
+    setCopied(false)
+  }, [selectedCommitHash])
+
+  const handleCopySHA = (hash: string) => {
+    window.api.app.copyToClipboard(hash)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   useEffect(() => {
     if (!selectedCommitHash || !activeRepo) {
@@ -58,8 +70,55 @@ const DetailsPanel: React.FC = () => {
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-all' }}>
                 {commit.message}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                by {commit.author_name} • {new Date(commit.date).toLocaleDateString()}
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '4px 8px' }}>
+                <span>by {commit.author_name}</span>
+                <span>•</span>
+                <span>{new Date(commit.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                <span>SHA:</span>
+                <code 
+                  data-testid="commit-sha-short"
+                  style={{ 
+                    fontFamily: 'JetBrains Mono, monospace', 
+                    backgroundColor: 'var(--bg-tertiary)', 
+                    padding: '1px 4px', 
+                    borderRadius: '3px',
+                    border: '1px solid var(--border)',
+                    fontSize: '10.5px',
+                    color: 'var(--text-primary)'
+                  }}
+                >
+                  {commit.hash.substring(0, 7)}
+                </code>
+                <button
+                  onClick={() => handleCopySHA(commit.hash)}
+                  className="copy-sha-btn"
+                  data-testid="copy-sha-btn"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: copied ? '#10b981' : 'var(--text-secondary)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '2px',
+                    borderRadius: '4px',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--hover)'
+                    e.currentTarget.style.color = copied ? '#10b981' : 'var(--text-primary)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent'
+                    e.currentTarget.style.color = copied ? '#10b981' : 'var(--text-secondary)'
+                  }}
+                  title="Copy full SHA"
+                >
+                  {copied ? <Check size={12} /> : <Copy size={12} />}
+                </button>
               </div>
             </div>
           ) : (

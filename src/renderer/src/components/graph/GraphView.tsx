@@ -92,7 +92,9 @@ const GraphView: React.FC = () => {
             </div>
             <div className="commit-message" title={c.message}>{c.message}</div>
             <div className="commit-author">{c.author_name}</div>
-            <div className="commit-date">{new Date(c.date).toLocaleDateString()}</div>
+            <div className="commit-date">
+              {new Date(c.date).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+            </div>
           </div>
         ))}
         {commits.length === 0 && (

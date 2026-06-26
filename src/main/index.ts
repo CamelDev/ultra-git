@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, clipboard } from 'electron'
 import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -185,6 +185,15 @@ app.whenReady().then(() => {
   ipcMain.handle('app:resolvePath', async (_, repoPath) => {
     try {
       return { success: true, path: resolve(repoPath) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('app:copyToClipboard', async (_, text) => {
+    try {
+      clipboard.writeText(text)
+      return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }
     }

@@ -29,7 +29,8 @@ const api = {
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
-    resolvePath: (repoPath: string) => ipcRenderer.invoke('app:resolvePath', repoPath)
+    resolvePath: (repoPath: string) => ipcRenderer.invoke('app:resolvePath', repoPath),
+    copyToClipboard: (text: string) => ipcRenderer.invoke('app:copyToClipboard', text)
   }
 }
 

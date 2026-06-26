@@ -80,6 +80,30 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       // Verify commit highlight
       await expect(smallModCommit).toHaveClass(/active/)
 
+      // 1. Verify date format in the commit list (should contain a colon ':' indicating hour/minute)
+      const firstCommitDate = commitItems.first().locator('.commit-date')
+      await expect(firstCommitDate).toBeVisible()
+      const dateText = await firstCommitDate.textContent()
+      expect(dateText).toContain(':')
+
+      // 2. Verify short SHA is shown in Details Panel
+      const shaShort = page.locator('[data-testid="commit-sha-short"]')
+      await expect(shaShort).toBeVisible()
+      const shaShortText = await shaShort.textContent()
+      expect(shaShortText?.trim().length).toBe(7)
+
+      // 3. Verify copy full SHA button behavior
+      const copyBtn = page.locator('[data-testid="copy-sha-btn"]')
+      await expect(copyBtn).toBeVisible()
+      await copyBtn.click()
+
+      // Verify the clipboard contains the full SHA (40 characters) and starts with the short SHA
+      const clipboardText = await app.evaluate(async ({ clipboard }) => {
+        return clipboard.readText()
+      })
+      expect(clipboardText.startsWith(shaShortText?.trim() || '')).toBe(true)
+      expect(clipboardText.length).toBe(40)
+
       // Verify details panel files list
       const fileItem = page.locator('.details-panel .file-item').first()
       await expect(fileItem).toBeVisible()
