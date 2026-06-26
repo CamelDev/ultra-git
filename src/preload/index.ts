@@ -23,6 +23,10 @@ const api = {
     stashAll: (repoPath: string, message?: string) => ipcRenderer.invoke('git:stashAll', repoPath, message),
     stashList: (repoPath: string) => ipcRenderer.invoke('git:stashList', repoPath),
     stashPop: (repoPath: string, index: number) => ipcRenderer.invoke('git:stashPop', repoPath, index),
+    stashDrop: (repoPath: string, index: number) => ipcRenderer.invoke('git:stashDrop', repoPath, index),
+    getStashFiles: (repoPath: string, index: number) => ipcRenderer.invoke('git:getStashFiles', repoPath, index),
+    getStashFileDiff: (repoPath: string, index: number, filePath: string, oldPath?: string, status?: string, isUntracked?: boolean) => 
+      ipcRenderer.invoke('git:getStashFileDiff', repoPath, index, filePath, oldPath, status, isUntracked),
     setRepositoryIdentity: (repoPath: string, identity: any) => ipcRenderer.invoke('git:setRepositoryIdentity', repoPath, identity),
     validateToken: (provider: string, token: string, email?: string) => ipcRenderer.invoke('git:validateToken', { provider, token, email }),
     watchRepo: (repoPath: string | null) => ipcRenderer.invoke('git:watchRepo', repoPath),

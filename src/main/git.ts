@@ -271,6 +271,133 @@ export const gitService = {
     }
   },
 
+  stashDrop: async (repoPath: string, index: number) => {
+    const git = getGitInstance(repoPath);
+    await git.raw(['stash', 'drop', `stash@{${index}}`]);
+    return { success: true };
+  },
+
+  getStashFiles: async (repoPath: string, index: number) => {
+    const git = getGitInstance(repoPath);
+    const stashRef = `stash@{${index}}`;
+    const files: Array<{ status: string; path: string; oldPath?: string; isUntracked?: boolean }> = [];
+
+    // 1. Get modified/staged files (diff between parent 1 and the stash commit)
+    try {
+      const res = await git.raw(['diff', '--name-status', `${stashRef}^1`, stashRef]);
+      const lines = res.split('\n').map((l) => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        const parts = line.split(/\s+/);
+        if (parts.length < 2) continue;
+        const rawStatus = parts[0];
+        const status = rawStatus.charAt(0);
+        if (status === 'R' && parts.length >= 3) {
+          files.push({
+            status,
+            oldPath: parts[1],
+            path: parts[2]
+          });
+        } else {
+          files.push({
+            status,
+            path: parts[1]
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`Could not get diff for ${stashRef}`, e);
+    }
+
+    // 2. Check untracked files (in parent 3, if it exists)
+    try {
+      // Check if parent 3 exists
+      await git.raw(['cat-file', '-t', `${stashRef}^3`]);
+      // If it exists, diff between parent 1 and parent 3 to find added files
+      const res3 = await git.raw(['diff', '--name-status', `${stashRef}^1`, `${stashRef}^3`]);
+      const lines3 = res3.split('\n').map((l) => l.trim()).filter(Boolean);
+      for (const line of lines3) {
+        const parts = line.split(/\s+/);
+        if (parts.length < 2) continue;
+        const rawStatus = parts[0];
+        const status = rawStatus.charAt(0);
+        const filePath = status === 'R' && parts.length >= 3 ? parts[2] : parts[1];
+        if (!files.some((f) => f.path === filePath)) {
+          if (status === 'R' && parts.length >= 3) {
+            files.push({
+              status,
+              oldPath: parts[1],
+              path: parts[2],
+              isUntracked: true
+            });
+          } else {
+            files.push({
+              status,
+              path: filePath,
+              isUntracked: true
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // Parent 3 doesn't exist
+    }
+
+    return files;
+  },
+
+  getStashFileDiff: async (
+    repoPath: string,
+    index: number,
+    filePath: string,
+    oldPath?: string,
+    status?: string,
+    isUntracked?: boolean
+  ) => {
+    const git = getGitInstance(repoPath);
+    const stashRef = `stash@{${index}}`;
+    let before = '';
+    let after = '';
+
+    if (isUntracked) {
+      try {
+        after = await git.show([`${stashRef}^3:${filePath}`]);
+      } catch (e) {
+        console.warn(`Could not get content for untracked ${filePath} at ${stashRef}^3`, e);
+      }
+    } else {
+      if (status !== 'D') {
+        try {
+          after = await git.show([`${stashRef}:${filePath}`]);
+        } catch (e) {
+          console.warn(`Could not get content for ${filePath} at ${stashRef}`, e);
+        }
+      }
+      if (status !== 'A') {
+        try {
+          const pathBefore = oldPath || filePath;
+          before = await git.show([`${stashRef}^1:${pathBefore}`]);
+        } catch (e) {
+          console.warn(`Could not get parent content for ${filePath} at ${stashRef}^1`, e);
+        }
+      }
+    }
+
+    const isBinaryString = (str: string) => {
+      for (let i = 0; i < Math.min(str.length, 1000); i++) {
+        if (str.charCodeAt(i) === 0) return true;
+      }
+      return false;
+    };
+
+    const isBinary = isBinaryString(before) || isBinaryString(after);
+
+    return {
+      before: isBinary ? '' : before,
+      after: isBinary ? '' : after,
+      isBinary
+    };
+  },
+
   getActiveFileDiff: async (
     repoPath: string,
     filePath: string,

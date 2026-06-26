@@ -851,30 +851,61 @@ body {
   color: var(--text-secondary);
 }
 
-/* Pop button — visible only on selected stash */
-.stash-pop-btn {
-  background-color: #334155;
-  color: #94a3b8;
-  border: 1px solid #475569;
+/* Stash action button group — visible only on selected stash */
+.stash-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.stash-action-btn {
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 3px 10px;
+  padding: 3px 8px;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  flex-shrink: 0;
-  align-self: center;
-  transition: background-color 0.2s, color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  height: 24px;
+  box-sizing: border-box;
 }
 
-.stash-pop-btn:hover:not(:disabled) {
-  background-color: #6366f1;
+.stash-action-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background-color: var(--hover);
+  border-color: var(--text-secondary);
+}
+
+.stash-action-btn.pop {
+  padding: 3px 10px;
+}
+
+.stash-action-btn.pop:hover:not(:disabled) {
+  background-color: var(--accent);
   color: #fff;
-  border-color: #6366f1;
+  border-color: var(--accent);
 }
 
-.stash-pop-btn:disabled {
+.stash-action-btn.delete:hover:not(:disabled) {
+  background-color: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+.stash-action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.stash-modal-file-item:hover {
+  background-color: var(--hover);
 }
 
 .stash-empty {

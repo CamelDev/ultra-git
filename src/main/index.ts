@@ -215,6 +215,33 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:stashDrop', async (_, repoPath, index) => {
+    try {
+      const data = await gitService.stashDrop(repoPath, index)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getStashFiles', async (_, repoPath, index) => {
+    try {
+      const data = await gitService.getStashFiles(repoPath, index)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getStashFileDiff', async (_, repoPath, index, filePath, oldPath, status, isUntracked) => {
+    try {
+      const data = await gitService.getStashFileDiff(repoPath, index, filePath, oldPath, status, isUntracked)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:setRepositoryIdentity', async (_, repoPath, identity) => {
     console.log('Main Process: git:setRepositoryIdentity called for path:', repoPath, 'with identity:', identity)
     try {

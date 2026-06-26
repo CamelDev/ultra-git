@@ -11,6 +11,9 @@ interface DiffModalProps {
   repoPath: string
   isActiveChange?: boolean
   isStaged?: boolean
+  isStash?: boolean
+  stashIndex?: number | null
+  stashMessage?: string | null
 }
 
 interface DiffItem {
@@ -133,13 +136,22 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   commitHash,
   repoPath,
   isActiveChange,
-  isStaged
+  isStaged,
+  isStash = false,
+  stashIndex = null,
+  stashMessage = null
 }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [diffItems, setDiffItems] = useState<DiffItem[]>([])
   const [isBinary, setIsBinary] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
+
+  // Stash details files states
+  const [stashFiles, setStashFiles] = useState<any[]>([])
+  const [stashFilesLoading, setStashFilesLoading] = useState(false)
+  const [stashFilesError, setStashFilesError] = useState<string | null>(null)
+  const [selectedStashFile, setSelectedStashFile] = useState<any | null>(null)
 
   // 1. Close on ESC key press
   useEffect(() => {
@@ -156,6 +168,42 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     }
   }, [isOpen, onClose])
 
+  // Load stash files list
+  useEffect(() => {
+    if (!isOpen || !isStash || stashIndex === null || stashIndex === undefined) {
+      setStashFiles([])
+      setSelectedStashFile(null)
+      return
+    }
+
+    let isMounted = true
+    setStashFilesLoading(true)
+    setStashFilesError(null)
+
+    window.api.git.getStashFiles(repoPath, stashIndex)
+      .then((res) => {
+        if (!isMounted) return
+        if (res.success && res.data) {
+          setStashFiles(res.data)
+          if (res.data.length > 0) {
+            setSelectedStashFile(res.data[0])
+          }
+        } else {
+          setStashFilesError(res.error || 'Failed to load stash files')
+        }
+        setStashFilesLoading(false)
+      })
+      .catch((err) => {
+        if (!isMounted) return
+        setStashFilesError(err.message || 'Error loading stash files')
+        setStashFilesLoading(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [isOpen, isStash, stashIndex, repoPath])
+
   useEffect(() => {
     if (!isOpen) return
 
@@ -163,9 +211,22 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     setLoading(true)
     setError(null)
 
-    const fetchDiff = isActiveChange
-      ? window.api.git.getActiveFileDiff(repoPath, filePath, !!isStaged, oldPath)
-      : window.api.git.getCommitFileDiff(repoPath, commitHash!, filePath, oldPath, status)
+    const targetFilePath = isStash ? selectedStashFile?.path : filePath
+    const targetOldPath = isStash ? selectedStashFile?.oldPath : oldPath
+    const targetStatus = isStash ? selectedStashFile?.status : status
+    const isUntracked = isStash ? selectedStashFile?.isUntracked : false
+
+    if (isStash && !selectedStashFile) {
+      setLoading(false)
+      setDiffItems([])
+      return
+    }
+
+    const fetchDiff = isStash
+      ? window.api.git.getStashFileDiff(repoPath, stashIndex!, targetFilePath, targetOldPath, targetStatus, isUntracked)
+      : isActiveChange
+      ? window.api.git.getActiveFileDiff(repoPath, targetFilePath, !!isStaged, targetOldPath)
+      : window.api.git.getCommitFileDiff(repoPath, commitHash!, targetFilePath, targetOldPath, targetStatus)
 
     fetchDiff
       .then((res) => {
@@ -193,7 +254,19 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     return () => {
       isMounted = false
     }
-  }, [isOpen, filePath, commitHash, repoPath, isActiveChange, isStaged, oldPath, status])
+  }, [
+    isOpen,
+    filePath,
+    commitHash,
+    repoPath,
+    isActiveChange,
+    isStaged,
+    oldPath,
+    status,
+    isStash,
+    stashIndex,
+    selectedStashFile
+  ])
 
   // 2. Scroll to the first diff position after loading
   useEffect(() => {
@@ -228,6 +301,10 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
   if (!isOpen) return null
 
+  const currentFilePath = isStash ? selectedStashFile?.path || 'No file selected' : filePath
+  const currentOldPath = isStash ? selectedStashFile?.oldPath : oldPath
+  const currentStatus = isStash ? selectedStashFile?.status : status
+
   return (
     <div className="diff-modal-overlay" onClick={onClose}>
       <div className="diff-modal-content" onClick={(e) => e.stopPropagation()}>
@@ -235,13 +312,31 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <FileText size={18} style={{ color: 'var(--accent-light)' }} />
             <div>
-              <div style={{ fontWeight: 600, fontSize: '15px', wordBreak: 'break-all' }}>{filePath}</div>
+              <div style={{ fontWeight: 600, fontSize: '15px', wordBreak: 'break-all' }}>{currentFilePath}</div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                {status === 'R' ? `Renamed from ${oldPath} | ` : ''}
-                {isActiveChange ? (
+                {currentStatus === 'R' ? `Renamed from ${currentOldPath} | ` : ''}
+                {isStash ? (
+                  <span>
+                    Stash details:{' '}
+                    <code
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        backgroundColor: 'var(--bg-tertiary)',
+                        padding: '1px 4px',
+                        borderRadius: '3px'
+                      }}
+                    >
+                      stash@{stashIndex}
+                    </code>{' '}
+                    {stashMessage ? `— "${stashMessage}"` : ''}
+                  </span>
+                ) : isActiveChange ? (
                   <span>{isStaged ? 'Staged changes' : 'Unstaged changes'}</span>
                 ) : (
-                  <>Commit: <span style={{ fontFamily: 'monospace' }}>{commitHash?.substring(0, 8)}</span></>
+                  <>
+                    Commit:{' '}
+                    <span style={{ fontFamily: 'monospace' }}>{commitHash?.substring(0, 8)}</span>
+                  </>
                 )}
               </div>
             </div>
@@ -251,9 +346,142 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           </button>
         </div>
         <div className="diff-modal-body">
-          <div ref={bodyRef} className="diff-modal-scroll">
+          {isStash && (
+            <div
+              className="diff-modal-sidebar"
+              style={{
+                width: '240px',
+                borderRight: '1px solid var(--border)',
+                display: 'flex',
+                flexDirection: 'column',
+                backgroundColor: 'var(--bg-secondary)',
+                flexShrink: 0
+              }}
+            >
+              <div
+                style={{
+                  padding: '12px 16px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  borderBottom: '1px solid var(--border)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}
+              >
+                Stash Files
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+                {stashFilesLoading ? (
+                  <div
+                    style={{
+                      padding: '16px',
+                      textAlign: 'center',
+                      color: 'var(--text-secondary)',
+                      fontSize: '12px'
+                    }}
+                  >
+                    Loading...
+                  </div>
+                ) : stashFilesError ? (
+                  <div
+                    style={{
+                      padding: '16px',
+                      textAlign: 'center',
+                      color: '#f87171',
+                      fontSize: '12px'
+                    }}
+                  >
+                    {stashFilesError}
+                  </div>
+                ) : stashFiles.length === 0 ? (
+                  <div
+                    style={{
+                      padding: '16px',
+                      textAlign: 'center',
+                      color: 'var(--text-secondary)',
+                      fontSize: '12px'
+                    }}
+                  >
+                    No files changed
+                  </div>
+                ) : (
+                  stashFiles.map((file) => {
+                    const isFileSelected = file.path === selectedStashFile?.path
+                    return (
+                      <div
+                        key={file.path}
+                        onClick={() => setSelectedStashFile(file)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '6px 8px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          backgroundColor: isFileSelected
+                            ? 'rgba(99, 102, 241, 0.15)'
+                            : 'transparent',
+                          transition: 'all 0.15s ease',
+                          marginBottom: '2px'
+                        }}
+                        className="stash-modal-file-item"
+                      >
+                        <FileText
+                          size={13}
+                          style={{
+                            marginRight: '6px',
+                            color: isFileSelected
+                              ? 'var(--accent-light)'
+                              : 'var(--text-secondary)',
+                            flexShrink: 0
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontSize: '12px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            flex: 1,
+                            color: isFileSelected ? 'var(--text-primary)' : 'var(--text-secondary)'
+                          }}
+                          title={file.path}
+                        >
+                          {file.path}
+                        </span>
+                        <span
+                          className={`file-status status-${file.status.toLowerCase()}`}
+                          style={{
+                            fontSize: '9px',
+                            padding: '1px 4px',
+                            borderRadius: '3px',
+                            fontWeight: 700,
+                            flexShrink: 0
+                          }}
+                        >
+                          {file.status}
+                        </span>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          <div
+            ref={bodyRef}
+            className="diff-modal-scroll"
+            style={{ display: isStash && !selectedStashFile ? 'none' : 'block' }}
+          >
             {loading && (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <div
+                style={{
+                  padding: '40px',
+                  textAlign: 'center',
+                  color: 'var(--text-secondary)'
+                }}
+              >
                 Loading file diff...
               </div>
             )}
@@ -263,7 +491,13 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               </div>
             )}
             {!loading && !error && isBinary && (
-              <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <div
+                style={{
+                  padding: '60px',
+                  textAlign: 'center',
+                  color: 'var(--text-secondary)'
+                }}
+              >
                 Binary file (diff not available as text)
               </div>
             )}

@@ -23,6 +23,9 @@ declare global {
         stashAll: (repoPath: string, message?: string) => Promise<{ success: boolean; error?: string }>;
         stashList: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ index: number; ref: string; message: string; date: string }>; error?: string }>;
         stashPop: (repoPath: string, index: number) => Promise<{ success: boolean; data?: { hadConflicts: boolean }; error?: string }>;
+        stashDrop: (repoPath: string, index: number) => Promise<{ success: boolean; data?: any; error?: string }>;
+        getStashFiles: (repoPath: string, index: number) => Promise<{ success: boolean; data?: Array<{ status: string; path: string; oldPath?: string; isUntracked?: boolean }>; error?: string }>;
+        getStashFileDiff: (repoPath: string, index: number, filePath: string, oldPath?: string, status?: string, isUntracked?: boolean) => Promise<{ success: boolean; data?: { before: string; after: string; isBinary: boolean }; error?: string }>;
         setRepositoryIdentity: (repoPath: string, identity: { name: string; email: string; sshKeyPath?: string; personalAccessToken?: string; username?: string; provider?: string }) => Promise<{ success: boolean; data?: any; error?: string }>;
         validateToken: (provider: string, token: string, email?: string) => Promise<{ success: boolean; data?: { name: string; email: string; username: string; avatarUrl: string }; error?: string }>;
         watchRepo: (repoPath: string | null) => Promise<{ success: boolean; error?: string }>;

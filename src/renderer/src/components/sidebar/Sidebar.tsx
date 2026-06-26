@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { GitBranch, Layers, Package, AlertTriangle, User } from 'lucide-react'
+import { GitBranch, Layers, Package, AlertTriangle, User, Trash2, List } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
+import { DiffModal } from '../details/DiffModal'
 
 const Sidebar: React.FC = () => {
   const { getActiveRepo, refreshRepo } = useRepoStore()
@@ -10,7 +11,12 @@ const Sidebar: React.FC = () => {
   const [selectedStashIndex, setSelectedStashIndex] = useState<number | null>(null)
   const [conflictWarning, setConflictWarning] = useState(false)
   const [poppingIndex, setPoppingIndex] = useState<number | null>(null)
+  const [deletingIndex, setDeletingIndex] = useState<number | null>(null)
   const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
+  
+  const [isStashDetailsOpen, setIsStashDetailsOpen] = useState(false)
+  const [detailsStashIndex, setDetailsStashIndex] = useState<number | null>(null)
+  const [detailsStashMessage, setDetailsStashMessage] = useState<string | null>(null)
 
   const branch = activeRepo?.branch || 'main'
   const status = activeRepo?.status
@@ -19,6 +25,20 @@ const Sidebar: React.FC = () => {
   const handlePopStash = async (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
     if (!activeRepo) return
+
+    const confirmRes = await window.api.app.showMessageBox({
+      type: 'question',
+      title: 'Pop Stash',
+      message: 'Are you sure you want to pop this stash back into your working directory?',
+      buttons: ['Cancel', 'Pop'],
+      defaultId: 1,
+      cancelId: 0
+    })
+
+    if (!confirmRes.success || confirmRes.response !== 1) {
+      return
+    }
+
     setPoppingIndex(index)
     setConflictWarning(false)
     try {
@@ -37,6 +57,46 @@ const Sidebar: React.FC = () => {
     } finally {
       setPoppingIndex(null)
     }
+  }
+
+  const handleDeleteStash = async (e: React.MouseEvent, index: number) => {
+    e.stopPropagation()
+    if (!activeRepo) return
+
+    const confirmRes = await window.api.app.showMessageBox({
+      type: 'warning',
+      title: 'Delete Stash',
+      message: 'Are you sure you want to delete this stash? This action cannot be undone.',
+      buttons: ['Cancel', 'Delete'],
+      defaultId: 1,
+      cancelId: 0
+    })
+
+    if (!confirmRes.success || confirmRes.response !== 1) {
+      return
+    }
+
+    setDeletingIndex(index)
+    try {
+      const res = await window.api.git.stashDrop(activeRepo.path, index)
+      if (res.success) {
+        setSelectedStashIndex(null)
+        await refreshRepo(activeRepo.id)
+      } else {
+        console.error('Failed to delete stash:', res.error)
+      }
+    } catch (err) {
+      console.error('Error deleting stash:', err)
+    } finally {
+      setDeletingIndex(null)
+    }
+  }
+
+  const handleShowStashDetails = (e: React.MouseEvent, index: number, message: string) => {
+    e.stopPropagation()
+    setDetailsStashIndex(index)
+    setDetailsStashMessage(message)
+    setIsStashDetailsOpen(true)
   }
 
   const formatStashDate = (dateStr: string) => {
@@ -145,15 +205,35 @@ const Sidebar: React.FC = () => {
                   <div className="stash-item-date">{formatStashDate(stash.date)}</div>
                 </div>
                 {isSelected && (
-                  <button
-                    className="stash-pop-btn"
-                    onClick={(e) => handlePopStash(e, stash.index)}
-                    disabled={isPopping}
-                    title="Pop this stash back to working directory"
-                    data-testid={`stash-pop-btn-${stash.index}`}
-                  >
-                    {isPopping ? '…' : 'Pop'}
-                  </button>
+                  <div className="stash-actions">
+                    <button
+                      className="stash-action-btn pop"
+                      onClick={(e) => handlePopStash(e, stash.index)}
+                      disabled={isPopping || deletingIndex === stash.index}
+                      title="Pop this stash back to working directory"
+                      data-testid={`stash-pop-btn-${stash.index}`}
+                    >
+                      {isPopping ? '…' : 'Pop'}
+                    </button>
+                    <button
+                      className="stash-action-btn details"
+                      onClick={(e) => handleShowStashDetails(e, stash.index, stash.message)}
+                      disabled={isPopping || deletingIndex === stash.index}
+                      title="View stash files and diff details"
+                      data-testid={`stash-details-btn-${stash.index}`}
+                    >
+                      <List size={13} />
+                    </button>
+                    <button
+                      className="stash-action-btn delete"
+                      onClick={(e) => handleDeleteStash(e, stash.index)}
+                      disabled={isPopping || deletingIndex === stash.index}
+                      title="Delete this stash"
+                      data-testid={`stash-delete-btn-${stash.index}`}
+                    >
+                      {deletingIndex === stash.index ? '…' : <Trash2 size={13} />}
+                    </button>
+                  </div>
                 )}
               </div>
             )
@@ -191,6 +271,23 @@ const Sidebar: React.FC = () => {
         isOpen={identitiesModalOpen}
         onClose={() => setIdentitiesModalOpen(false)}
       />
+
+      {isStashDetailsOpen && activeRepo && detailsStashIndex !== null && (
+        <DiffModal
+          isOpen={isStashDetailsOpen}
+          onClose={() => {
+            setIsStashDetailsOpen(false)
+            setDetailsStashIndex(null)
+            setDetailsStashMessage(null)
+          }}
+          filePath=""
+          status=""
+          repoPath={activeRepo.path}
+          isStash={true}
+          stashIndex={detailsStashIndex}
+          stashMessage={detailsStashMessage}
+        />
+      )}
     </div>
   )
 }
