@@ -80,7 +80,7 @@ body {
   display: flex;
   flex: 1;
   height: 100%;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 
 .tab {
@@ -95,6 +95,7 @@ body {
   transition: all 0.2s ease;
   position: relative;
   border-right: 1px solid var(--border);
+  -webkit-app-region: no-drag;
 }
 
 .tab:hover {

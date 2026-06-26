@@ -22,10 +22,31 @@ interface RepoState {
   setActiveId: (id: string) => void;
   refreshRepo: (id: string) => Promise<void>;
   setSelectedCommitHash: (hash: string | null) => void;
+  initializeRepos: (paths: string[], activePath: string | null) => Promise<void>;
   
   // Helper to get active repo
   getActiveRepo: () => Repository | undefined;
 }
+
+const normalizePath = (p: string) => p.toLowerCase().replace(/\\/g, '/');
+
+const saveToLocalStorage = (repositories: Repository[], activeId: string | null) => {
+  try {
+    if (typeof localStorage === 'undefined') {
+      return;
+    }
+    const paths = repositories.map(r => r.path);
+    const activeRepo = repositories.find(r => r.id === activeId);
+    localStorage.setItem('open-repo-paths', JSON.stringify(paths));
+    if (activeRepo) {
+      localStorage.setItem('active-repo-path', activeRepo.path);
+    } else {
+      localStorage.removeItem('active-repo-path');
+    }
+  } catch (e) {
+    console.error('Failed to save to localStorage', e);
+  }
+};
 
 export const useRepoStore = create<RepoState>((set, get) => ({
   repositories: [],
@@ -45,6 +66,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       window.api.git.watchRepo(repo.path).catch(err => console.error('Failed to watch repo on switch', err));
     }
     get().refreshRepo(id).catch(err => console.error('Failed to refresh repo on switch', err));
+    saveToLocalStorage(get().repositories, id);
   },
 
   setSelectedCommitHash: (hash: string | null) => {
@@ -65,10 +87,11 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     }
     
     // Check if already open
-    if (repositories.find(r => r.path === resolvedPath)) {
-      const existing = repositories.find(r => r.path === resolvedPath)!;
+    if (repositories.find(r => normalizePath(r.path) === normalizePath(resolvedPath))) {
+      const existing = repositories.find(r => normalizePath(r.path) === normalizePath(resolvedPath))!;
       const latestHash = existing.commits.length > 0 ? existing.commits[0].hash : null;
       set({ activeId: existing.id, selectedCommitHash: latestHash });
+      saveToLocalStorage(get().repositories, existing.id);
       return;
     }
 
@@ -91,6 +114,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       activeId: id,
       selectedCommitHash: null
     });
+    saveToLocalStorage(get().repositories, id);
 
     window.api.git.watchRepo(resolvedPath).catch(err => console.error('Failed to watch repo on add', err));
     await get().refreshRepo(id);
@@ -109,12 +133,88 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const latestHash = (nextActiveRepo && nextActiveRepo.commits.length > 0) ? nextActiveRepo.commits[0].hash : null;
 
     set({ repositories: newRepos, activeId: newActiveId, selectedCommitHash: latestHash });
+    saveToLocalStorage(newRepos, newActiveId);
 
     if (nextActiveRepo) {
       window.api.git.watchRepo(nextActiveRepo.path).catch(err => console.error('Failed to watch next repo on remove', err));
     } else {
       window.api.git.watchRepo(null).catch(err => console.error('Failed to stop watching repo on remove', err));
     }
+  },
+
+  initializeRepos: async (paths: string[], activePath: string | null) => {
+    // Resolve all paths
+    const resolvedPaths = await Promise.all(
+      paths.map(async (p) => {
+        try {
+          const res = await window.api.app.resolvePath(p);
+          if (res.success && res.path) {
+            return res.path;
+          }
+        } catch (e) {
+          console.error('Failed to resolve path', p, e);
+        }
+        return p;
+      })
+    );
+
+    // Filter duplicates
+    const uniquePaths = Array.from(new Set(resolvedPaths));
+    if (uniquePaths.length === 0) return;
+
+    // Build Repository objects
+    const newRepos: Repository[] = uniquePaths.map((p) => {
+      const name = p.split(/[\\/]/).pop() || p;
+      const id = Math.random().toString(36).substring(7);
+      return {
+        id,
+        path: p,
+        name,
+        branch: 'main',
+        status: null,
+        commits: [],
+        isLoading: true,
+        error: null,
+      };
+    });
+
+    // Resolve active path
+    let resolvedActivePath = activePath;
+    if (activePath) {
+      try {
+        const res = await window.api.app.resolvePath(activePath);
+        if (res.success && res.path) {
+          resolvedActivePath = res.path;
+        }
+      } catch (e) {
+        console.error('Failed to resolve active path', activePath, e);
+      }
+    }
+    
+    // Find the repo matching the active path, or default to the first one
+    const activeRepo = newRepos.find(r => normalizePath(r.path) === normalizePath(resolvedActivePath || '')) || newRepos[0];
+    const activeId = activeRepo ? activeRepo.id : null;
+
+    set({
+      repositories: newRepos,
+      activeId,
+      selectedCommitHash: null
+    });
+    
+    if (activeId) {
+      saveToLocalStorage(newRepos, activeId);
+    }
+
+    if (activeRepo) {
+      window.api.git.watchRepo(activeRepo.path).catch(err => 
+        console.error('Failed to watch active repo on init', err)
+      );
+    }
+
+    // Refresh all loaded repos
+    await Promise.all(
+      newRepos.map(r => get().refreshRepo(r.id))
+    );
   },
 
   refreshRepo: async (id: string) => {

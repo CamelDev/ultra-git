@@ -72,4 +72,69 @@ test.describe('Multi-Repo Tab System', () => {
       await app.close();
     }
   });
+
+  test('should persist tabs on app reload/restart', async () => {
+    // 1. Launch the native Electron Application
+    const { app: app1, page: page1 } = await launchElectronApp();
+    
+    try {
+      const expectedInitialTabName = path.basename(process.cwd());
+
+      // Verify initial default tab renders
+      const initialTabs1 = page1.locator('[data-testid="repo-tab"]');
+      await expect(initialTabs1).toHaveCount(1);
+      await expect(initialTabs1.first()).toContainText(expectedInitialTabName);
+
+      // Mock the native dialog in the Electron Main process
+      await app1.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath };
+        });
+      }, sandbox.dir);
+
+      // Click the Add Repository button
+      const addBtn = page1.locator('[data-testid="add-repo-btn"]');
+      await expect(addBtn).toBeVisible();
+      await addBtn.click();
+
+      // Verify the new tab is added successfully (count = 2)
+      const expectedTabName = path.basename(sandbox.dir);
+      await expect(initialTabs1).toHaveCount(2);
+      await expect(initialTabs1.last()).toContainText(expectedTabName);
+
+      // Switch to the new tab so we also test active tab persistence
+      await initialTabs1.last().click();
+
+      // Close the first app instance
+      await app1.close();
+
+      // 2. Launch the Electron Application again (restart without clearing localStorage)
+      const { app: app2, page: page2 } = await launchElectronApp({ cleanState: false });
+
+      try {
+        const initialTabs2 = page2.locator('[data-testid="repo-tab"]');
+        
+        // Both tabs should still be open!
+        await expect(initialTabs2).toHaveCount(2);
+        await expect(initialTabs2.first()).toContainText(expectedInitialTabName);
+        await expect(initialTabs2.last()).toContainText(expectedTabName);
+
+        // The second tab should still be active, meaning its sidebar should show the sandbox branch
+        const sidebarActiveBranch = page2.locator('[data-testid="sidebar-active-branch"]');
+        await expect(sidebarActiveBranch).toBeVisible();
+        await expect(sidebarActiveBranch).toContainText('feature/e2e-tabs');
+
+      } finally {
+        await app2.close();
+      }
+
+    } finally {
+      try {
+        await app1.close();
+      } catch (e) {
+        // Ignore if already closed
+      }
+    }
+  });
 });

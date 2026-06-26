@@ -8,7 +8,7 @@ import { useRepoStore } from './store/useRepoStore'
 import { ActiveChanges } from './components/active-changes/ActiveChanges'
 
 function App() {
-  const { addRepo, getActiveRepo, refreshRepo } = useRepoStore()
+  const { addRepo, getActiveRepo, refreshRepo, initializeRepos } = useRepoStore()
   const activeRepo = getActiveRepo()
   const hasActiveChanges = !!(activeRepo?.status?.files && activeRepo.status.files.length > 0)
   
@@ -141,9 +141,27 @@ function App() {
   }, [activeChangesHeight])
 
   useEffect(() => {
-    // Initial repo load
-    addRepo('.') 
-  }, [])
+    // Initial repo load from localStorage
+    const savedPathsStr = localStorage.getItem('open-repo-paths')
+    const savedActivePath = localStorage.getItem('active-repo-path')
+    
+    let paths: string[] = []
+    if (savedPathsStr) {
+      try {
+        paths = JSON.parse(savedPathsStr)
+      } catch (e) {
+        console.error('Failed to parse saved repository paths', e)
+      }
+    }
+    
+    if (paths.length === 0) {
+      paths = ['.']
+    }
+    
+    initializeRepos(paths, savedActivePath).catch((err) =>
+      console.error('Failed to initialize repositories', err)
+    )
+  }, [initializeRepos])
 
   // Auto-refresh when files change in the repository
   useEffect(() => {

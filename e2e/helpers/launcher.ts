@@ -10,7 +10,7 @@ export interface LaunchedApp {
  * Robustly launches the production-built Electron application.
  * Reusable across all E2E specs to ensure unified bootstrap parameters.
  */
-export async function launchElectronApp(): Promise<LaunchedApp> {
+export async function launchElectronApp(options: { cleanState?: boolean } = { cleanState: true }): Promise<LaunchedApp> {
   const mainPath = path.join(__dirname, '../../out/main/index.js');
   
   const app = await electron.launch({
@@ -19,6 +19,14 @@ export async function launchElectronApp(): Promise<LaunchedApp> {
 
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
+
+  if (options.cleanState) {
+    await page.evaluate(() => {
+      localStorage.clear();
+    });
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+  }
 
   return { app, page };
 }

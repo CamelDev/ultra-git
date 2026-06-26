@@ -6,14 +6,31 @@ const mockApi = {
   git: {
     status: vi.fn().mockResolvedValue({ success: true, data: { current: 'main' } }),
     log: vi.fn().mockResolvedValue({ success: true, data: { all: [] } }),
+    watchRepo: vi.fn().mockResolvedValue({ success: true }),
   },
   app: {
     openDirectory: vi.fn(),
+    resolvePath: vi.fn().mockImplementation((p) => Promise.resolve({ success: true, path: p })),
   }
 }
 
+const localStore: Record<string, string> = {};
+const mockLocalStorage = {
+  getItem: vi.fn().mockImplementation((key) => localStore[key] || null),
+  setItem: vi.fn().mockImplementation((key, value) => { localStore[key] = String(value); }),
+  removeItem: vi.fn().mockImplementation((key) => { delete localStore[key]; }),
+  clear: vi.fn().mockImplementation(() => { for (const key in localStore) delete localStore[key]; }),
+  length: 0,
+  key: vi.fn()
+};
+
 // @ts-ignore
-global.window = { api: mockApi }
+global.window = {
+  api: mockApi,
+  localStorage: mockLocalStorage
+}
+// @ts-ignore
+global.localStorage = mockLocalStorage
 
 describe('useRepoStore', () => {
   beforeEach(() => {
@@ -76,5 +93,58 @@ describe('useRepoStore', () => {
 
     setActiveId(id1);
     expect(useRepoStore.getState().activeId).toBe(id1);
+  });
+
+  it('should initialize repositories and set active one from activePath', async () => {
+    const { initializeRepos } = useRepoStore.getState();
+    await initializeRepos(['/repo1', '/repo2'], '/repo2');
+
+    const state = useRepoStore.getState();
+    expect(state.repositories.length).toBe(2);
+    expect(state.repositories[0].path).toBe('/repo1');
+    expect(state.repositories[1].path).toBe('/repo2');
+    
+    const activeRepo = state.getActiveRepo();
+    expect(activeRepo).toBeDefined();
+    expect(activeRepo!.path).toBe('/repo2');
+    expect(state.activeId).toBe(activeRepo!.id);
+  });
+
+  it('should fallback to first repository if activePath is not found', async () => {
+    const { initializeRepos } = useRepoStore.getState();
+    await initializeRepos(['/repo1', '/repo2'], '/non-existent');
+
+    const state = useRepoStore.getState();
+    expect(state.repositories.length).toBe(2);
+    const activeRepo = state.getActiveRepo();
+    expect(activeRepo!.path).toBe('/repo1');
+  });
+
+  it('should save to localStorage when repositories are added, switched, and removed', async () => {
+    // Clear localStore before testing
+    for (const key in localStore) delete localStore[key];
+
+    const { addRepo, setActiveId, removeRepo } = useRepoStore.getState();
+    
+    await addRepo('/repo1');
+    expect(JSON.parse(localStore['open-repo-paths'])).toEqual(['/repo1']);
+    expect(localStore['active-repo-path']).toBe('/repo1');
+
+    await addRepo('/repo2');
+    expect(JSON.parse(localStore['open-repo-paths'])).toEqual(['/repo1', '/repo2']);
+    expect(localStore['active-repo-path']).toBe('/repo2');
+
+    const id1 = useRepoStore.getState().repositories[0].id;
+    setActiveId(id1);
+    expect(localStore['active-repo-path']).toBe('/repo1');
+
+    const id2 = useRepoStore.getState().repositories[1].id;
+    removeRepo(id2);
+    expect(JSON.parse(localStore['open-repo-paths'])).toEqual(['/repo1']);
+    expect(localStore['active-repo-path']).toBe('/repo1');
+
+    removeRepo(id1);
+    expect(JSON.parse(localStore['open-repo-paths'])).toEqual([]);
+    expect(localStore['active-repo-path']).toBeUndefined();
   });
 });
