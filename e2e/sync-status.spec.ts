@@ -161,14 +161,14 @@ test.describe('Branch Sync Status', () => {
 
       // Click Pull
       await pullBtn.click()
-      await page.waitForTimeout(2000) // Wait for pull to complete and refresh
+      await expect(pullBtn).toBeEnabled({ timeout: 15000 }) // Wait for pull to complete and refresh
 
       // Pull behind badge should be gone
       await expect(pullBehindBadge).not.toBeVisible()
 
       // Click Push
       await pushBtn.click()
-      await page.waitForTimeout(2000) // Wait for push to complete and refresh
+      await expect(pushBtn).toBeEnabled({ timeout: 15000 }) // Wait for push to complete and refresh
 
       // Push ahead badge should be gone
       await expect(pushAheadBadge).not.toBeVisible()
@@ -221,7 +221,7 @@ test.describe('Branch Sync Status', () => {
 
       // Click Pull to cause conflict
       await pullBtn.click()
-      await page.waitForTimeout(2000)
+      await expect(pullBtn).toBeEnabled({ timeout: 15000 })
 
       // Conflict banner should be visible
       const conflictBanner = page.locator('[data-testid="pull-conflict-banner"]')

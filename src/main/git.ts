@@ -99,7 +99,7 @@ export const gitService = {
   pull: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
     try {
-      await git.pull();
+      await git.pull(undefined, undefined, { '--no-edit': null });
       return { hadConflicts: false };
     } catch (err: any) {
       const msg: string = err.message || '';
