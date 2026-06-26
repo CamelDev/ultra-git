@@ -77,19 +77,26 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
       return
     }
 
+    if (provider === 'bitbucket' && !email.trim()) {
+      setValidationError('Bitbucket API tokens require your Atlassian account email address. Please fill in the Git Email field first.')
+      return
+    }
+
     setIsValidating(true)
     setValidationError('')
     setConnectedUser(null)
 
     try {
-      const res = await window.api.git.validateToken(provider, personalAccessToken.trim())
+      const res = await window.api.git.validateToken(provider, personalAccessToken.trim(), email.trim())
       if (res.success && res.data) {
         const user = res.data
         setConnectedUser(user)
         
         // Auto-fill values
         setName(user.name || '')
-        setEmail(user.email || '')
+        if (user.email) {
+          setEmail(user.email)
+        }
         if (!label) {
           const capitalizedProvider = provider.charAt(0).toUpperCase() + provider.slice(1)
           setLabel(`${capitalizedProvider} - ${user.username || user.name}`)
@@ -160,8 +167,8 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
 
   const getProviderLink = () => {
     if (provider === 'github') return 'https://github.com/settings/tokens'
-    if (provider === 'gitlab') return 'https://gitlab.com/-/profile/personal_access_tokens'
-    if (provider === 'bitbucket') return 'https://bitbucket.org/account/settings/app-passwords'
+    if (provider === 'gitlab') return 'https://gitlab.com/-/user_settings/personal_access_tokens'
+    if (provider === 'bitbucket') return 'https://id.atlassian.com/manage-profile/security/api-tokens'
     return null
   }
 

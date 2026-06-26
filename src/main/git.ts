@@ -1,17 +1,20 @@
 import simpleGit, { SimpleGit, SimpleGitOptions } from 'simple-git';
 import fs from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 // Manage simple-git instances per repository path
 const gitInstances = new Map<string, SimpleGit>();
 
 function getGitInstance(repoPath: string): SimpleGit {
   if (!gitInstances.has(repoPath)) {
-    const options: Partial<SimpleGitOptions> = {
+    const options: any = {
       baseDir: repoPath,
       binary: 'git',
       maxConcurrentProcesses: 6,
       trimmed: false,
+      unsafe: {
+        allowUnsafeCredentialHelper: true
+      }
     };
     gitInstances.set(repoPath, simpleGit(options));
   }
@@ -99,7 +102,7 @@ export const gitService = {
   pull: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
     try {
-      await git.pull(undefined, undefined, { '--no-edit': null });
+      await git.pull(undefined, undefined, { '--no-edit': null, '--no-rebase': null });
       return { hadConflicts: false };
     } catch (err: any) {
       const msg: string = err.message || '';
@@ -323,8 +326,20 @@ export const gitService = {
 
   setRepositoryIdentity: async (
     repoPath: string,
-    identity: { name: string; email: string; sshKeyPath?: string; personalAccessToken?: string }
+    identity: {
+      name: string;
+      email: string;
+      sshKeyPath?: string;
+      personalAccessToken?: string;
+      username?: string;
+      provider?: string;
+    }
   ) => {
+    if (process.env.ULTRA_GIT_TESTING === 'true' && resolve(repoPath) === resolve(process.cwd())) {
+      console.log(`git.ts: Skipping git configuration modification for main workspace CWD repository: ${repoPath}`);
+      return { success: true };
+    }
+
     const git = getGitInstance(repoPath);
     if (identity.name) {
       await git.addConfig('user.name', identity.name, false, 'local');
@@ -365,8 +380,18 @@ export const gitService = {
 
     if (identity.personalAccessToken) {
       const escapedToken = identity.personalAccessToken.replace(/"/g, '\\"');
+      let helperUsername = 'token';
+      if (identity.provider === 'bitbucket') {
+        helperUsername = identity.username || identity.email || 'x-token-auth';
+      } else if (identity.provider === 'gitlab') {
+        helperUsername = identity.username || 'oauth2';
+      } else if (identity.provider === 'github') {
+        helperUsername = identity.username || 'token';
+      } else if (identity.username) {
+        helperUsername = identity.username;
+      }
       await git.raw(['config', '--local', '--add', 'credential.helper', '']);
-      await git.raw(['config', '--local', '--add', 'credential.helper', `!f() { echo "username=token"; echo "password=${escapedToken}"; }; f`]);
+      await git.raw(['config', '--local', '--add', 'credential.helper', `!f() { echo "username=${helperUsername}"; echo "password=${escapedToken}"; }; f`]);
     }
 
     return { success: true };

@@ -142,7 +142,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         name: globalIdList[0].name,
         email: globalIdList[0].email,
         sshKeyPath: globalIdList[0].sshKeyPath,
-        personalAccessToken: globalIdList[0].personalAccessToken
+        personalAccessToken: globalIdList[0].personalAccessToken,
+        username: globalIdList[0].username,
+        provider: globalIdList[0].provider
       }).catch(console.error);
     }
 
@@ -232,7 +234,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
           name: globalIdList[0].name,
           email: globalIdList[0].email,
           sshKeyPath: globalIdList[0].sshKeyPath,
-          personalAccessToken: globalIdList[0].personalAccessToken
+          personalAccessToken: globalIdList[0].personalAccessToken,
+          username: globalIdList[0].username,
+          provider: globalIdList[0].provider
         }).catch(console.error);
       }
 
@@ -400,7 +404,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     for (const r of repos) {
       if (r.identityId === id) {
         console.log(`useRepoStore: unsetting repo configuration on disk for ${r.path}`);
-        window.api.git.setRepositoryIdentity(r.path, { name: '', email: '', sshKeyPath: undefined, personalAccessToken: undefined })
+        window.api.git.setRepositoryIdentity(r.path, { name: '', email: '', sshKeyPath: undefined, personalAccessToken: undefined, username: undefined, provider: undefined })
           .catch(err => console.error('Failed to unset local git config on profile deletion', err));
       }
     }
@@ -452,10 +456,12 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         name: identity.name,
         email: identity.email,
         sshKeyPath: identity.sshKeyPath,
-        personalAccessToken: identity.personalAccessToken
+        personalAccessToken: identity.personalAccessToken,
+        username: identity.username,
+        provider: identity.provider
       });
     } else {
-      await window.api.git.setRepositoryIdentity(repo.path, { name: '', email: '', sshKeyPath: undefined, personalAccessToken: undefined });
+      await window.api.git.setRepositoryIdentity(repo.path, { name: '', email: '', sshKeyPath: undefined, personalAccessToken: undefined, username: undefined, provider: undefined });
     }
   }
 }));

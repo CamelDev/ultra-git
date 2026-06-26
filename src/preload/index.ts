@@ -24,7 +24,7 @@ const api = {
     stashList: (repoPath: string) => ipcRenderer.invoke('git:stashList', repoPath),
     stashPop: (repoPath: string, index: number) => ipcRenderer.invoke('git:stashPop', repoPath, index),
     setRepositoryIdentity: (repoPath: string, identity: any) => ipcRenderer.invoke('git:setRepositoryIdentity', repoPath, identity),
-    validateToken: (provider: string, token: string) => ipcRenderer.invoke('git:validateToken', { provider, token }),
+    validateToken: (provider: string, token: string, email?: string) => ipcRenderer.invoke('git:validateToken', { provider, token, email }),
     watchRepo: (repoPath: string | null) => ipcRenderer.invoke('git:watchRepo', repoPath),
     onRepoChanged: (callback: (repoPath: string) => void) => {
       const listener = (_event: any, path: string) => callback(path)

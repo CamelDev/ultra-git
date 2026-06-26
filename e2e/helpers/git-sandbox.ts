@@ -17,7 +17,12 @@ export class GitSandbox {
     
     // Create the isolated sandbox directory
     fs.mkdirSync(this.dir, { recursive: true });
-    this.git = simpleGit(this.dir);
+    this.git = simpleGit({
+      baseDir: this.dir,
+      unsafe: {
+        allowUnsafeCredentialHelper: true
+      }
+    } as any);
   }
 
   /**
@@ -30,6 +35,7 @@ export class GitSandbox {
     // Enforce local-only config parameters
     await this.git.addConfig('user.name', 'Test User', false, 'local');
     await this.git.addConfig('user.email', 'test@example.com', false, 'local');
+    await this.git.addConfig('pull.rebase', 'false', false, 'local');
     
     // Create initial commit so we have a valid HEAD and default branch (e.g. main/master)
     fs.writeFileSync(path.join(this.dir, 'README.md'), '# Test Sandbox Repo\n');

@@ -226,7 +226,7 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:validateToken', async (_, { provider, token }) => {
+  ipcMain.handle('git:validateToken', async (_, { provider, token, email }) => {
     try {
       let url = ''
       const headers: Record<string, string> = {
@@ -242,7 +242,12 @@ app.whenReady().then(() => {
         headers['Authorization'] = `Bearer ${token}`
       } else if (provider === 'bitbucket') {
         url = 'https://api.bitbucket.org/2.0/user'
-        headers['Authorization'] = `Bearer ${token}`
+        if (email) {
+          const authString = Buffer.from(`${email}:${token}`).toString('base64')
+          headers['Authorization'] = `Basic ${authString}`
+        } else {
+          headers['Authorization'] = `Bearer ${token}`
+        }
       } else {
         return { success: false, error: 'Unsupported provider' }
       }

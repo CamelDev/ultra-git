@@ -132,6 +132,10 @@ test.describe('Branch Sync Status', () => {
         ipcMain.handle('dialog:openDirectory', async () => {
           return { canceled: false, path: sandboxPath }
         })
+        ipcMain.removeHandler('dialog:showMessageBox')
+        ipcMain.handle('dialog:showMessageBox', async () => {
+          return { success: true, response: 0 }
+        })
       }, localSandbox.dir)
 
       const addBtn = page.locator('[data-testid="add-repo-btn"]')

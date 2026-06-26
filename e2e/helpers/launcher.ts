@@ -21,6 +21,10 @@ export async function launchElectronApp(options: { cleanState?: boolean } = { cl
   
   const app = await electron.launch({
     args: [mainPath, '--no-sandbox', `--user-data-dir=${currentUserDataDir}`],
+    env: {
+      ...process.env,
+      ULTRA_GIT_TESTING: 'true'
+    }
   });
 
   const page = await app.firstWindow();
