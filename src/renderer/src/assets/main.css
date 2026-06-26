@@ -913,3 +913,7 @@ body {
   animation: spin 1s linear infinite;
   display: inline-block;
 }
+
+.dropdown-item-hover:hover {
+  background-color: var(--hover) !important;
+}

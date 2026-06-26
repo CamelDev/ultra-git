@@ -10,7 +10,7 @@ declare global {
         log: (repoPath: string, maxCount?: number) => Promise<{ success: boolean; data?: any; error?: string }>;
         fetch: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         pull: (repoPath: string) => Promise<{ success: boolean; data?: { hadConflicts: boolean }; error?: string }>;
-        push: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        push: (repoPath: string, force?: boolean) => Promise<{ success: boolean; error?: string }>;
         checkout: (repoPath: string, branchName: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         getCommitFiles: (repoPath: string, commitHash: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => Promise<{ success: boolean; data?: any; error?: string }>;

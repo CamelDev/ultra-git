@@ -113,9 +113,13 @@ export const gitService = {
     }
   },
 
-  push: async (repoPath: string) => {
+  push: async (repoPath: string, force?: boolean) => {
     const git = getGitInstance(repoPath);
-    await git.push();
+    if (force) {
+      await git.push(undefined, undefined, { '--force': null });
+    } else {
+      await git.push();
+    }
     return { success: true };
   },
 

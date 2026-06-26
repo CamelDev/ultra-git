@@ -236,4 +236,64 @@ test.describe('Branch Sync Status', () => {
       await app.close()
     }
   })
+
+  test('should support force push when local branch is behind remote', async () => {
+    // 1. Local commit
+    await localSandbox.createCommit('file-local.txt', 'local content', 'Local commit')
+
+    // 2. Remote commit to make local behind
+    await remoteSandbox.createCommit('file-remote.txt', 'remote content', 'Remote commit')
+
+    // 3. Fetch to update remote tracking branch
+    await localSandbox.git.fetch()
+
+    const { app, page } = await launchElectronApp()
+    
+    try {
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, localSandbox.dir)
+
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await addBtn.click()
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      // Mock showMessageBox response beforehand. Let's return index 2 (Force Push) when prompted.
+      // Message box buttons are: ['Cancel', 'Pull', 'Force Push']
+      await app.evaluate(({ ipcMain }) => {
+        ipcMain.removeHandler('dialog:showMessageBox')
+        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
+          if (options.message && options.message.includes('behind its remote counterpart')) {
+            return { success: true, response: 2 }
+          }
+          return { success: true, response: 0 }
+        })
+      })
+
+      const pushBtn = page.locator('[data-testid="push-btn"]')
+      await expect(pushBtn).toBeVisible()
+
+      // Click Push
+      await pushBtn.click()
+      await expect(pushBtn).toBeEnabled({ timeout: 15000 })
+
+      // Verify that local is no longer behind/ahead (push succeeded via force push)
+      const pushAheadBadge = page.locator('[data-testid="push-ahead-count"]')
+      await expect(pushAheadBadge).not.toBeVisible()
+
+    } finally {
+      await app.close()
+    }
+  })
 })

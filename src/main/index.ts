@@ -98,9 +98,9 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:push', async (_, repoPath) => {
+  ipcMain.handle('git:push', async (_, repoPath, force) => {
     try {
-      const data = await gitService.push(repoPath)
+      const data = await gitService.push(repoPath, force)
       return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
