@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown } from 'lucide-react'
+import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { IdentitiesModal } from '../details/IdentitiesModal'
 
 const GraphView: React.FC = () => {
   const { getActiveRepo, selectedCommitHash, setSelectedCommitHash, refreshRepo, identities, setRepoIdentity } = useRepoStore()
@@ -11,6 +12,7 @@ const GraphView: React.FC = () => {
   const [isPulling, setIsPulling] = useState(false)
   const [isPushing, setIsPushing] = useState(false)
   const [showPushDropdown, setShowPushDropdown] = useState(false)
+  const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -380,6 +382,14 @@ const GraphView: React.FC = () => {
                 <option key={id.id} value={id.id}>{id.label} ({id.name})</option>
               ))}
             </select>
+            <Settings 
+              size={14} 
+              className="settings-cog-log"
+              onClick={() => setIdentitiesModalOpen(true)}
+              title="Manage Git Identities"
+              data-testid="log-manage-identities-btn"
+              style={{ flexShrink: 0 }}
+            />
             {!activeRepo.identityId && identities.length > 1 && (
               <span 
                 style={{ 
@@ -478,6 +488,10 @@ const GraphView: React.FC = () => {
           )}
         </div>
       </div>
+      <IdentitiesModal 
+        isOpen={identitiesModalOpen}
+        onClose={() => setIdentitiesModalOpen(false)}
+      />
     </div>
   )
 }

@@ -42,7 +42,11 @@ test.describe('Git Identities Feature', () => {
       await tabs.last().click()
       await page.waitForTimeout(1000)
 
-      // 1. Open identities modal
+      // 1. Open identities modal via Settings Cog dropdown
+      const cogBtn = page.locator('[data-testid="settings-cog-btn"]')
+      await expect(cogBtn).toBeVisible()
+      await cogBtn.click()
+
       const manageBtn = page.locator('[data-testid="manage-identities-btn"]')
       await expect(manageBtn).toBeVisible()
       await manageBtn.click()
@@ -67,6 +71,7 @@ test.describe('Git Identities Feature', () => {
       await expect(selectDropdown).toHaveValue(/^[a-z0-9]+$/) // should be a random ID string
 
       // 4. Open modal again to add a second profile
+      await cogBtn.click()
       await manageBtn.click()
       await page.fill('input[data-testid="label-input"]', 'Work Profile')
       await page.fill('input[data-testid="name-input"]', 'Jane Work')
@@ -162,7 +167,11 @@ test.describe('Git Identities Feature', () => {
       await tabs.last().click()
       await page.waitForTimeout(1000)
 
-      // 1. Open identities modal
+      // 1. Open identities modal via Settings Cog dropdown
+      const cogBtn = page.locator('[data-testid="settings-cog-btn"]')
+      await expect(cogBtn).toBeVisible()
+      await cogBtn.click()
+
       const manageBtn = page.locator('[data-testid="manage-identities-btn"]')
       await manageBtn.click()
 
@@ -219,6 +228,7 @@ test.describe('Git Identities Feature', () => {
       expect(credHelper.trim()).toContain('valid_token')
 
       // 3. Re-open modal and test Edit mode
+      await cogBtn.click()
       await manageBtn.click()
       const editBtn = page.locator('[data-testid="edit-profile-Github - CamelDev"]')
       await editBtn.click()
@@ -248,6 +258,7 @@ test.describe('Git Identities Feature', () => {
       expect(userEmail.trim()).toBe('jane.edited@company.com')
 
       // 4. Test delete profile unsets configurations
+      await cogBtn.click()
       await manageBtn.click()
       const deleteBtn = page.locator('[data-testid="delete-profile-GitHub - Edited Profile"]')
       await deleteBtn.click()
@@ -332,7 +343,11 @@ test.describe('Git Identities Feature', () => {
       await tabs.last().click()
       await page.waitForTimeout(1000)
 
-      // 1. Open identities modal
+      // 1. Open identities modal via Settings Cog dropdown
+      const cogBtn = page.locator('[data-testid="settings-cog-btn"]')
+      await expect(cogBtn).toBeVisible()
+      await cogBtn.click()
+
       const manageBtn = page.locator('[data-testid="manage-identities-btn"]')
       await manageBtn.click()
 

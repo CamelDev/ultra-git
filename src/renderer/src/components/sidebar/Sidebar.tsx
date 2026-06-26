@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
-import { GitBranch, Layers, Package, AlertTriangle, User, Trash2, List } from 'lucide-react'
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
-import { IdentitiesModal } from '../details/IdentitiesModal'
 import { DiffModal } from '../details/DiffModal'
 
 const Sidebar: React.FC = () => {
@@ -12,7 +11,6 @@ const Sidebar: React.FC = () => {
   const [conflictWarning, setConflictWarning] = useState(false)
   const [poppingIndex, setPoppingIndex] = useState<number | null>(null)
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null)
-  const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
   
   const [isStashDetailsOpen, setIsStashDetailsOpen] = useState(false)
   const [detailsStashIndex, setDetailsStashIndex] = useState<number | null>(null)
@@ -248,29 +246,6 @@ const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      <div className="sidebar-section" style={{ marginTop: 'auto', borderTop: '1px solid var(--border)', paddingTop: '12px', paddingBottom: '12px' }}>
-        <button
-          className="btn-secondary"
-          onClick={() => setIdentitiesModalOpen(true)}
-          style={{ 
-            width: 'calc(100% - 32px)', 
-            margin: '0 16px', 
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            gap: '8px' 
-          }}
-          data-testid="manage-identities-btn"
-        >
-          <User size={14} />
-          <span>Manage Identities</span>
-        </button>
-      </div>
-
-      <IdentitiesModal 
-        isOpen={identitiesModalOpen}
-        onClose={() => setIdentitiesModalOpen(false)}
-      />
 
       {isStashDetailsOpen && activeRepo && detailsStashIndex !== null && (
         <DiffModal

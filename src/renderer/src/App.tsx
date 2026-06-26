@@ -192,6 +192,20 @@ function App() {
     }
   }, [activeRepo?.id, getActiveRepo, refreshRepo])
 
+  // Listen for layout reset event
+  useEffect(() => {
+    const handleReset = () => {
+      setSidebarWidth(280)
+      setDetailsWidth(380)
+      setActiveChangesHeight(window.innerHeight / 2)
+    }
+    window.addEventListener('reset-layout', handleReset)
+    return () => {
+      window.removeEventListener('reset-layout', handleReset)
+    }
+  }, [])
+
+
   return (
     <>
       <TitleBar />
