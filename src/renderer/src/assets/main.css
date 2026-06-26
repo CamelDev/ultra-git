@@ -787,3 +787,106 @@ body {
   overflow: hidden;
 }
 
+/* Stash button — muted steel gray */
+.btn-stash {
+  background-color: #3a3f4b;
+  color: #cbd5e1;
+  border: 1px solid #4b5563;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.btn-stash:hover {
+  background-color: #4b5563;
+  color: #f1f5f9;
+  border-color: #6b7280;
+}
+
+/* Stash list items in sidebar */
+.stash-item {
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 8px 16px;
+  gap: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  border-radius: 6px;
+  margin: 2px 8px;
+}
+
+.stash-item.stash-selected {
+  background-color: rgba(99, 102, 241, 0.12);
+}
+
+.stash-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stash-item-message {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stash-item-date {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Pop button — visible only on selected stash */
+.stash-pop-btn {
+  background-color: #334155;
+  color: #94a3b8;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.stash-pop-btn:hover:not(:disabled) {
+  background-color: #6366f1;
+  color: #fff;
+  border-color: #6366f1;
+}
+
+.stash-pop-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stash-empty {
+  padding: 8px 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Conflict warning banner in sidebar */
+.stash-conflict-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 8px 8px;
+  padding: 8px 12px;
+  background-color: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #fbbf24;
+  line-height: 1.5;
+}

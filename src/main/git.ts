@@ -140,6 +140,48 @@ export const gitService = {
     return await git.commit(message);
   },
 
+  stashAll: async (repoPath: string, message?: string) => {
+    const git = getGitInstance(repoPath);
+    const args = ['stash', 'push', '--include-untracked'];
+    if (message) {
+      args.push('-m', message);
+    }
+    await git.raw(args);
+  },
+
+  stashList: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    const result = await git.raw(['stash', 'list', '--format=%gd|%gs|%ci']);
+    if (!result.trim()) return [];
+    return result
+      .trim()
+      .split('\n')
+      .map((line) => {
+        const parts = line.split('|');
+        const ref = parts[0]?.trim() || '';
+        const message = parts[1]?.trim() || '';
+        const date = parts[2]?.trim() || '';
+        const indexMatch = ref.match(/stash@\{(\d+)\}/);
+        const index = indexMatch ? parseInt(indexMatch[1], 10) : 0;
+        return { index, ref, message, date };
+      });
+  },
+
+  stashPop: async (repoPath: string, index: number) => {
+    const git = getGitInstance(repoPath);
+    try {
+      await git.raw(['stash', 'pop', `stash@{${index}}`]);
+      return { hadConflicts: false };
+    } catch (err: any) {
+      // git stash pop exits with non-zero when there are conflicts
+      const msg: string = err.message || '';
+      if (msg.includes('CONFLICT') || msg.includes('conflict')) {
+        return { hadConflicts: true };
+      }
+      throw err;
+    }
+  },
+
   getActiveFileDiff: async (
     repoPath: string,
     filePath: string,

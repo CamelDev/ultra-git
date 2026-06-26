@@ -170,6 +170,33 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:stashAll', async (_, repoPath, message) => {
+    try {
+      await gitService.stashAll(repoPath, message)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:stashList', async (_, repoPath) => {
+    try {
+      const data = await gitService.stashList(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:stashPop', async (_, repoPath, index) => {
+    try {
+      const data = await gitService.stashPop(repoPath, index)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('dialog:openDirectory', async () => {
     console.log('Main Process: Received dialog:openDirectory request');
     const result = await dialog.showOpenDialog(mainWindow!, {
@@ -179,6 +206,15 @@ app.whenReady().then(() => {
       return { canceled: true }
     } else {
       return { canceled: false, path: result.filePaths[0] }
+    }
+  })
+
+  ipcMain.handle('dialog:showMessageBox', async (_, options) => {
+    try {
+      const result = await dialog.showMessageBox(mainWindow!, options)
+      return { success: true, response: result.response }
+    } catch (error: any) {
+      return { success: false, error: error.message }
     }
   })
 

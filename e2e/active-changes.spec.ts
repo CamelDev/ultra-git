@@ -160,4 +160,86 @@ test.describe('Active Changes Panel', () => {
       await app.close()
     }
   })
+
+  test('should show warning dialog and not commit if nothing is staged', async () => {
+    const { app, page } = await launchElectronApp()
+    page.on('console', msg => console.log('PAGE LOG:', msg.text()))
+    page.on('pageerror', err => console.error('PAGE ERROR:', err.message))
+
+    try {
+      // Clear localStorage
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      // Mock openDirectory dialog to load sandbox repo
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, sandbox.dir)
+
+      // Click to add repository
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      // Create unstaged changes
+      fs.appendFileSync(path.join(sandbox.dir, 'README.md'), 'Modified README again\n')
+
+      // Switch tabs to trigger status refresh
+      await tabs.first().click()
+      await page.waitForTimeout(500)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      // Verify active changes panel is visible
+      const panel = page.locator('[data-testid="active-changes-panel"]')
+      await expect(panel).toBeVisible()
+
+      // Track showMessageBox calls
+      await app.evaluate(async ({ ipcMain }) => {
+        (global as any).showMessageBoxOptions = null
+        ipcMain.removeHandler('dialog:showMessageBox')
+        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
+          (global as any).showMessageBoxOptions = options
+          return { success: true, response: 0 }
+        })
+      })
+
+      const commitInput = page.locator('[data-testid="commit-message-input"]')
+      const commitBtn = page.locator('[data-testid="commit-btn"]')
+
+      // Fill valid commit message
+      await commitInput.fill('Valid message but empty staging')
+      await expect(commitBtn).toBeEnabled()
+
+      // Click commit
+      await commitBtn.click()
+      await page.waitForTimeout(1000)
+
+      // Retrieve the message box options from the main process
+      const options = await app.evaluate(() => {
+        return (global as any).showMessageBoxOptions
+      })
+
+      expect(options).not.toBeNull()
+      expect(options.type).toBe('warning')
+      expect(options.title).toBe('No changes staged')
+      expect(options.message).toContain('no changes staged to be committed')
+
+      // Verify active changes panel is still visible (commit did not execute)
+      await expect(panel).toBeVisible()
+
+    } finally {
+      await app.close()
+    }
+  })
 })

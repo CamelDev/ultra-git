@@ -1,5 +1,12 @@
 import { create } from 'zustand'
 
+export interface StashEntry {
+  index: number;
+  ref: string;
+  message: string;
+  date: string;
+}
+
 export interface Repository {
   id: string;
   path: string;
@@ -7,6 +14,7 @@ export interface Repository {
   branch: string;
   status: any;
   commits: any[];
+  stashes: StashEntry[];
   isLoading: boolean;
   error: string | null;
 }
@@ -105,6 +113,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       branch: 'main',
       status: null,
       commits: [],
+      stashes: [],
       isLoading: true,
       error: null,
     };
@@ -173,6 +182,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         branch: 'main',
         status: null,
         commits: [],
+        stashes: [],
         isLoading: true,
         error: null,
       };
@@ -230,13 +240,15 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     });
 
     try {
-      const [statusRes, logRes] = await Promise.all([
+      const [statusRes, logRes, stashRes] = await Promise.all([
         window.api.git.status(repo.path),
-        window.api.git.log(repo.path)
+        window.api.git.log(repo.path),
+        window.api.git.stashList(repo.path)
       ]);
 
       set((state) => {
         const commits = logRes.success ? logRes.data.all : [];
+        const stashes = stashRes.success ? (stashRes.data ?? []) : [];
         const updatedRepos = state.repositories.map(r => {
           if (r.id === id) {
             return {
@@ -244,6 +256,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
               status: statusRes.success ? statusRes.data : null,
               branch: statusRes.success ? statusRes.data.current : r.branch,
               commits,
+              stashes,
               error: statusRes.success ? null : (statusRes.error ?? 'Unknown error'),
               isLoading: false
             };

@@ -84,8 +84,29 @@ export const ActiveChanges: React.FC = () => {
     }
   }
 
+  const handleStashAll = async () => {
+    try {
+      const res = await window.api.git.stashAll(activeRepo.path)
+      if (res.success) {
+        await refreshRepo(activeRepo.id)
+      } else {
+        console.error('Failed to stash files:', res.error)
+      }
+    } catch (err) {
+      console.error('Error stashing files:', err)
+    }
+  }
+
   const handleCommit = async () => {
     if (commitMessage.trim().length <= 2) return
+    if (stagedFiles.length === 0) {
+      await window.api.app.showMessageBox({
+        type: 'warning',
+        title: 'No changes staged',
+        message: 'There are no changes staged to be committed. Please stage some changes first.'
+      })
+      return
+    }
     try {
       const res = await window.api.git.commit(activeRepo.path, commitMessage)
       if (res.success) {
@@ -260,6 +281,16 @@ export const ActiveChanges: React.FC = () => {
           style={{ opacity: stagedFiles.length === 0 ? 0.5 : 1, cursor: stagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
         >
           Unstage all
+        </button>
+        <button
+          className="btn-stash"
+          onClick={handleStashAll}
+          disabled={files.length === 0}
+          style={{ opacity: files.length === 0 ? 0.5 : 1, cursor: files.length === 0 ? 'not-allowed' : 'pointer' }}
+          title="Stash all uncommitted changes (staged and unstaged)"
+          data-testid="stash-all-btn"
+        >
+          Stash all
         </button>
 
         <div className="commit-section">

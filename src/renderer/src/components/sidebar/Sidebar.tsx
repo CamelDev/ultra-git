@@ -1,13 +1,56 @@
-import React from 'react'
-import { GitBranch, Layers } from 'lucide-react'
+import React, { useState } from 'react'
+import { GitBranch, Layers, Package, AlertTriangle } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 
 const Sidebar: React.FC = () => {
-  const { getActiveRepo } = useRepoStore()
+  const { getActiveRepo, refreshRepo } = useRepoStore()
   const activeRepo = getActiveRepo()
-  
+
+  const [selectedStashIndex, setSelectedStashIndex] = useState<number | null>(null)
+  const [conflictWarning, setConflictWarning] = useState(false)
+  const [poppingIndex, setPoppingIndex] = useState<number | null>(null)
+
   const branch = activeRepo?.branch || 'main'
   const status = activeRepo?.status
+  const stashes = activeRepo?.stashes ?? []
+
+  const handlePopStash = async (e: React.MouseEvent, index: number) => {
+    e.stopPropagation()
+    if (!activeRepo) return
+    setPoppingIndex(index)
+    setConflictWarning(false)
+    try {
+      const res = await window.api.git.stashPop(activeRepo.path, index)
+      if (res.success) {
+        if (res.data?.hadConflicts) {
+          setConflictWarning(true)
+        }
+        setSelectedStashIndex(null)
+        await refreshRepo(activeRepo.id)
+      } else {
+        console.error('Failed to pop stash:', res.error)
+      }
+    } catch (err) {
+      console.error('Error popping stash:', err)
+    } finally {
+      setPoppingIndex(null)
+    }
+  }
+
+  const formatStashDate = (dateStr: string) => {
+    if (!dateStr) return ''
+    try {
+      const d = new Date(dateStr)
+      return d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return dateStr
+    }
+  }
 
   return (
     <div className="sidebar" data-testid="sidebar">
@@ -36,8 +79,55 @@ const Sidebar: React.FC = () => {
       <div className="sidebar-section">
         <div className="sidebar-header">
           <span>Stashes</span>
-          <span>0</span>
+          <span>{stashes.length}</span>
         </div>
+
+        {conflictWarning && (
+          <div className="stash-conflict-banner">
+            <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>Conflicts detected — resolve the conflict markers (&lt;&lt;&lt;&lt;&lt;&lt;&lt;) in your files manually, then mark as resolved.</span>
+          </div>
+        )}
+
+        {stashes.length === 0 ? (
+          <div className="stash-empty">No stashes</div>
+        ) : (
+          stashes.map((stash) => {
+            const isSelected = selectedStashIndex === stash.index
+            const isPopping = poppingIndex === stash.index
+            return (
+              <div
+                key={stash.ref}
+                className={`sidebar-item stash-item${isSelected ? ' stash-selected' : ''}`}
+                onClick={() => setSelectedStashIndex(isSelected ? null : stash.index)}
+                data-testid={`stash-item-${stash.index}`}
+              >
+                <Package
+                  className="sidebar-item-icon"
+                  size={14}
+                  style={{ color: isSelected ? 'var(--accent-light)' : 'var(--text-secondary)', flexShrink: 0 }}
+                />
+                <div className="stash-item-info">
+                  <div className="stash-item-message" title={stash.message}>
+                    {stash.message}
+                  </div>
+                  <div className="stash-item-date">{formatStashDate(stash.date)}</div>
+                </div>
+                {isSelected && (
+                  <button
+                    className="stash-pop-btn"
+                    onClick={(e) => handlePopStash(e, stash.index)}
+                    disabled={isPopping}
+                    title="Pop this stash back to working directory"
+                    data-testid={`stash-pop-btn-${stash.index}`}
+                  >
+                    {isPopping ? '…' : 'Pop'}
+                  </button>
+                )}
+              </div>
+            )
+          })
+        )}
       </div>
 
       <div className="sidebar-section">
