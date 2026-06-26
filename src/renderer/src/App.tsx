@@ -8,7 +8,7 @@ import { useRepoStore } from './store/useRepoStore'
 import { ActiveChanges } from './components/active-changes/ActiveChanges'
 
 function App() {
-  const { addRepo, getActiveRepo } = useRepoStore()
+  const { addRepo, getActiveRepo, refreshRepo } = useRepoStore()
   const activeRepo = getActiveRepo()
   const hasActiveChanges = !!(activeRepo?.status?.files && activeRepo.status.files.length > 0)
   
@@ -144,6 +144,35 @@ function App() {
     // Initial repo load
     addRepo('.') 
   }, [])
+
+  // Auto-refresh when files change in the repository
+  useEffect(() => {
+    const unsubscribe = window.api.git.onRepoChanged((repoPath) => {
+      const currentActive = getActiveRepo()
+      if (currentActive && currentActive.path === repoPath) {
+        refreshRepo(currentActive.id).catch((err) =>
+          console.error('Failed to refresh repo on filesystem change', err)
+        )
+      }
+    })
+    return unsubscribe
+  }, [activeRepo?.id, activeRepo?.path, getActiveRepo, refreshRepo])
+
+  // Auto-refresh when user returns focus to the application window
+  useEffect(() => {
+    const handleFocus = () => {
+      const currentActive = getActiveRepo()
+      if (currentActive) {
+        refreshRepo(currentActive.id).catch((err) =>
+          console.error('Failed to refresh repo on window focus', err)
+        )
+      }
+    }
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [activeRepo?.id, getActiveRepo, refreshRepo])
 
   return (
     <>

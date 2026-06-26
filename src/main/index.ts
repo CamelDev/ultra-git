@@ -3,6 +3,7 @@ import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { gitService } from './git'
+import { watchDirectory, stopWatching } from './watcher'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -189,6 +190,23 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:watchRepo', async (_, repoPath) => {
+    try {
+      if (!repoPath) {
+        stopWatching()
+        return { success: true }
+      }
+      watchDirectory(repoPath, () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('git:repo-changed', repoPath)
+        }
+      })
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   createWindow()
 
   app.on('activate', function () {
@@ -202,6 +220,7 @@ app.whenReady().then(() => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  stopWatching()
   if (process.platform !== 'darwin') {
     app.quit()
   }

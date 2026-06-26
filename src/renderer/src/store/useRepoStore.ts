@@ -41,6 +41,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const repo = get().repositories.find(r => r.id === id);
     const latestHash = (repo && repo.commits.length > 0) ? repo.commits[0].hash : null;
     set({ activeId: id, selectedCommitHash: latestHash });
+    if (repo) {
+      window.api.git.watchRepo(repo.path).catch(err => console.error('Failed to watch repo on switch', err));
+    }
     get().refreshRepo(id).catch(err => console.error('Failed to refresh repo on switch', err));
   },
 
@@ -89,6 +92,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       selectedCommitHash: null
     });
 
+    window.api.git.watchRepo(resolvedPath).catch(err => console.error('Failed to watch repo on add', err));
     await get().refreshRepo(id);
   },
 
@@ -105,6 +109,12 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const latestHash = (nextActiveRepo && nextActiveRepo.commits.length > 0) ? nextActiveRepo.commits[0].hash : null;
 
     set({ repositories: newRepos, activeId: newActiveId, selectedCommitHash: latestHash });
+
+    if (nextActiveRepo) {
+      window.api.git.watchRepo(nextActiveRepo.path).catch(err => console.error('Failed to watch next repo on remove', err));
+    } else {
+      window.api.git.watchRepo(null).catch(err => console.error('Failed to stop watching repo on remove', err));
+    }
   },
 
   refreshRepo: async (id: string) => {

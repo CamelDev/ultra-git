@@ -17,7 +17,15 @@ const api = {
     resetAll: (repoPath: string) => ipcRenderer.invoke('git:resetAll', repoPath),
     commit: (repoPath: string, message: string) => ipcRenderer.invoke('git:commit', repoPath, message),
     getActiveFileDiff: (repoPath: string, filePath: string, isStaged: boolean, oldPath?: string) => 
-      ipcRenderer.invoke('git:getActiveFileDiff', repoPath, filePath, isStaged, oldPath)
+      ipcRenderer.invoke('git:getActiveFileDiff', repoPath, filePath, isStaged, oldPath),
+    watchRepo: (repoPath: string | null) => ipcRenderer.invoke('git:watchRepo', repoPath),
+    onRepoChanged: (callback: (repoPath: string) => void) => {
+      const listener = (_event: any, path: string) => callback(path)
+      ipcRenderer.on('git:repo-changed', listener)
+      return () => {
+        ipcRenderer.off('git:repo-changed', listener)
+      }
+    }
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),

@@ -18,6 +18,8 @@ declare global {
         resetAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         commit: (repoPath: string, message: string) => Promise<{ success: boolean; error?: string }>;
         getActiveFileDiff: (repoPath: string, filePath: string, isStaged: boolean, oldPath?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+        watchRepo: (repoPath: string | null) => Promise<{ success: boolean; error?: string }>;
+        onRepoChanged: (callback: (repoPath: string) => void) => () => void;
       };
       app: {
         openDirectory: () => Promise<{ canceled: boolean; path?: string }>;
