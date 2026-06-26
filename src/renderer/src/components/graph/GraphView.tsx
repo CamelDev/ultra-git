@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react'
+import { Globe } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 
 const GraphView: React.FC = () => {
@@ -81,14 +82,37 @@ const GraphView: React.FC = () => {
             onClick={() => setSelectedCommitHash(c.hash)}
             style={{ cursor: 'pointer' }}
           >
-            <div className="commit-graph-area">
-              <div style={{ 
-                width: '10px', 
-                height: '10px', 
-                borderRadius: '50%', 
-                backgroundColor: 'var(--accent)',
-                margin: '12px auto'
-              }} />
+            <div className="commit-graph-area" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              {c.syncStatus === 'remote-only' ? (
+                <Globe 
+                  className="commit-globe-icon" 
+                  size={14} 
+                  style={{ color: 'var(--text-secondary)' }}
+                  data-testid="commit-globe-icon"
+                />
+              ) : c.syncStatus === 'local-only' ? (
+                <div 
+                  data-testid="commit-local-only-circle"
+                  style={{ 
+                    width: '10px', 
+                    height: '10px', 
+                    borderRadius: '50%', 
+                    border: '2px solid var(--accent)', 
+                    backgroundColor: 'transparent',
+                    boxSizing: 'border-box'
+                  }} 
+                />
+              ) : (
+                <div 
+                  data-testid="commit-pushed-circle"
+                  style={{ 
+                    width: '10px', 
+                    height: '10px', 
+                    borderRadius: '50%', 
+                    backgroundColor: 'var(--accent)'
+                  }} 
+                />
+              )}
             </div>
             <div className="commit-message" title={c.message}>{c.message}</div>
             <div className="commit-author">{c.author_name}</div>

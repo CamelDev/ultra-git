@@ -6,7 +6,7 @@ import { DiffModal } from '../details/DiffModal'
 export const ActiveChanges: React.FC = () => {
   const { getActiveRepo, refreshRepo } = useRepoStore()
   const activeRepo = getActiveRepo()
-  
+
   const [selectedFileForDiff, setSelectedFileForDiff] = useState<{
     path: string
     oldPath?: string
@@ -14,17 +14,15 @@ export const ActiveChanges: React.FC = () => {
     isStaged: boolean
   } | null>(null)
 
-  const [commitMessage, setCommitMessage] = useState('')
-
   if (!activeRepo || !activeRepo.status || !activeRepo.status.files) {
     return null
   }
 
   const files = activeRepo.status.files as any[]
-  
+
   // Staged files: index is not space (' ') and not untracked ('?')
   const stagedFiles = files.filter((f) => f.index !== ' ' && f.index !== '?')
-  
+
   // Unstaged files: working_dir is not space (' '), or index is untracked ('?')
   const unstagedFiles = files.filter((f) => f.working_dir !== ' ' || f.index === '?')
 
@@ -58,68 +56,6 @@ export const ActiveChanges: React.FC = () => {
     }
   }
 
-  const handleStageAll = async () => {
-    try {
-      const res = await window.api.git.addAll(activeRepo.path)
-      if (res.success) {
-        await refreshRepo(activeRepo.id)
-      } else {
-        console.error('Failed to stage all files:', res.error)
-      }
-    } catch (err) {
-      console.error('Error staging all files:', err)
-    }
-  }
-
-  const handleUnstageAll = async () => {
-    try {
-      const res = await window.api.git.resetAll(activeRepo.path)
-      if (res.success) {
-        await refreshRepo(activeRepo.id)
-      } else {
-        console.error('Failed to unstage all files:', res.error)
-      }
-    } catch (err) {
-      console.error('Error unstaging all files:', err)
-    }
-  }
-
-  const handleStashAll = async () => {
-    try {
-      const res = await window.api.git.stashAll(activeRepo.path)
-      if (res.success) {
-        await refreshRepo(activeRepo.id)
-      } else {
-        console.error('Failed to stash files:', res.error)
-      }
-    } catch (err) {
-      console.error('Error stashing files:', err)
-    }
-  }
-
-  const handleCommit = async () => {
-    if (commitMessage.trim().length <= 2) return
-    if (stagedFiles.length === 0) {
-      await window.api.app.showMessageBox({
-        type: 'warning',
-        title: 'No changes staged',
-        message: 'There are no changes staged to be committed. Please stage some changes first.'
-      })
-      return
-    }
-    try {
-      const res = await window.api.git.commit(activeRepo.path, commitMessage)
-      if (res.success) {
-        setCommitMessage('')
-        await refreshRepo(activeRepo.id)
-      } else {
-        console.error('Failed to commit:', res.error)
-      }
-    } catch (err) {
-      console.error('Error committing changes:', err)
-    }
-  }
-
   const getStatusClass = (status: string) => {
     if (status === '?') return 'status-q'
     return `status-${status.toLowerCase()}`
@@ -133,12 +69,7 @@ export const ActiveChanges: React.FC = () => {
 
   return (
     <div className="active-changes-panel" data-testid="active-changes-panel">
-      <div className="active-changes-header">
-        <div>Active changes</div>
-        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-          {activeRepo.branch}
-        </div>
-      </div>
+
 
       <div className="active-changes-columns">
         {/* Unstaged (Changed files) column */}
@@ -262,55 +193,6 @@ export const ActiveChanges: React.FC = () => {
               })
             )}
           </div>
-        </div>
-      </div>
-
-      <div className="active-changes-footer">
-        <button
-          className="btn-primary"
-          onClick={handleStageAll}
-          disabled={unstagedFiles.length === 0}
-          style={{ opacity: unstagedFiles.length === 0 ? 0.5 : 1, cursor: unstagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
-        >
-          Stage all
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={handleUnstageAll}
-          disabled={stagedFiles.length === 0}
-          style={{ opacity: stagedFiles.length === 0 ? 0.5 : 1, cursor: stagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
-        >
-          Unstage all
-        </button>
-        <button
-          className="btn-stash"
-          onClick={handleStashAll}
-          disabled={files.length === 0}
-          style={{ opacity: files.length === 0 ? 0.5 : 1, cursor: files.length === 0 ? 'not-allowed' : 'pointer' }}
-          title="Stash all uncommitted changes (staged and unstaged)"
-          data-testid="stash-all-btn"
-        >
-          Stash all
-        </button>
-
-        <div className="commit-section">
-          <input
-            type="text"
-            className="commit-input"
-            placeholder="Commit message..."
-            value={commitMessage}
-            onChange={(e) => setCommitMessage(e.target.value)}
-            data-testid="commit-message-input"
-          />
-          <button
-            className="btn-primary"
-            onClick={handleCommit}
-            disabled={commitMessage.trim().length <= 2}
-            style={{ opacity: commitMessage.trim().length <= 2 ? 0.5 : 1, cursor: commitMessage.trim().length <= 2 ? 'not-allowed' : 'pointer' }}
-            data-testid="commit-btn"
-          >
-            Commit
-          </button>
         </div>
       </div>
 

@@ -59,9 +59,38 @@ const Sidebar: React.FC = () => {
           <span>Local</span>
           <span>{status?.ahead + status?.behind || 0}</span>
         </div>
-        <div className="sidebar-item active">
-          <GitBranch className="sidebar-item-icon" size={14} />
-          <span data-testid="sidebar-active-branch">{branch}</span>
+        <div className="sidebar-item active" style={{ display: 'flex', alignItems: 'center' }}>
+          <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+          <span data-testid="sidebar-active-branch" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{branch}</span>
+          {(status?.ahead > 0 || status?.behind > 0) && (
+            <span 
+              className="branch-sync-badge" 
+              style={{ 
+                marginLeft: 'auto', 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '6px', 
+                fontSize: '11px', 
+                fontWeight: 700, 
+                padding: '2px 6px',
+                borderRadius: '4px',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                userSelect: 'none'
+              }}
+              data-testid="branch-sync-badge"
+            >
+              {status.ahead > 0 && (
+                <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-ahead">
+                  ↑<span>{status.ahead}</span>
+                </span>
+              )}
+              {status.behind > 0 && (
+                <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-behind">
+                  ↓<span>{status.behind}</span>
+                </span>
+              )}
+            </span>
+          )}
         </div>
       </div>
 

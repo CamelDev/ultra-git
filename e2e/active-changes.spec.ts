@@ -112,7 +112,7 @@ test.describe('Active Changes Panel', () => {
       await expect(unstagedItems).toHaveCount(2)
 
       // 6. Stage All
-      const stageAllBtn = panel.locator('.btn-primary', { hasText: 'Stage all' })
+      const stageAllBtn = page.locator('.toolbar .btn-primary', { hasText: 'Stage all' })
       await stageAllBtn.click()
       await page.waitForTimeout(500)
 
@@ -121,7 +121,7 @@ test.describe('Active Changes Panel', () => {
       await expect(unstagedItems).toHaveCount(0)
 
       // 7. Unstage All
-      const unstageAllBtn = panel.locator('.btn-secondary', { hasText: 'Unstage all' })
+      const unstageAllBtn = page.locator('.toolbar .btn-secondary', { hasText: 'Unstage all' })
       await unstageAllBtn.click()
       await page.waitForTimeout(500)
 
@@ -130,8 +130,8 @@ test.describe('Active Changes Panel', () => {
       await expect(unstagedItems).toHaveCount(2)
 
       // 8. Commit functionality verification
-      const commitInput = panel.locator('[data-testid="commit-message-input"]')
-      const commitBtn = panel.locator('[data-testid="commit-btn"]')
+      const commitInput = page.locator('.toolbar [data-testid="commit-message-input"]')
+      const commitBtn = page.locator('.toolbar [data-testid="commit-btn"]')
 
       // Commit button should be disabled initially (empty message)
       await expect(commitBtn).toBeDisabled()
@@ -214,8 +214,8 @@ test.describe('Active Changes Panel', () => {
         })
       })
 
-      const commitInput = page.locator('[data-testid="commit-message-input"]')
-      const commitBtn = page.locator('[data-testid="commit-btn"]')
+      const commitInput = page.locator('.toolbar [data-testid="commit-message-input"]')
+      const commitBtn = page.locator('.toolbar [data-testid="commit-btn"]')
 
       // Fill valid commit message
       await commitInput.fill('Valid message but empty staging')

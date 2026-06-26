@@ -250,6 +250,13 @@ body {
   gap: 20px;
 }
 
+.toolbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .toolbar-button {
   display: flex;
   flex-direction: column;

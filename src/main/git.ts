@@ -26,7 +26,69 @@ export const gitService = {
 
   log: async (repoPath: string, maxCount = 50) => {
     const git = getGitInstance(repoPath);
-    return await git.log({ maxCount });
+    
+    let trackingBranch: string | null = null;
+    try {
+      const statusResult = await git.status();
+      trackingBranch = statusResult.tracking || null;
+    } catch (e) {
+      console.warn('Failed to get tracking branch in git.log', e);
+    }
+
+    let logResult;
+    const aheadSet = new Set<string>();
+    const behindSet = new Set<string>();
+
+    if (trackingBranch) {
+      try {
+        const [aheadRaw, behindRaw] = await Promise.all([
+          git.raw(['rev-list', `${trackingBranch}..HEAD`]),
+          git.raw(['rev-list', `HEAD..${trackingBranch}`])
+        ]);
+
+        aheadRaw.split('\n').forEach(h => {
+          const trimmed = h.trim();
+          if (trimmed) aheadSet.add(trimmed);
+        });
+
+        behindRaw.split('\n').forEach(h => {
+          const trimmed = h.trim();
+          if (trimmed) behindSet.add(trimmed);
+        });
+
+        // Combined log of HEAD and remote-tracking branch
+        logResult = await git.log([
+          'HEAD',
+          trackingBranch,
+          `--max-count=${maxCount}`
+        ]);
+      } catch (err) {
+        console.warn('Failed to get tracking branches log, falling back to HEAD log', err);
+        logResult = await git.log({ maxCount });
+      }
+    } else {
+      logResult = await git.log({ maxCount });
+    }
+
+    // Attach status to each commit
+    const all = logResult.all.map((commit: any) => {
+      const hash = commit.hash;
+      let syncStatus: 'local-only' | 'remote-only' | 'pushed' = 'pushed';
+      if (aheadSet.has(hash)) {
+        syncStatus = 'local-only';
+      } else if (behindSet.has(hash)) {
+        syncStatus = 'remote-only';
+      }
+      return {
+        ...commit,
+        syncStatus
+      };
+    });
+
+    return {
+      ...logResult,
+      all
+    };
   },
 
   fetch: async (repoPath: string) => {
