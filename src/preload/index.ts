@@ -7,6 +7,8 @@ const api = {
     status: (repoPath: string) => ipcRenderer.invoke('git:status', repoPath),
     log: (repoPath: string, maxCount?: number) => ipcRenderer.invoke('git:log', repoPath, maxCount),
     fetch: (repoPath: string) => ipcRenderer.invoke('git:fetch', repoPath),
+    pull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
+    push: (repoPath: string) => ipcRenderer.invoke('git:push', repoPath),
     checkout: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:checkout', repoPath, branchName),
     getCommitFiles: (repoPath: string, commitHash: string) => ipcRenderer.invoke('git:getCommitFiles', repoPath, commitHash),
     getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => 
@@ -21,6 +23,8 @@ const api = {
     stashAll: (repoPath: string, message?: string) => ipcRenderer.invoke('git:stashAll', repoPath, message),
     stashList: (repoPath: string) => ipcRenderer.invoke('git:stashList', repoPath),
     stashPop: (repoPath: string, index: number) => ipcRenderer.invoke('git:stashPop', repoPath, index),
+    setRepositoryIdentity: (repoPath: string, identity: any) => ipcRenderer.invoke('git:setRepositoryIdentity', repoPath, identity),
+    validateToken: (provider: string, token: string) => ipcRenderer.invoke('git:validateToken', { provider, token }),
     watchRepo: (repoPath: string | null) => ipcRenderer.invoke('git:watchRepo', repoPath),
     onRepoChanged: (callback: (repoPath: string) => void) => {
       const listener = (_event: any, path: string) => callback(path)
@@ -32,6 +36,7 @@ const api = {
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
+    openFile: (options?: any) => ipcRenderer.invoke('dialog:openFile', options),
     resolvePath: (repoPath: string) => ipcRenderer.invoke('app:resolvePath', repoPath),
     copyToClipboard: (text: string) => ipcRenderer.invoke('app:copyToClipboard', text),
     showMessageBox: (options: any) => ipcRenderer.invoke('dialog:showMessageBox', options)

@@ -897,3 +897,19 @@ body {
   color: #fbbf24;
   line-height: 1.5;
 }
+
+/* Conflicted status color (U) in file list */
+.status-u {
+  color: #f87171; /* red-400 */
+}
+
+/* Spin animation for sync buttons */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin-animation {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}

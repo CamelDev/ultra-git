@@ -89,6 +89,24 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:pull', async (_, repoPath) => {
+    try {
+      const data = await gitService.pull(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:push', async (_, repoPath) => {
+    try {
+      const data = await gitService.push(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:checkout', async (_, repoPath, branchName) => {
     try {
       const data = await gitService.checkout(repoPath, branchName)
@@ -197,10 +215,91 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:setRepositoryIdentity', async (_, repoPath, identity) => {
+    console.log('Main Process: git:setRepositoryIdentity called for path:', repoPath, 'with identity:', identity)
+    try {
+      const data = await gitService.setRepositoryIdentity(repoPath, identity)
+      return { success: true, data }
+    } catch (error: any) {
+      console.error('Main Process: git:setRepositoryIdentity failed:', error.message)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:validateToken', async (_, { provider, token }) => {
+    try {
+      let url = ''
+      const headers: Record<string, string> = {
+        'User-Agent': 'ultra-git'
+      }
+
+      if (provider === 'github') {
+        url = 'https://api.github.com/user'
+        headers['Authorization'] = `token ${token}`
+        headers['Accept'] = 'application/vnd.github.v3+json'
+      } else if (provider === 'gitlab') {
+        url = 'https://gitlab.com/api/v4/user'
+        headers['Authorization'] = `Bearer ${token}`
+      } else if (provider === 'bitbucket') {
+        url = 'https://api.bitbucket.org/2.0/user'
+        headers['Authorization'] = `Bearer ${token}`
+      } else {
+        return { success: false, error: 'Unsupported provider' }
+      }
+
+      const response = await fetch(url, { headers })
+      if (!response.ok) {
+        return { success: false, error: `API error: ${response.status} ${response.statusText}` }
+      }
+
+      const data: any = await response.json()
+      let name = ''
+      let email = ''
+      let username = ''
+      let avatarUrl = ''
+
+      if (provider === 'github') {
+        name = data.name || data.login || ''
+        email = data.email || `${data.login}@users.noreply.github.com`
+        username = data.login || ''
+        avatarUrl = data.avatar_url || ''
+      } else if (provider === 'gitlab') {
+        name = data.name || data.username || ''
+        email = data.email || `${data.username}@noreply.gitlab.com`
+        username = data.username || ''
+        avatarUrl = data.avatar_url || ''
+      } else if (provider === 'bitbucket') {
+        name = data.display_name || data.username || ''
+        email = data.email || ''
+        username = data.username || ''
+        avatarUrl = data.links?.avatar?.href || ''
+      }
+
+      return {
+        success: true,
+        data: { name, email, username, avatarUrl }
+      }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('dialog:openDirectory', async () => {
     console.log('Main Process: Received dialog:openDirectory request');
     const result = await dialog.showOpenDialog(mainWindow!, {
       properties: ['openDirectory']
+    })
+    if (result.canceled) {
+      return { canceled: true }
+    } else {
+      return { canceled: false, path: result.filePaths[0] }
+    }
+  })
+
+  ipcMain.handle('dialog:openFile', async (_, options) => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      properties: ['openFile'],
+      ...options
     })
     if (result.canceled) {
       return { canceled: true }

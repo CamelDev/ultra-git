@@ -81,14 +81,21 @@ export class GitSandbox {
     await this.git.stash(['push', '-m', message]);
   }
 
-  /**
-   * Prunes and recursively deletes the temporary sandbox directory on test teardown.
-   */
   async destroy(): Promise<void> {
-    try {
-      fs.rmSync(this.dir, { recursive: true, force: true });
-    } catch (error) {
-      console.warn(`Failed to recursively delete GitSandbox folder at ${this.dir}:`, error);
+    // Give Windows a brief moment to release any pending file handles from recent Git operations
+    await new Promise(resolve => setTimeout(resolve, 100));
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        fs.rmSync(this.dir, { recursive: true, force: true });
+        return; // Success!
+      } catch (error: any) {
+        if (attempt === 3) {
+          console.warn(`Failed to recursively delete GitSandbox folder at ${this.dir} after 3 attempts:`, error);
+        } else {
+          // Wait longer before retrying
+          await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+        }
+      }
     }
   }
 }

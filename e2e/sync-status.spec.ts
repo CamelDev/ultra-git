@@ -108,4 +108,128 @@ test.describe('Branch Sync Status', () => {
       await app.close()
     }
   })
+
+  test('should pull remote changes and push local changes successfully', async () => {
+    // Local commit
+    await localSandbox.createCommit('file-local.txt', 'local content', 'Local commit')
+
+    // Remote commit
+    await remoteSandbox.createCommit('file-remote.txt', 'remote content', 'Remote commit')
+
+    // Fetch to update remote tracking branch
+    await localSandbox.git.fetch()
+
+    const { app, page } = await launchElectronApp()
+    
+    try {
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, localSandbox.dir)
+
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await addBtn.click()
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      // Verify sync actions panel is visible
+      const syncPanel = page.locator('[data-testid="sync-actions-panel"]')
+      await expect(syncPanel).toBeVisible()
+
+      // Pull button and behind count should be visible
+      const pullBtn = page.locator('[data-testid="pull-btn"]')
+      await expect(pullBtn).toBeVisible()
+      const pullBehindBadge = page.locator('[data-testid="pull-behind-count"]')
+      await expect(pullBehindBadge).toBeVisible()
+      await expect(pullBehindBadge).toContainText('1')
+
+      // Push button and ahead count should be visible
+      const pushBtn = page.locator('[data-testid="push-btn"]')
+      await expect(pushBtn).toBeVisible()
+      const pushAheadBadge = page.locator('[data-testid="push-ahead-count"]')
+      await expect(pushAheadBadge).toBeVisible()
+      await expect(pushAheadBadge).toContainText('1')
+
+      // Click Pull
+      await pullBtn.click()
+      await page.waitForTimeout(2000) // Wait for pull to complete and refresh
+
+      // Pull behind badge should be gone
+      await expect(pullBehindBadge).not.toBeVisible()
+
+      // Click Push
+      await pushBtn.click()
+      await page.waitForTimeout(2000) // Wait for push to complete and refresh
+
+      // Push ahead badge should be gone
+      await expect(pushAheadBadge).not.toBeVisible()
+
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('should display conflict warning banner when pull encounters conflicts', async () => {
+    // Both modify the same file with different content to cause a conflict
+    await localSandbox.createCommit('conflict-file.txt', 'local version', 'Local conflicting commit')
+
+    await remoteSandbox.createCommit('conflict-file.txt', 'remote version', 'Remote conflicting commit')
+
+    // Fetch to update remote tracking branch
+    await localSandbox.git.fetch()
+
+    const { app, page } = await launchElectronApp()
+    
+    try {
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, localSandbox.dir)
+
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await addBtn.click()
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      const pullBtn = page.locator('[data-testid="pull-btn"]')
+      
+      // Mock message box response so it doesn't block the test
+      await app.evaluate(({ ipcMain }) => {
+        ipcMain.removeHandler('dialog:showMessageBox')
+        ipcMain.handle('dialog:showMessageBox', async () => {
+          return { success: true, response: 0 }
+        })
+      })
+
+      // Click Pull to cause conflict
+      await pullBtn.click()
+      await page.waitForTimeout(2000)
+
+      // Conflict banner should be visible
+      const conflictBanner = page.locator('[data-testid="pull-conflict-banner"]')
+      await expect(conflictBanner).toBeVisible()
+      await expect(conflictBanner).toContainText('Merge conflicts detected')
+
+    } finally {
+      await app.close()
+    }
+  })
 })

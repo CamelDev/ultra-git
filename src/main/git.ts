@@ -96,6 +96,26 @@ export const gitService = {
     return await git.fetch();
   },
 
+  pull: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    try {
+      await git.pull();
+      return { hadConflicts: false };
+    } catch (err: any) {
+      const msg: string = err.message || '';
+      if (msg.includes('CONFLICT') || msg.includes('conflict') || msg.includes('Merge conflict')) {
+        return { hadConflicts: true };
+      }
+      throw err;
+    }
+  },
+
+  push: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    await git.push();
+    return { success: true };
+  },
+
   checkout: async (repoPath: string, branchName: string) => {
     const git = getGitInstance(repoPath);
     return await git.checkout(branchName);
@@ -299,5 +319,56 @@ export const gitService = {
       after: isBinary ? '' : after, 
       isBinary 
     };
+  },
+
+  setRepositoryIdentity: async (
+    repoPath: string,
+    identity: { name: string; email: string; sshKeyPath?: string; personalAccessToken?: string }
+  ) => {
+    const git = getGitInstance(repoPath);
+    if (identity.name) {
+      await git.addConfig('user.name', identity.name, false, 'local');
+    } else {
+      try {
+        await git.raw(['config', '--local', '--unset-all', 'user.name']);
+      } catch (e: any) {
+        console.error('git.ts: Failed to unset user.name:', e.message);
+      }
+    }
+
+    if (identity.email) {
+      await git.addConfig('user.email', identity.email, false, 'local');
+    } else {
+      try {
+        await git.raw(['config', '--local', '--unset-all', 'user.email']);
+      } catch (e: any) {
+        console.error('git.ts: Failed to unset user.email:', e.message);
+      }
+    }
+
+    if (identity.sshKeyPath) {
+      const normalizedPath = identity.sshKeyPath.replace(/\\/g, '/');
+      await git.addConfig('core.sshCommand', `ssh -i "${normalizedPath}" -o IdentitiesOnly=yes`, false, 'local');
+    } else {
+      try {
+        await git.raw(['config', '--local', '--unset-all', 'core.sshCommand']);
+      } catch (e: any) {
+        console.error('git.ts: Failed to unset core.sshCommand:', e.message);
+      }
+    }
+
+    try {
+      await git.raw(['config', '--local', '--unset-all', 'credential.helper']);
+    } catch (e: any) {
+      // Ignore if not set
+    }
+
+    if (identity.personalAccessToken) {
+      const escapedToken = identity.personalAccessToken.replace(/"/g, '\\"');
+      await git.raw(['config', '--local', '--add', 'credential.helper', '']);
+      await git.raw(['config', '--local', '--add', 'credential.helper', `!f() { echo "username=token"; echo "password=${escapedToken}"; }; f`]);
+    }
+
+    return { success: true };
   }
 };

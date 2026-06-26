@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
-import { FileText, ArrowRight, ArrowLeft } from 'lucide-react'
+import { FileText, ArrowRight, ArrowLeft, AlertTriangle } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { DiffModal } from '../details/DiffModal'
 
 export const ActiveChanges: React.FC = () => {
-  const { getActiveRepo, refreshRepo } = useRepoStore()
+  const { getActiveRepo, refreshRepo, identities } = useRepoStore()
   const activeRepo = getActiveRepo()
 
   const [selectedFileForDiff, setSelectedFileForDiff] = useState<{
@@ -67,9 +67,31 @@ export const ActiveChanges: React.FC = () => {
     return renameInfo ? renameInfo.from : undefined
   }
 
+  const isIdentityRequiredAndMissing = !!(activeRepo && identities.length > 1 && !activeRepo.identityId)
+
   return (
     <div className="active-changes-panel" data-testid="active-changes-panel">
-
+      {isIdentityRequiredAndMissing && (
+        <div 
+          className="pull-conflict-banner" 
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 16px',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            borderBottom: '1px solid rgba(245, 158, 11, 0.2)',
+            fontSize: '12px',
+            color: '#f59e0b',
+            fontWeight: 500,
+            boxSizing: 'border-box'
+          }}
+          data-testid="identity-required-banner"
+        >
+          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+          <span>Multiple Git identities configured. Please select the identity profile you wish to use for this repository from the Sync Panel dropdown above.</span>
+        </div>
+      )}
 
       <div className="active-changes-columns">
         {/* Unstaged (Changed files) column */}

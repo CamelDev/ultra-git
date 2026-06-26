@@ -7,6 +7,18 @@ export interface StashEntry {
   date: string;
 }
 
+export interface Identity {
+  id: string;
+  label: string;
+  name: string;
+  email: string;
+  provider?: 'github' | 'gitlab' | 'bitbucket' | 'custom';
+  username?: string;
+  avatarUrl?: string;
+  sshKeyPath?: string;
+  personalAccessToken?: string;
+}
+
 export interface Repository {
   id: string;
   path: string;
@@ -17,10 +29,12 @@ export interface Repository {
   stashes: StashEntry[];
   isLoading: boolean;
   error: string | null;
+  identityId?: string;
 }
 
 interface RepoState {
   repositories: Repository[];
+  identities: Identity[];
   activeId: string | null;
   selectedCommitHash: string | null;
   
@@ -34,6 +48,12 @@ interface RepoState {
   
   // Helper to get active repo
   getActiveRepo: () => Repository | undefined;
+
+  // Identity Actions
+  addIdentity: (identity: Omit<Identity, 'id'>) => void;
+  removeIdentity: (id: string) => void;
+  updateIdentity: (identity: Identity) => void;
+  setRepoIdentity: (repoId: string, identityId: string | undefined) => Promise<void>;
 }
 
 const normalizePath = (p: string) => p.toLowerCase().replace(/\\/g, '/');
@@ -58,6 +78,7 @@ const saveToLocalStorage = (repositories: Repository[], activeId: string | null)
 
 export const useRepoStore = create<RepoState>((set, get) => ({
   repositories: [],
+  identities: typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [],
   activeId: null,
   selectedCommitHash: null,
 
@@ -106,6 +127,25 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const name = resolvedPath.split(/[\\/]/).pop() || resolvedPath;
     const id = Math.random().toString(36).substring(7);
 
+    const repoIdentities = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('repo-identities') || '{}') : {};
+    const globalIdList = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [];
+    const normalized = normalizePath(resolvedPath);
+    let identityId = repoIdentities[normalized];
+
+    if (!identityId && globalIdList.length === 1) {
+      identityId = globalIdList[0].id;
+      repoIdentities[normalized] = identityId;
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('repo-identities', JSON.stringify(repoIdentities));
+      }
+      window.api.git.setRepositoryIdentity(resolvedPath, {
+        name: globalIdList[0].name,
+        email: globalIdList[0].email,
+        sshKeyPath: globalIdList[0].sshKeyPath,
+        personalAccessToken: globalIdList[0].personalAccessToken
+      }).catch(console.error);
+    }
+
     const newRepo: Repository = {
       id,
       path: resolvedPath,
@@ -116,6 +156,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       stashes: [],
       isLoading: true,
       error: null,
+      identityId
     };
 
     set({ 
@@ -171,10 +212,30 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const uniquePaths = Array.from(new Set(resolvedPaths));
     if (uniquePaths.length === 0) return;
 
+    const repoIdentities = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('repo-identities') || '{}') : {};
+    const globalIdList = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [];
+
     // Build Repository objects
     const newRepos: Repository[] = uniquePaths.map((p) => {
       const name = p.split(/[\\/]/).pop() || p;
       const id = Math.random().toString(36).substring(7);
+      const normalized = normalizePath(p);
+      let identityId = repoIdentities[normalized];
+
+      if (!identityId && globalIdList.length === 1) {
+        identityId = globalIdList[0].id;
+        repoIdentities[normalized] = identityId;
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('repo-identities', JSON.stringify(repoIdentities));
+        }
+        window.api.git.setRepositoryIdentity(p, {
+          name: globalIdList[0].name,
+          email: globalIdList[0].email,
+          sshKeyPath: globalIdList[0].sshKeyPath,
+          personalAccessToken: globalIdList[0].personalAccessToken
+        }).catch(console.error);
+      }
+
       return {
         id,
         path: p,
@@ -185,6 +246,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         stashes: [],
         isLoading: true,
         error: null,
+        identityId
       };
     });
 
@@ -280,6 +342,120 @@ export const useRepoStore = create<RepoState>((set, get) => ({
           r.id === id ? { ...r, error: err.message, isLoading: false } : r
         )
       }));
+    }
+  },
+
+  addIdentity: (identityData) => {
+    const id = Math.random().toString(36).substring(7);
+    const newIdentity = { ...identityData, id };
+    const updated = [...get().identities, newIdentity];
+    set({ identities: updated });
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('global-identities', JSON.stringify(updated));
+    }
+
+    // If this is the only identity, auto-assign it to all open repositories!
+    if (updated.length === 1) {
+      const repos = get().repositories;
+      for (const r of repos) {
+        get().setRepoIdentity(r.id, id);
+      }
+    }
+  },
+
+  removeIdentity: (id) => {
+    console.log('useRepoStore: removeIdentity called for id:', id);
+    const updatedIdentities = get().identities.filter(i => i.id !== id);
+    
+    // Update store repositories state synchronously to avoid race conditions
+    const repos = get().repositories;
+    const updatedRepos = repos.map(r => 
+      r.identityId === id ? { ...r, identityId: undefined } : r
+    );
+    
+    set({ 
+      identities: updatedIdentities,
+      repositories: updatedRepos 
+    });
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('global-identities', JSON.stringify(updatedIdentities));
+    }
+
+    // Also remove from repository mappings
+    const repoIdentities = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('repo-identities') || '{}') : {};
+    let changed = false;
+    Object.keys(repoIdentities).forEach(k => {
+      if (repoIdentities[k] === id) {
+        delete repoIdentities[k];
+        changed = true;
+      }
+    });
+    if (changed && typeof localStorage !== 'undefined') {
+      localStorage.setItem('repo-identities', JSON.stringify(repoIdentities));
+    }
+
+    // Unset local git configurations on disk
+    console.log('useRepoStore: removeIdentity unsetting local configurations for repos');
+    for (const r of repos) {
+      if (r.identityId === id) {
+        console.log(`useRepoStore: unsetting repo configuration on disk for ${r.path}`);
+        window.api.git.setRepositoryIdentity(r.path, { name: '', email: '', sshKeyPath: undefined, personalAccessToken: undefined })
+          .catch(err => console.error('Failed to unset local git config on profile deletion', err));
+      }
+    }
+  },
+
+  updateIdentity: (identity) => {
+    const updated = get().identities.map(i => i.id === identity.id ? identity : i);
+    set({ identities: updated });
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('global-identities', JSON.stringify(updated));
+    }
+
+    // Refresh repository configurations if any repository uses this identity!
+    const repos = get().repositories;
+    for (const r of repos) {
+      if (r.identityId === identity.id) {
+        get().setRepoIdentity(r.id, identity.id);
+      }
+    }
+  },
+
+  setRepoIdentity: async (repoId, identityId) => {
+    const { repositories, identities } = get();
+    const repo = repositories.find(r => r.id === repoId);
+    if (!repo) return;
+
+    // Update state
+    const updatedRepos = repositories.map(r => 
+      r.id === repoId ? { ...r, identityId } : r
+    );
+    set({ repositories: updatedRepos });
+
+    // Save path mapping to localStorage
+    const normalized = normalizePath(repo.path);
+    const mappings = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('repo-identities') || '{}') : {};
+    if (identityId) {
+      mappings[normalized] = identityId;
+    } else {
+      delete mappings[normalized];
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('repo-identities', JSON.stringify(mappings));
+    }
+
+    // Apply to local Git configuration
+    const identity = identities.find(i => i.id === identityId);
+    if (identity) {
+      await window.api.git.setRepositoryIdentity(repo.path, {
+        name: identity.name,
+        email: identity.email,
+        sshKeyPath: identity.sshKeyPath,
+        personalAccessToken: identity.personalAccessToken
+      });
+    } else {
+      await window.api.git.setRepositoryIdentity(repo.path, { name: '', email: '', sshKeyPath: undefined, personalAccessToken: undefined });
     }
   }
 }));

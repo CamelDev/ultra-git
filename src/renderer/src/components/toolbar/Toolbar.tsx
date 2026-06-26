@@ -2,13 +2,15 @@ import React, { useState } from 'react'
 import { useRepoStore } from '../../store/useRepoStore'
 
 const Toolbar: React.FC = () => {
-  const { getActiveRepo, refreshRepo } = useRepoStore()
+  const { getActiveRepo, refreshRepo, identities } = useRepoStore()
   const activeRepo = getActiveRepo()
   const [commitMessage, setCommitMessage] = useState('')
 
   const files = activeRepo?.status?.files as any[] || []
   const stagedFiles = files.filter((f) => f.index !== ' ' && f.index !== '?')
   const unstagedFiles = files.filter((f) => f.working_dir !== ' ' || f.index === '?')
+
+  const isIdentityRequiredAndMissing = !!(activeRepo && identities.length > 1 && !activeRepo.identityId)
 
   const handleStageAll = async () => {
     if (!activeRepo) return
@@ -119,20 +121,37 @@ const Toolbar: React.FC = () => {
           </button>
 
           <div className="commit-section" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {isIdentityRequiredAndMissing && (
+              <span 
+                style={{ color: '#f59e0b', fontSize: '11px', fontWeight: 600, marginRight: '8px' }}
+                data-testid="identity-missing-warning"
+              >
+                Select identity in log sync panel
+              </span>
+            )}
             <input
               type="text"
               className="commit-input"
               placeholder="Commit message..."
               value={commitMessage}
               onChange={(e) => setCommitMessage(e.target.value)}
+              disabled={isIdentityRequiredAndMissing}
+              style={{
+                opacity: isIdentityRequiredAndMissing ? 0.6 : 1,
+                cursor: isIdentityRequiredAndMissing ? 'not-allowed' : 'text'
+              }}
               data-testid="commit-message-input"
             />
             <button
               className="btn-primary"
               onClick={handleCommit}
-              disabled={commitMessage.trim().length <= 2}
-              style={{ opacity: commitMessage.trim().length <= 2 ? 0.5 : 1, cursor: commitMessage.trim().length <= 2 ? 'not-allowed' : 'pointer' }}
+              disabled={commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing}
+              style={{ 
+                opacity: (commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing) ? 0.5 : 1, 
+                cursor: (commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing) ? 'not-allowed' : 'pointer' 
+              }}
               data-testid="commit-btn"
+              title={isIdentityRequiredAndMissing ? "Please select a Git identity to enable committing" : undefined}
             >
               Commit
             </button>

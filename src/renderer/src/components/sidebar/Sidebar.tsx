@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { GitBranch, Layers, Package, AlertTriangle } from 'lucide-react'
+import { GitBranch, Layers, Package, AlertTriangle, User } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { IdentitiesModal } from '../details/IdentitiesModal'
 
 const Sidebar: React.FC = () => {
   const { getActiveRepo, refreshRepo } = useRepoStore()
@@ -9,6 +10,7 @@ const Sidebar: React.FC = () => {
   const [selectedStashIndex, setSelectedStashIndex] = useState<number | null>(null)
   const [conflictWarning, setConflictWarning] = useState(false)
   const [poppingIndex, setPoppingIndex] = useState<number | null>(null)
+  const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
 
   const branch = activeRepo?.branch || 'main'
   const status = activeRepo?.status
@@ -165,6 +167,30 @@ const Sidebar: React.FC = () => {
           <span>0</span>
         </div>
       </div>
+
+      <div className="sidebar-section" style={{ marginTop: 'auto', borderTop: '1px solid var(--border)', paddingTop: '12px', paddingBottom: '12px' }}>
+        <button
+          className="btn-secondary"
+          onClick={() => setIdentitiesModalOpen(true)}
+          style={{ 
+            width: 'calc(100% - 32px)', 
+            margin: '0 16px', 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: '8px' 
+          }}
+          data-testid="manage-identities-btn"
+        >
+          <User size={14} />
+          <span>Manage Identities</span>
+        </button>
+      </div>
+
+      <IdentitiesModal 
+        isOpen={identitiesModalOpen}
+        onClose={() => setIdentitiesModalOpen(false)}
+      />
     </div>
   )
 }
