@@ -8,7 +8,10 @@ const api = {
     log: (repoPath: string, maxCount?: number) => ipcRenderer.invoke('git:log', repoPath, maxCount),
     fetch: (repoPath: string) => ipcRenderer.invoke('git:fetch', repoPath),
     pull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
-    push: (repoPath: string, force?: boolean) => ipcRenderer.invoke('git:push', repoPath, force),
+    push: (repoPath: string, force?: boolean, remote?: string, branch?: string, setUpstream?: boolean) => 
+      ipcRenderer.invoke('git:push', repoPath, force, remote, branch, setUpstream),
+    getRemotes: (repoPath: string) => ipcRenderer.invoke('git:getRemotes', repoPath),
+    addRemote: (repoPath: string, name: string, url: string) => ipcRenderer.invoke('git:addRemote', repoPath, name, url),
     checkout: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:checkout', repoPath, branchName),
     createBranch: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:createBranch', repoPath, branchName),
     getBranches: (repoPath: string) => ipcRenderer.invoke('git:getBranches', repoPath),
@@ -31,6 +34,8 @@ const api = {
       ipcRenderer.invoke('git:getStashFileDiff', repoPath, index, filePath, oldPath, status, isUntracked),
     setRepositoryIdentity: (repoPath: string, identity: any) => ipcRenderer.invoke('git:setRepositoryIdentity', repoPath, identity),
     validateToken: (provider: string, token: string, email?: string) => ipcRenderer.invoke('git:validateToken', { provider, token, email }),
+    createRemoteRepo: (provider: string, token: string, repoName: string, makePublic: boolean) => 
+      ipcRenderer.invoke('git:createRemoteRepo', { provider, token, repoName, makePublic }),
     watchRepo: (repoPath: string | null) => ipcRenderer.invoke('git:watchRepo', repoPath),
     onRepoChanged: (callback: (repoPath: string) => void) => {
       const listener = (_event: any, path: string) => callback(path)

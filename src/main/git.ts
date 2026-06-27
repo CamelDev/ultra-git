@@ -113,13 +113,32 @@ export const gitService = {
     }
   },
 
-  push: async (repoPath: string, force?: boolean) => {
+  push: async (repoPath: string, force?: boolean, remote?: string, branch?: string, setUpstream?: boolean) => {
     const git = getGitInstance(repoPath);
+    const options: any = {};
     if (force) {
-      await git.push(undefined, undefined, { '--force': null });
-    } else {
-      await git.push();
+      options['--force'] = null;
     }
+    if (setUpstream) {
+      options['--set-upstream'] = null;
+    }
+
+    if (remote && branch) {
+      await git.push(remote, branch, options);
+    } else {
+      await git.push(undefined, undefined, options);
+    }
+    return { success: true };
+  },
+
+  getRemotes: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    return await git.getRemotes(true);
+  },
+
+  addRemote: async (repoPath: string, name: string, url: string) => {
+    const git = getGitInstance(repoPath);
+    await git.addRemote(name, url);
     return { success: true };
   },
 
