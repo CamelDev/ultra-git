@@ -152,6 +152,19 @@ export const gitService = {
     return await git.checkoutLocalBranch(branchName);
   },
 
+  deleteBranch: async (repoPath: string, branchName: string, force?: boolean) => {
+    const git = getGitInstance(repoPath);
+    const args = ['branch', force ? '-D' : '-d', branchName];
+    await git.raw(args);
+    return { success: true };
+  },
+
+  renameBranch: async (repoPath: string, oldName: string, newName: string) => {
+    const git = getGitInstance(repoPath);
+    await git.raw(['branch', '-m', oldName, newName]);
+    return { success: true };
+  },
+
   getBranches: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
     const summary = await git.branch();

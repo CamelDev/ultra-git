@@ -231,6 +231,16 @@ body {
   height: 18px;
 }
 
+.branch-actions {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-item:hover .branch-actions {
+  display: flex;
+}
+
 /* Main Content */
 .main-content {
   flex: 1;

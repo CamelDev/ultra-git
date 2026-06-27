@@ -143,6 +143,24 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:deleteBranch', async (_, repoPath, branchName, force) => {
+    try {
+      const data = await gitService.deleteBranch(repoPath, branchName, force)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:renameBranch', async (_, repoPath, oldName, newName) => {
+    try {
+      const data = await gitService.renameBranch(repoPath, oldName, newName)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:getBranches', async (_, repoPath) => {
     try {
       const data = await gitService.getBranches(repoPath)

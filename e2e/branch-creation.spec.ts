@@ -157,7 +157,63 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       currentBranch = await sandbox.git.revparse(['--abbrev-ref', 'HEAD'])
       expect(currentBranch.trim()).toBe('feature-from-sidebar')
 
-      console.log('Branch creation E2E test completed successfully.')
+      console.log('25. Rename active branch (feature-from-sidebar -> renamed-active)...')
+      await activeBranch.hover()
+      const renameActiveBtn = page.locator('[data-testid="sidebar-rename-branch-btn"]')
+      await expect(renameActiveBtn).toBeVisible()
+      await renameActiveBtn.click()
+      await page.waitForTimeout(300)
+      
+      await expect(modal).toBeVisible()
+      await expect(modal).toContainText('Rename Branch')
+      await input.fill('renamed-active')
+      await submitBtn.click()
+      await page.waitForTimeout(1000)
+      
+      await expect(modal).not.toBeVisible()
+      await expect(activeBranch).toContainText('renamed-active')
+      
+      console.log('26. Verify Git branch renamed for active branch...')
+      currentBranch = await sandbox.git.revparse(['--abbrev-ref', 'HEAD'])
+      expect(currentBranch.trim()).toBe('renamed-active')
+
+      console.log('27. Rename inactive branch (main -> main-renamed)...')
+      await mainBranchItem.hover()
+      const renameInactiveBtn = page.locator('[data-testid="rename-branch-btn-main"]')
+      await expect(renameInactiveBtn).toBeVisible()
+      await renameInactiveBtn.click()
+      await page.waitForTimeout(300)
+      
+      await expect(modal).toBeVisible()
+      await input.fill('main-renamed')
+      await submitBtn.click()
+      await page.waitForTimeout(1000)
+      
+      await expect(modal).not.toBeVisible()
+      const renamedMainBranchItem = page.locator('[data-testid="sidebar-branch-main-renamed"]')
+      await expect(renamedMainBranchItem).toBeVisible()
+
+      console.log('28. Verify active branch cannot be deleted...')
+      const activeDeleteBtn = page.locator('[data-testid="sidebar-delete-branch-btn"]')
+      await expect(activeDeleteBtn).toBeDisabled()
+
+      console.log('29. Delete inactive branch main-renamed...')
+      console.log('Mocking dialog:showMessageBox to Confirm (1)...')
+      await app.evaluate(async ({ ipcMain }) => {
+        ipcMain.removeHandler('dialog:showMessageBox')
+        ipcMain.handle('dialog:showMessageBox', async () => {
+          return { success: true, response: 1 }
+        })
+      })
+      
+      await renamedMainBranchItem.hover()
+      const deleteInactiveBtn = page.locator('[data-testid="delete-branch-btn-main-renamed"]')
+      await expect(deleteInactiveBtn).toBeVisible()
+      await deleteInactiveBtn.click()
+      await page.waitForTimeout(1000)
+
+      await expect(renamedMainBranchItem).not.toBeVisible()
+      console.log('Branch rename and deletion E2E tests verified successfully.')
 
     } finally {
       await app.close()

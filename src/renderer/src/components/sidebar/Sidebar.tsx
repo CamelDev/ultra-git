@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X } from 'lucide-react'
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2 } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { DiffModal } from '../details/DiffModal'
 
@@ -19,6 +19,8 @@ const Sidebar: React.FC = () => {
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false)
   const [newBranchName, setNewBranchName] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [branchModalMode, setBranchModalMode] = useState<'create' | 'rename'>('create')
+  const [branchToRename, setBranchToRename] = useState<string>('')
 
   const branch = activeRepo?.branch || 'main'
   const status = activeRepo?.status
@@ -116,21 +118,114 @@ const Sidebar: React.FC = () => {
     }
   }
 
-  const handleCreateBranchSubmit = async () => {
+  const openCreateBranchModal = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setBranchModalMode('create')
+    setNewBranchName('')
+    setErrorMessage('')
+    setIsBranchModalOpen(true)
+  }
+
+  const openRenameBranchModal = (e: React.MouseEvent, branchName: string) => {
+    e.stopPropagation()
+    setBranchModalMode('rename')
+    setBranchToRename(branchName)
+    setNewBranchName(branchName)
+    setErrorMessage('')
+    setIsBranchModalOpen(true)
+  }
+
+  const handleBranchModalSubmit = async () => {
     const name = newBranchName.trim()
     if (!name || !activeRepo) return
     try {
-      const res = await window.api.git.createBranch(activeRepo.path, name)
-      if (res.success) {
-        setIsBranchModalOpen(false)
-        setNewBranchName('')
-        setErrorMessage('')
-        await refreshRepo(activeRepo.id)
+      if (branchModalMode === 'create') {
+        const res = await window.api.git.createBranch(activeRepo.path, name)
+        if (res.success) {
+          setIsBranchModalOpen(false)
+          setNewBranchName('')
+          setErrorMessage('')
+          await refreshRepo(activeRepo.id)
+        } else {
+          setErrorMessage(res.error || 'Failed to create branch.')
+        }
       } else {
-        setErrorMessage(res.error || 'Failed to create branch.')
+        const res = await window.api.git.renameBranch(activeRepo.path, branchToRename, name)
+        if (res.success) {
+          setIsBranchModalOpen(false)
+          setNewBranchName('')
+          setErrorMessage('')
+          await refreshRepo(activeRepo.id)
+        } else {
+          setErrorMessage(res.error || 'Failed to rename branch.')
+        }
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'An error occurred.')
+    }
+  }
+
+  const handleDeleteBranch = async (e: React.MouseEvent, branchName: string) => {
+    e.stopPropagation()
+    if (!activeRepo) return
+
+    const confirmRes = await window.api.app.showMessageBox({
+      type: 'warning',
+      title: 'Delete Branch',
+      message: `Are you sure you want to delete the branch '${branchName}'?`,
+      buttons: ['Cancel', 'Delete'],
+      defaultId: 1,
+      cancelId: 0
+    })
+
+    if (!confirmRes.success || confirmRes.response !== 1) {
+      return
+    }
+
+    try {
+      const res = await window.api.git.deleteBranch(activeRepo.path, branchName, false)
+      if (res.success) {
+        await refreshRepo(activeRepo.id)
+      } else {
+        const errorMsg = res.error || ''
+        if (errorMsg.includes('not fully merged') || errorMsg.includes('force')) {
+          const forceConfirm = await window.api.app.showMessageBox({
+            type: 'question',
+            title: 'Force Delete Branch',
+            message: `The branch '${branchName}' is not fully merged. Do you want to force delete it?`,
+            buttons: ['Cancel', 'Force Delete'],
+            defaultId: 1,
+            cancelId: 0
+          })
+          if (forceConfirm.success && forceConfirm.response === 1) {
+            const forceRes = await window.api.git.deleteBranch(activeRepo.path, branchName, true)
+            if (forceRes.success) {
+              await refreshRepo(activeRepo.id)
+            } else {
+              console.error('Failed to force delete branch:', forceRes.error)
+              await window.api.app.showMessageBox({
+                type: 'error',
+                title: 'Error',
+                message: `Failed to delete branch: ${forceRes.error}`
+              })
+            }
+          }
+        } else {
+          console.error('Failed to delete branch:', res.error)
+          await window.api.app.showMessageBox({
+            type: 'error',
+            title: 'Error',
+            message: `Failed to delete branch: ${res.error}`
+          })
+        }
+      }
+    } catch (err: any) {
+      console.error('Error deleting branch:', err)
+      await window.api.app.showMessageBox({
+        type: 'error',
+        title: 'Error',
+        message: `Error deleting branch: ${err.message || err}`
+      })
     }
   }
 
@@ -200,29 +295,35 @@ const Sidebar: React.FC = () => {
                     )}
                   </span>
                 )}
-                <button
-                  className="stash-action-btn"
-                  style={{ 
-                    marginLeft: (currentAhead > 0 || currentBehind > 0) ? '8px' : 'auto',
-                    flexShrink: 0,
-                    padding: 0,
-                    height: '24px',
-                    width: '24px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setNewBranchName('')
-                    setErrorMessage('')
-                    setIsBranchModalOpen(true)
-                  }}
-                  title="Create a new branch from latest local commit (HEAD)"
-                  data-testid="sidebar-create-branch-btn"
-                >
-                  <GitBranch size={14} />
-                </button>
+                <div className="branch-actions" style={{ marginLeft: (currentAhead > 0 || currentBehind > 0) ? '8px' : 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                  <button
+                    className="stash-action-btn"
+                    style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={(e) => openRenameBranchModal(e, name)}
+                    title="Rename branch"
+                    data-testid="sidebar-rename-branch-btn"
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                  <button
+                    className="stash-action-btn"
+                    style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={(e) => openCreateBranchModal(e)}
+                    title="Create a new branch from latest local commit (HEAD)"
+                    data-testid="sidebar-create-branch-btn"
+                  >
+                    <GitBranch size={13} />
+                  </button>
+                  <button
+                    className="stash-action-btn delete"
+                    style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    disabled={true}
+                    title="Cannot delete the currently checked out branch"
+                    data-testid="sidebar-delete-branch-btn"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
             );
           } else {
@@ -265,6 +366,26 @@ const Sidebar: React.FC = () => {
                     )}
                   </span>
                 )}
+                <div className="branch-actions" style={{ marginLeft: (currentAhead > 0 || currentBehind > 0) ? '8px' : 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                  <button
+                    className="stash-action-btn"
+                    style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={(e) => openRenameBranchModal(e, name)}
+                    title="Rename branch"
+                    data-testid={`rename-branch-btn-${name}`}
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                  <button
+                    className="stash-action-btn delete"
+                    style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={(e) => handleDeleteBranch(e, name)}
+                    title="Delete branch"
+                    data-testid={`delete-branch-btn-${name}`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
             );
           }
@@ -410,7 +531,7 @@ const Sidebar: React.FC = () => {
             <div className="diff-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
               <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <GitBranch size={16} />
-                Create New Branch
+                {branchModalMode === 'create' ? 'Create New Branch' : 'Rename Branch'}
               </h2>
               <button 
                 className="diff-modal-close" 
@@ -425,11 +546,15 @@ const Sidebar: React.FC = () => {
             {/* Body */}
             <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                Create a new local branch starting from the latest commit of <strong>{branch}</strong>.
+                {branchModalMode === 'create' ? (
+                  <>Create a new local branch starting from the latest commit of <strong>{branch}</strong>.</>
+                ) : (
+                  <>Enter a new name for the local branch <strong>{branchToRename}</strong>.</>
+                )}
               </div>
               <input
                 type="text"
-                placeholder="Branch name..."
+                placeholder={branchModalMode === 'create' ? "Branch name..." : "New branch name..."}
                 value={newBranchName}
                 onChange={(e) => {
                   setNewBranchName(e.target.value)
@@ -437,7 +562,7 @@ const Sidebar: React.FC = () => {
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    handleCreateBranchSubmit()
+                    handleBranchModalSubmit()
                   }
                 }}
                 style={{
@@ -471,12 +596,12 @@ const Sidebar: React.FC = () => {
               </button>
               <button
                 className="btn-primary"
-                onClick={handleCreateBranchSubmit}
-                disabled={!newBranchName.trim()}
-                style={{ opacity: !newBranchName.trim() ? 0.5 : 1, cursor: !newBranchName.trim() ? 'not-allowed' : 'pointer' }}
+                onClick={handleBranchModalSubmit}
+                disabled={!newBranchName.trim() || (branchModalMode === 'rename' && newBranchName.trim() === branchToRename)}
+                style={{ opacity: (!newBranchName.trim() || (branchModalMode === 'rename' && newBranchName.trim() === branchToRename)) ? 0.5 : 1, cursor: (!newBranchName.trim() || (branchModalMode === 'rename' && newBranchName.trim() === branchToRename)) ? 'not-allowed' : 'pointer' }}
                 data-testid="create-branch-submit-btn"
               >
-                Create Branch
+                {branchModalMode === 'create' ? 'Create Branch' : 'Rename'}
               </button>
             </div>
           </div>
