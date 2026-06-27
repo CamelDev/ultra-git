@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X } from 'lucide-react'
+import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 
@@ -22,6 +22,11 @@ const GraphView: React.FC = () => {
   const [remoteError, setRemoteError] = useState('')
   const [makeRemotePublic, setMakeRemotePublic] = useState(false)
   const [isCreatingRemote, setIsCreatingRemote] = useState(false)
+
+  const [isUpstreamModalOpen, setIsUpstreamModalOpen] = useState(false)
+  const [upstreamBranch, setUpstreamBranch] = useState('')
+  const [upstreamRemote, setUpstreamRemote] = useState('origin')
+  const [upstreamError, setUpstreamError] = useState('')
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -282,7 +287,7 @@ const GraphView: React.FC = () => {
       }
 
       // 2. Perform push with upstream option
-      const pushRes = await window.api.git.push(activeRepo.path, false, remote, branch, true)
+      const pushRes = await window.api.git.push(activeRepo.path, false, remote, `${activeRepo.branch}:${branch}`, true)
       await refreshRepo(activeRepo.id)
       
       if (pushRes.success) {
@@ -294,6 +299,29 @@ const GraphView: React.FC = () => {
       }
     } catch (err: any) {
       setRemoteError(err.message || 'An unexpected error occurred.')
+    } finally {
+      setIsPushing(false)
+    }
+  }
+
+  const handleSetUpstreamSubmit = async () => {
+    const branch = upstreamBranch.trim()
+    if (!branch || !activeRepo) return
+
+    setIsPushing(true)
+    setUpstreamError('')
+    try {
+      const pushRes = await window.api.git.push(activeRepo.path, false, upstreamRemote, `${activeRepo.branch}:${branch}`, true)
+      await refreshRepo(activeRepo.id)
+      
+      if (pushRes.success) {
+        setIsUpstreamModalOpen(false)
+        setUpstreamError('')
+      } else {
+        setUpstreamError(pushRes.error || 'Failed to push to remote repository.')
+      }
+    } catch (err: any) {
+      setUpstreamError(err.message || 'An unexpected error occurred.')
     } finally {
       setIsPushing(false)
     }
@@ -567,6 +595,54 @@ const GraphView: React.FC = () => {
                   data-testid="force-push-option"
                 >
                   Force Push
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowPushDropdown(false)
+                    let initialRemote = 'origin'
+                    let initialBranch = activeRepo.branch || 'main'
+                    
+                    const tracking = activeRepo.status?.tracking
+                    if (tracking) {
+                      const slashIndex = tracking.indexOf('/')
+                      if (slashIndex !== -1) {
+                        initialRemote = tracking.substring(0, slashIndex)
+                        initialBranch = tracking.substring(slashIndex + 1)
+                      } else {
+                        initialBranch = tracking
+                      }
+                    } else {
+                      try {
+                        const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+                        if (remotesRes.success && remotesRes.data && remotesRes.data.length > 0) {
+                          initialRemote = remotesRes.data[0].name
+                        }
+                      } catch (e) {
+                        console.error('Failed to load remotes', e)
+                      }
+                    }
+                    
+                    setUpstreamRemote(initialRemote)
+                    setUpstreamBranch(initialBranch)
+                    setUpstreamError('')
+                    setIsUpstreamModalOpen(true)
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    width: '100%',
+                    borderTop: '1px solid var(--border)'
+                  }}
+                  className="dropdown-item-hover"
+                  data-testid="set-upstream-option"
+                >
+                  Set Upstream...
                 </button>
                 <button
                   onClick={async () => {
@@ -975,6 +1051,102 @@ const GraphView: React.FC = () => {
                 data-testid="remote-submit-btn"
               >
                 {isPushing ? 'Pushing...' : 'Set Remote & Push'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isUpstreamModalOpen && (
+        <div 
+          className="diff-modal-overlay" 
+          style={{ zIndex: 1100 }} 
+          onClick={() => setIsUpstreamModalOpen(false)}
+        >
+          <div 
+            className="diff-modal-content" 
+            style={{ 
+              maxWidth: '400px', 
+              width: '90%', 
+              height: 'auto', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)', 
+              padding: 0 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="diff-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <GitBranch size={16} />
+                Set Upstream Branch
+              </h2>
+              <button 
+                className="diff-modal-close" 
+                onClick={() => setIsUpstreamModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
+                data-testid="close-upstream-modal-btn"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Set the remote tracking branch name for <strong>{activeRepo?.branch}</strong>.
+              </div>
+              <input
+                type="text"
+                placeholder="Remote branch name..."
+                value={upstreamBranch}
+                onChange={(e) => {
+                  setUpstreamBranch(e.target.value)
+                  setUpstreamError('')
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSetUpstreamSubmit()
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  border: '1px solid var(--border)',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  outline: 'none'
+                }}
+                autoFocus
+                data-testid="upstream-branch-input"
+              />
+              {upstreamError && (
+                <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} data-testid="upstream-error-message">
+                  {upstreamError}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px', backgroundColor: 'var(--bg-secondary)' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setIsUpstreamModalOpen(false)}
+                data-testid="cancel-upstream-btn"
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleSetUpstreamSubmit}
+                disabled={!upstreamBranch.trim() || isPushing}
+                style={{ opacity: (!upstreamBranch.trim() || isPushing) ? 0.5 : 1, cursor: (!upstreamBranch.trim() || isPushing) ? 'not-allowed' : 'pointer' }}
+                data-testid="upstream-submit-btn"
+              >
+                {isPushing ? 'Pushing...' : 'Set Upstream & Push'}
               </button>
             </div>
           </div>
