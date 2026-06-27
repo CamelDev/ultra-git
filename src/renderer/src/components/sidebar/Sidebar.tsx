@@ -159,13 +159,19 @@ const Sidebar: React.FC = () => {
           <span>{localBranches.length}</span>
         </div>
         {localBranches.map((b) => {
-          const isActive = b === branch;
+          const name = typeof b === 'string' ? b : b.name;
+          const ahead = typeof b === 'string' ? 0 : b.ahead;
+          const behind = typeof b === 'string' ? 0 : b.behind;
+          const isActive = name === branch;
+          const currentAhead = isActive ? (status?.ahead ?? ahead) : ahead;
+          const currentBehind = isActive ? (status?.behind ?? behind) : behind;
+
           if (isActive) {
             return (
-              <div className="sidebar-item active" style={{ display: 'flex', alignItems: 'center' }} key={b}>
+              <div className="sidebar-item active" style={{ display: 'flex', alignItems: 'center' }} key={name}>
                 <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
-                <span data-testid="sidebar-active-branch" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
-                {(status?.ahead > 0 || status?.behind > 0) && (
+                <span data-testid="sidebar-active-branch" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                {(currentAhead > 0 || currentBehind > 0) && (
                   <span 
                     className="branch-sync-badge" 
                     style={{ 
@@ -182,14 +188,14 @@ const Sidebar: React.FC = () => {
                     }}
                     data-testid="branch-sync-badge"
                   >
-                    {status.ahead > 0 && (
+                    {currentAhead > 0 && (
                       <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-ahead">
-                        ↑<span>{status.ahead}</span>
+                        ↑<span>{currentAhead}</span>
                       </span>
                     )}
-                    {status.behind > 0 && (
+                    {currentBehind > 0 && (
                       <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-behind">
-                        ↓<span>{status.behind}</span>
+                        ↓<span>{currentBehind}</span>
                       </span>
                     )}
                   </span>
@@ -197,7 +203,7 @@ const Sidebar: React.FC = () => {
                 <button
                   className="stash-action-btn"
                   style={{ 
-                    marginLeft: (status?.ahead > 0 || status?.behind > 0) ? '8px' : 'auto',
+                    marginLeft: (currentAhead > 0 || currentBehind > 0) ? '8px' : 'auto',
                     flexShrink: 0,
                     padding: 0,
                     height: '24px',
@@ -224,12 +230,41 @@ const Sidebar: React.FC = () => {
               <div 
                 className="sidebar-item" 
                 style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} 
-                key={b}
-                onClick={() => handleCheckoutBranch(b)}
-                data-testid={`sidebar-branch-${b}`}
+                key={name}
+                onClick={() => handleCheckoutBranch(name)}
+                data-testid={`sidebar-branch-${name}`}
               >
                 <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                {(currentAhead > 0 || currentBehind > 0) && (
+                  <span 
+                    className="branch-sync-badge" 
+                    style={{ 
+                      marginLeft: 'auto', 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '6px', 
+                      fontSize: '11px', 
+                      fontWeight: 700, 
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      userSelect: 'none'
+                    }}
+                    data-testid="branch-sync-badge"
+                  >
+                    {currentAhead > 0 && (
+                      <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-ahead">
+                        ↑<span>{currentAhead}</span>
+                      </span>
+                    )}
+                    {currentBehind > 0 && (
+                      <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-behind">
+                        ↓<span>{currentBehind}</span>
+                      </span>
+                    )}
+                  </span>
+                )}
               </div>
             );
           }

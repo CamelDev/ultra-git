@@ -14,7 +14,7 @@ declare global {
         getRemotes: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ name: string; refs: { fetch: string; push: string } }>; error?: string }>;
         addRemote: (repoPath: string, name: string, url: string) => Promise<{ success: boolean; error?: string }>;
         createBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>;
-        getBranches: (repoPath: string) => Promise<{ success: boolean; data?: { current: string; local: string[]; remote: string[] }; error?: string }>;
+        getBranches: (repoPath: string) => Promise<{ success: boolean; data?: { current: string; local: Array<{ name: string; ahead: number; behind: number }>; remote: string[] }; error?: string }>;
         checkout: (repoPath: string, branchName: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         getCommitFiles: (repoPath: string, commitHash: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => Promise<{ success: boolean; data?: any; error?: string }>;

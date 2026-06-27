@@ -296,4 +296,58 @@ test.describe('Branch Sync Status', () => {
       await app.close()
     }
   })
+
+  test('should display ahead/behind badges in the sidebar for inactive branches', async () => {
+    // 1. Create and checkout a feature branch, push it to set upstream, make a commit to go ahead
+    await localSandbox.git.checkoutLocalBranch('feature-sync')
+    await localSandbox.git.push('origin', 'feature-sync', ['-u'])
+    await localSandbox.createCommit('file-feature.txt', 'feature content', 'Feature commit')
+
+    // 2. Checkout main so main is active and feature-sync is inactive
+    await localSandbox.git.checkout('main')
+
+    const { app, page } = await launchElectronApp()
+    
+    try {
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, localSandbox.dir)
+
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await addBtn.click()
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      // Active branch is main
+      const activeBranch = page.locator('[data-testid="sidebar-active-branch"]')
+      await expect(activeBranch).toBeVisible()
+      await expect(activeBranch).toContainText('main')
+
+      // Non-active branch 'feature-sync' should be visible and show its ahead status
+      const featureBranchItem = page.locator('[data-testid="sidebar-branch-feature-sync"]')
+      await expect(featureBranchItem).toBeVisible()
+      await expect(featureBranchItem).toContainText('feature-sync')
+
+      const featureSyncBadge = featureBranchItem.locator('[data-testid="branch-sync-badge"]')
+      await expect(featureSyncBadge).toBeVisible()
+
+      const featureAhead = featureBranchItem.locator('[data-testid="sync-ahead"]')
+      await expect(featureAhead).toBeVisible()
+      await expect(featureAhead).toContainText('↑1')
+
+    } finally {
+      await app.close()
+    }
+  })
 })
+

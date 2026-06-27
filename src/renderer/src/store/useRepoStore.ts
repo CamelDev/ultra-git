@@ -31,7 +31,7 @@ export interface Repository {
   error: string | null;
   identityId?: string;
   branches?: {
-    local: string[];
+    local: Array<{ name: string; ahead: number; behind: number } | string>;
     remote: string[];
   };
 }

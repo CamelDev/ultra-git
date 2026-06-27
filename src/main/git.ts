@@ -155,9 +155,34 @@ export const gitService = {
   getBranches: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
     const summary = await git.branch();
-    const local: string[] = [];
+    const local: Array<{ name: string; ahead: number; behind: number }> = [];
     const remote: string[] = [];
     
+    const branchStatusMap = new Map<string, { ahead: number; behind: number }>();
+    try {
+      const trackingRaw = await git.raw(['for-each-ref', '--format=%(refname:short) %(upstream:track)', 'refs/heads/']);
+      const lines = trackingRaw.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const spaceIdx = trimmed.indexOf(' ');
+        const name = spaceIdx === -1 ? trimmed : trimmed.substring(0, spaceIdx).trim();
+        const track = spaceIdx === -1 ? '' : trimmed.substring(spaceIdx + 1).trim();
+        
+        let ahead = 0;
+        let behind = 0;
+        if (track) {
+          const aheadMatch = track.match(/ahead\s+(\d+)/);
+          if (aheadMatch) ahead = parseInt(aheadMatch[1], 10);
+          const behindMatch = track.match(/behind\s+(\d+)/);
+          if (behindMatch) behind = parseInt(behindMatch[1], 10);
+        }
+        branchStatusMap.set(name, { ahead, behind });
+      }
+    } catch (e) {
+      console.warn('Failed to fetch ahead/behind counts for local branches', e);
+    }
+
     summary.all.forEach(name => {
       if (name.startsWith('remotes/')) {
         const cleanName = name.replace(/^remotes\//, '');
@@ -165,7 +190,12 @@ export const gitService = {
           remote.push(cleanName);
         }
       } else {
-        local.push(name);
+        const status = branchStatusMap.get(name) || { ahead: 0, behind: 0 };
+        local.push({
+          name,
+          ahead: status.ahead,
+          behind: status.behind
+        });
       }
     });
 
