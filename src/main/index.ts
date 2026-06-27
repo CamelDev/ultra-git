@@ -116,6 +116,24 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:createBranch', async (_, repoPath, branchName) => {
+    try {
+      const data = await gitService.createBranch(repoPath, branchName)
+      return { success: true, data: JSON.parse(JSON.stringify(data)) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getBranches', async (_, repoPath) => {
+    try {
+      const data = await gitService.getBranches(repoPath)
+      return { success: true, data: JSON.parse(JSON.stringify(data)) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:getCommitFiles', async (_, repoPath, commitHash) => {
     try {
       const data = await gitService.getCommitFiles(repoPath, commitHash)
