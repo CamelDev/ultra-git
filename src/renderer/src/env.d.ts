@@ -10,7 +10,11 @@ declare global {
         log: (repoPath: string, maxCount?: number) => Promise<{ success: boolean; data?: any; error?: string }>;
         fetch: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         pull: (repoPath: string) => Promise<{ success: boolean; data?: { hadConflicts: boolean }; error?: string }>;
-        push: (repoPath: string, force?: boolean) => Promise<{ success: boolean; error?: string }>;
+        push: (repoPath: string, force?: boolean, remote?: string, branch?: string, setUpstream?: boolean) => Promise<{ success: boolean; error?: string }>;
+        getRemotes: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ name: string; refs: { fetch: string; push: string } }>; error?: string }>;
+        addRemote: (repoPath: string, name: string, url: string) => Promise<{ success: boolean; error?: string }>;
+        createBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>;
+        getBranches: (repoPath: string) => Promise<{ success: boolean; data?: { current: string; local: string[]; remote: string[] }; error?: string }>;
         checkout: (repoPath: string, branchName: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         getCommitFiles: (repoPath: string, commitHash: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
@@ -28,6 +32,7 @@ declare global {
         getStashFileDiff: (repoPath: string, index: number, filePath: string, oldPath?: string, status?: string, isUntracked?: boolean) => Promise<{ success: boolean; data?: { before: string; after: string; isBinary: boolean }; error?: string }>;
         setRepositoryIdentity: (repoPath: string, identity: { name: string; email: string; sshKeyPath?: string; personalAccessToken?: string; username?: string; provider?: string }) => Promise<{ success: boolean; data?: any; error?: string }>;
         validateToken: (provider: string, token: string, email?: string) => Promise<{ success: boolean; data?: { name: string; email: string; username: string; avatarUrl: string }; error?: string }>;
+        createRemoteRepo: (provider: string, token: string, repoName: string, makePublic: boolean) => Promise<{ success: boolean; data?: any; error?: string }>;
         watchRepo: (repoPath: string | null) => Promise<{ success: boolean; error?: string }>;
         onRepoChanged: (callback: (repoPath: string) => void) => () => void;
       };

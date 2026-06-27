@@ -98,9 +98,27 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:push', async (_, repoPath, force) => {
+  ipcMain.handle('git:push', async (_, repoPath, force, remote, branch, setUpstream) => {
     try {
-      const data = await gitService.push(repoPath, force)
+      const data = await gitService.push(repoPath, force, remote, branch, setUpstream)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getRemotes', async (_, repoPath) => {
+    try {
+      const data = await gitService.getRemotes(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:addRemote', async (_, repoPath, name, url) => {
+    try {
+      const data = await gitService.addRemote(repoPath, name, url)
       return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
@@ -329,6 +347,52 @@ app.whenReady().then(() => {
         success: true,
         data: { name, email, username, avatarUrl }
       }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:createRemoteRepo', async (_, { provider, token, repoName, makePublic }) => {
+    try {
+      let url = ''
+      const headers: Record<string, string> = {
+        'User-Agent': 'ultra-git',
+        'Content-Type': 'application/json'
+      }
+      let body: any = {}
+
+      if (provider === 'github') {
+        url = 'https://api.github.com/user/repos'
+        headers['Authorization'] = `token ${token}`
+        headers['Accept'] = 'application/vnd.github.v3+json'
+        body = {
+          name: repoName,
+          private: !makePublic
+        }
+      } else if (provider === 'gitlab') {
+        url = 'https://gitlab.com/api/v4/projects'
+        headers['Authorization'] = `Bearer ${token}`
+        body = {
+          name: repoName,
+          visibility: makePublic ? 'public' : 'private'
+        }
+      } else {
+        return { success: false, error: 'Unsupported provider for automatic repository creation' }
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        return { success: false, error: `API error (${response.status}): ${errorText}` }
+      }
+
+      const data = await response.json()
+      return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
     }

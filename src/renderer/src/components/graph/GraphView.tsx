@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings } from 'lucide-react'
+import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 
@@ -14,6 +14,19 @@ const GraphView: React.FC = () => {
   const [showPushDropdown, setShowPushDropdown] = useState(false)
   const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const [isRemoteModalOpen, setIsRemoteModalOpen] = useState(false)
+  const [remoteName, setRemoteName] = useState('origin')
+  const [remoteUrl, setRemoteUrl] = useState('')
+  const [remoteBranch, setRemoteBranch] = useState('')
+  const [remoteError, setRemoteError] = useState('')
+  const [makeRemotePublic, setMakeRemotePublic] = useState(false)
+  const [isCreatingRemote, setIsCreatingRemote] = useState(false)
+
+  const [isUpstreamModalOpen, setIsUpstreamModalOpen] = useState(false)
+  const [upstreamBranch, setUpstreamBranch] = useState('')
+  const [upstreamRemote, setUpstreamRemote] = useState('origin')
+  const [upstreamError, setUpstreamError] = useState('')
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -120,6 +133,200 @@ const GraphView: React.FC = () => {
     }
   }
 
+  const parseGitUrl = (urlStr: string) => {
+    const cleanUrl = urlStr.trim().replace(/\.git\/?$/, '')
+    
+    let provider: 'github' | 'gitlab' | 'bitbucket' | null = null
+    if (cleanUrl.includes('github.com')) provider = 'github'
+    else if (cleanUrl.includes('gitlab.com')) provider = 'gitlab'
+    else if (cleanUrl.includes('bitbucket.org')) provider = 'bitbucket'
+    
+    let owner = ''
+    let repo = ''
+    
+    if (cleanUrl.includes('://')) {
+      try {
+        const parsed = new URL(cleanUrl)
+        const parts = parsed.pathname.split('/').filter(Boolean)
+        if (parts.length >= 2) {
+          owner = parts[parts.length - 2]
+          repo = parts[parts.length - 1]
+        }
+      } catch (e) {
+        // fallback
+      }
+    } else if (cleanUrl.includes('@')) {
+      const match = cleanUrl.match(/:(.+)$/)
+      if (match && match[1]) {
+        const parts = match[1].split('/').filter(Boolean)
+        if (parts.length >= 2) {
+          owner = parts[parts.length - 2]
+          repo = parts[parts.length - 1]
+        }
+      }
+    }
+    
+    return { provider, owner, repo }
+  }
+
+  const handleCreateRemoteAndPush = async () => {
+    const remote = remoteName.trim()
+    const url = remoteUrl.trim()
+    const branch = remoteBranch.trim()
+    
+    if (!remote || !branch || !url || !activeRepo) return
+
+    const parsed = parseGitUrl(url)
+    if (!parsed.provider || !parsed.repo) {
+      setRemoteError('Could not detect a valid GitHub/GitLab URL structure. Please create the repository manually.')
+      return
+    }
+
+    const activeIdentity = identities.find(id => id.id === activeRepo.identityId)
+    if (!activeIdentity || !activeIdentity.personalAccessToken) {
+      setRemoteError('No Personal Access Token configured for the current active Identity.')
+      return
+    }
+
+    setIsCreatingRemote(true)
+    setRemoteError('')
+    try {
+      // 1. Create remote repository using API
+      const createRes = await window.api.git.createRemoteRepo(
+        parsed.provider,
+        activeIdentity.personalAccessToken,
+        parsed.repo,
+        makeRemotePublic
+      )
+
+      if (!createRes.success) {
+        setRemoteError(createRes.error || `Failed to create remote repository on ${parsed.provider}.`)
+        setIsCreatingRemote(false)
+        return
+      }
+
+      // 2. Add remote to local repo if it doesn't already exist
+      const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+      let remoteExists = false
+      if (remotesRes.success && remotesRes.data) {
+        remoteExists = remotesRes.data.some(r => r.name === remote)
+      }
+
+      if (!remoteExists) {
+        const addRes = await window.api.git.addRemote(activeRepo.path, remote, url)
+        if (!addRes.success) {
+          setRemoteError(addRes.error || 'Failed to add remote repository to local config.')
+          setIsCreatingRemote(false)
+          return
+        }
+      }
+
+      // 3. Perform push with upstream option
+      const pushRes = await window.api.git.push(activeRepo.path, false, remote, branch, true)
+      await refreshRepo(activeRepo.id)
+      
+      if (pushRes.success) {
+        setIsRemoteModalOpen(false)
+        setRemoteUrl('')
+        setRemoteError('')
+      } else {
+        setRemoteError(pushRes.error || 'Repository created, but failed to push.')
+      }
+    } catch (err: any) {
+      setRemoteError(err.message || 'An unexpected error occurred.')
+    } finally {
+      setIsCreatingRemote(false)
+    }
+  }
+
+  const handleSetRemoteSubmit = async () => {
+    const remote = remoteName.trim()
+    const url = remoteUrl.trim()
+    const branch = remoteBranch.trim()
+    
+    if (!remote || !branch || !activeRepo) return
+
+    setIsPushing(true)
+    setRemoteError('')
+    try {
+      // 1. If remote URL is entered, configure it
+      if (url) {
+        const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+        if (remotesRes.success && remotesRes.data) {
+          const exists = remotesRes.data.some(r => r.name === remote)
+          if (!exists) {
+            const addRes = await window.api.git.addRemote(activeRepo.path, remote, url)
+            if (!addRes.success) {
+              setRemoteError(addRes.error || 'Failed to add remote.')
+              setIsPushing(false)
+              return
+            }
+          }
+        } else if (remotesRes.success) {
+          const addRes = await window.api.git.addRemote(activeRepo.path, remote, url)
+          if (!addRes.success) {
+            setRemoteError(addRes.error || 'Failed to add remote.')
+            setIsPushing(false)
+            return
+          }
+        } else {
+          setRemoteError(remotesRes.error || 'Failed to read remotes.')
+          setIsPushing(false)
+          return
+        }
+      } else {
+        const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+        if (remotesRes.success && remotesRes.data) {
+          const exists = remotesRes.data.some(r => r.name === remote)
+          if (!exists) {
+            setRemoteError(`Remote "${remote}" does not exist. Please specify a Remote URL to add it.`)
+            setIsPushing(false)
+            return
+          }
+        }
+      }
+
+      // 2. Perform push with upstream option
+      const pushRes = await window.api.git.push(activeRepo.path, false, remote, `${activeRepo.branch}:${branch}`, true)
+      await refreshRepo(activeRepo.id)
+      
+      if (pushRes.success) {
+        setIsRemoteModalOpen(false)
+        setRemoteUrl('')
+        setRemoteError('')
+      } else {
+        setRemoteError(pushRes.error || 'Failed to push to remote repository.')
+      }
+    } catch (err: any) {
+      setRemoteError(err.message || 'An unexpected error occurred.')
+    } finally {
+      setIsPushing(false)
+    }
+  }
+
+  const handleSetUpstreamSubmit = async () => {
+    const branch = upstreamBranch.trim()
+    if (!branch || !activeRepo) return
+
+    setIsPushing(true)
+    setUpstreamError('')
+    try {
+      const pushRes = await window.api.git.push(activeRepo.path, false, upstreamRemote, `${activeRepo.branch}:${branch}`, true)
+      await refreshRepo(activeRepo.id)
+      
+      if (pushRes.success) {
+        setIsUpstreamModalOpen(false)
+        setUpstreamError('')
+      } else {
+        setUpstreamError(pushRes.error || 'Failed to push to remote repository.')
+      }
+    } catch (err: any) {
+      setUpstreamError(err.message || 'An unexpected error occurred.')
+    } finally {
+      setIsPushing(false)
+    }
+  }
+
   const handlePush = async (force?: boolean) => {
     if (!activeRepo || isPulling || isPushing) return
 
@@ -167,6 +374,40 @@ const GraphView: React.FC = () => {
             await handlePush(true)
             return
           }
+        }
+
+        const noUpstream = errorMsg.includes('no upstream branch') || 
+                           errorMsg.includes('No configured push destination') ||
+                           errorMsg.includes('no configured upstream') ||
+                           (errorMsg.includes('fatal:') && errorMsg.includes('upstream'))
+
+        if (noUpstream) {
+          const dialogRes = await window.api.app.showMessageBox({
+            type: 'question',
+            title: 'No Remote Configured',
+            message: 'This repository has no remote configured. Would you like to configure a remote now?',
+            buttons: ['Cancel', 'Configure']
+          })
+          if (dialogRes.success && dialogRes.response === 1) {
+            setRemoteName('origin')
+            setRemoteBranch(activeRepo.branch || 'main')
+            
+            try {
+              const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+              if (remotesRes.success && remotesRes.data && remotesRes.data.length > 0) {
+                setRemoteName(remotesRes.data[0].name)
+                setRemoteUrl(remotesRes.data[0].refs.push || remotesRes.data[0].refs.fetch || '')
+              } else {
+                setRemoteUrl('')
+              }
+            } catch (e) {
+              setRemoteUrl('')
+            }
+            
+            setIsRemoteModalOpen(true)
+            return
+          }
+          return
         }
 
         await window.api.app.showMessageBox({
@@ -355,6 +596,89 @@ const GraphView: React.FC = () => {
                 >
                   Force Push
                 </button>
+                <button
+                  onClick={async () => {
+                    setShowPushDropdown(false)
+                    let initialRemote = 'origin'
+                    let initialBranch = activeRepo.branch || 'main'
+                    
+                    const tracking = activeRepo.status?.tracking
+                    if (tracking) {
+                      const slashIndex = tracking.indexOf('/')
+                      if (slashIndex !== -1) {
+                        initialRemote = tracking.substring(0, slashIndex)
+                        initialBranch = tracking.substring(slashIndex + 1)
+                      } else {
+                        initialBranch = tracking
+                      }
+                    } else {
+                      try {
+                        const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+                        if (remotesRes.success && remotesRes.data && remotesRes.data.length > 0) {
+                          initialRemote = remotesRes.data[0].name
+                        }
+                      } catch (e) {
+                        console.error('Failed to load remotes', e)
+                      }
+                    }
+                    
+                    setUpstreamRemote(initialRemote)
+                    setUpstreamBranch(initialBranch)
+                    setUpstreamError('')
+                    setIsUpstreamModalOpen(true)
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    width: '100%',
+                    borderTop: '1px solid var(--border)'
+                  }}
+                  className="dropdown-item-hover"
+                  data-testid="set-upstream-option"
+                >
+                  Set Upstream...
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowPushDropdown(false)
+                    setRemoteName('origin')
+                    setRemoteBranch(activeRepo.branch || 'main')
+                    try {
+                      const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+                      if (remotesRes.success && remotesRes.data && remotesRes.data.length > 0) {
+                        setRemoteName(remotesRes.data[0].name)
+                        setRemoteUrl(remotesRes.data[0].refs.push || remotesRes.data[0].refs.fetch || '')
+                      } else {
+                        setRemoteUrl('')
+                      }
+                    } catch (e) {
+                      setRemoteUrl('')
+                    }
+                    setIsRemoteModalOpen(true)
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    width: '100%',
+                    borderTop: '1px solid var(--border)'
+                  }}
+                  className="dropdown-item-hover"
+                  data-testid="set-remote-option"
+                >
+                  Set Remote...
+                </button>
               </div>
             )}
           </div>
@@ -492,6 +816,342 @@ const GraphView: React.FC = () => {
         isOpen={identitiesModalOpen}
         onClose={() => setIdentitiesModalOpen(false)}
       />
+
+      {isRemoteModalOpen && (
+        <div 
+          className="diff-modal-overlay" 
+          style={{ zIndex: 1100 }} 
+          onClick={() => setIsRemoteModalOpen(false)}
+        >
+          <div 
+            className="diff-modal-content" 
+            style={{ 
+              maxWidth: '420px', 
+              width: '90%', 
+              height: 'auto', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)', 
+              padding: 0 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="diff-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ArrowUp size={16} />
+                Set Remote & Push
+              </h2>
+              <button 
+                className="diff-modal-close" 
+                onClick={() => setIsRemoteModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
+                data-testid="close-remote-modal-btn"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Configure a remote repository and set the upstream branch for <strong>{activeRepo?.branch}</strong>.
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>Remote Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. origin"
+                  value={remoteName}
+                  onChange={(e) => {
+                    setRemoteName(e.target.value)
+                    setRemoteError('')
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                  data-testid="remote-name-input"
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>Remote URL</label>
+                <input
+                  type="text"
+                  placeholder="e.g. https://github.com/user/repo.git"
+                  value={remoteUrl}
+                  onChange={(e) => {
+                    setRemoteUrl(e.target.value)
+                    setRemoteError('')
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                  data-testid="remote-url-input"
+                />
+                <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+                  Optional if the remote name already exists in this repository.
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>Branch Name</label>
+                <input
+                  type="text"
+                  placeholder="Branch name..."
+                  value={remoteBranch}
+                  onChange={(e) => {
+                    setRemoteBranch(e.target.value)
+                    setRemoteError('')
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                  data-testid="remote-branch-input"
+                />
+              </div>
+
+              {remoteError && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} data-testid="remote-error-message">
+                    {remoteError}
+                  </div>
+                  {/* Repo not found helper flow */}
+                  {(remoteError.toLowerCase().includes('not found') || 
+                    remoteError.toLowerCase().includes('does not exist') || 
+                    remoteError.toLowerCase().includes('404')) && (
+                    <>
+                      {(() => {
+                        const parsed = parseGitUrl(remoteUrl)
+                        const activeIdentity = identities.find(id => id.id === activeRepo?.identityId)
+                        const canCreateAutomatically = !!(parsed.provider && activeIdentity?.personalAccessToken && (parsed.provider === 'github' || parsed.provider === 'gitlab'))
+                        
+                        if (canCreateAutomatically) {
+                          return (
+                            <div style={{ marginTop: '4px', padding: '12px', border: '1px dashed var(--border)', borderRadius: '6px', backgroundColor: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                Automatic Remote Repository Creation
+                              </div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                Would you like to automatically create the <strong>{parsed.repo}</strong> repository on {parsed.provider === 'github' ? 'GitHub' : 'GitLab'} using your selected identity?
+                              </div>
+                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={makeRemotePublic}
+                                  onChange={(e) => setMakeRemotePublic(e.target.checked)}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                                Make Repository Public
+                              </label>
+                              <button
+                                className="btn-primary"
+                                onClick={handleCreateRemoteAndPush}
+                                disabled={isCreatingRemote || isPushing}
+                                style={{ 
+                                  fontSize: '11px', 
+                                  padding: '6px 12px', 
+                                  marginTop: '4px',
+                                  display: 'inline-flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center',
+                                  gap: '4px',
+                                  alignSelf: 'flex-start',
+                                  opacity: (isCreatingRemote || isPushing) ? 0.5 : 1,
+                                  cursor: (isCreatingRemote || isPushing) ? 'not-allowed' : 'pointer'
+                                }}
+                                data-testid="create-remote-and-push-btn"
+                              >
+                                {isCreatingRemote ? 'Creating & Pushing...' : 'Create Remote & Push'}
+                              </button>
+                            </div>
+                          )
+                        } else {
+                          return (
+                            <div style={{ marginTop: '4px', padding: '12px', border: '1px dashed var(--border)', borderRadius: '6px', backgroundColor: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                Create Remote Repository
+                              </div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                To create it automatically, configure an Identity with a Personal Access Token in the toolbar. Alternatively, create it manually on the platform:
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                                {(!parsed.provider || parsed.provider === 'github') && (
+                                  <a
+                                    href="https://github.com/new"
+                                    target="_blank"
+                                    className="btn-secondary"
+                                    style={{ fontSize: '11px', padding: '4px 8px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                    data-testid="create-on-github-link"
+                                  >
+                                    Create on GitHub
+                                  </a>
+                                )}
+                                {(!parsed.provider || parsed.provider === 'gitlab') && (
+                                  <a
+                                    href="https://gitlab.com/projects/new"
+                                    target="_blank"
+                                    className="btn-secondary"
+                                    style={{ fontSize: '11px', padding: '4px 8px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                    data-testid="create-on-gitlab-link"
+                                  >
+                                    Create on GitLab
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        }
+                      })()}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px', backgroundColor: 'var(--bg-secondary)' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setIsRemoteModalOpen(false)}
+                data-testid="remote-cancel-btn"
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleSetRemoteSubmit}
+                disabled={!remoteName.trim() || !remoteBranch.trim() || isPushing}
+                style={{ 
+                  opacity: (!remoteName.trim() || !remoteBranch.trim() || isPushing) ? 0.5 : 1, 
+                  cursor: (!remoteName.trim() || !remoteBranch.trim() || isPushing) ? 'not-allowed' : 'pointer' 
+                }}
+                data-testid="remote-submit-btn"
+              >
+                {isPushing ? 'Pushing...' : 'Set Remote & Push'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isUpstreamModalOpen && (
+        <div 
+          className="diff-modal-overlay" 
+          style={{ zIndex: 1100 }} 
+          onClick={() => setIsUpstreamModalOpen(false)}
+        >
+          <div 
+            className="diff-modal-content" 
+            style={{ 
+              maxWidth: '400px', 
+              width: '90%', 
+              height: 'auto', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)', 
+              padding: 0 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="diff-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <GitBranch size={16} />
+                Set Upstream Branch
+              </h2>
+              <button 
+                className="diff-modal-close" 
+                onClick={() => setIsUpstreamModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
+                data-testid="close-upstream-modal-btn"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Set the remote tracking branch name for <strong>{activeRepo?.branch}</strong>.
+              </div>
+              <input
+                type="text"
+                placeholder="Remote branch name..."
+                value={upstreamBranch}
+                onChange={(e) => {
+                  setUpstreamBranch(e.target.value)
+                  setUpstreamError('')
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSetUpstreamSubmit()
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  border: '1px solid var(--border)',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  outline: 'none'
+                }}
+                autoFocus
+                data-testid="upstream-branch-input"
+              />
+              {upstreamError && (
+                <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} data-testid="upstream-error-message">
+                  {upstreamError}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px', backgroundColor: 'var(--bg-secondary)' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setIsUpstreamModalOpen(false)}
+                data-testid="cancel-upstream-btn"
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleSetUpstreamSubmit}
+                disabled={!upstreamBranch.trim() || isPushing}
+                style={{ opacity: (!upstreamBranch.trim() || isPushing) ? 0.5 : 1, cursor: (!upstreamBranch.trim() || isPushing) ? 'not-allowed' : 'pointer' }}
+                data-testid="upstream-submit-btn"
+              >
+                {isPushing ? 'Pushing...' : 'Set Upstream & Push'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
