@@ -128,6 +128,35 @@ export const gitService = {
     return await git.checkout(branchName);
   },
 
+  createBranch: async (repoPath: string, branchName: string) => {
+    const git = getGitInstance(repoPath);
+    return await git.checkoutLocalBranch(branchName);
+  },
+
+  getBranches: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    const summary = await git.branch();
+    const local: string[] = [];
+    const remote: string[] = [];
+    
+    summary.all.forEach(name => {
+      if (name.startsWith('remotes/')) {
+        const cleanName = name.replace(/^remotes\//, '');
+        if (!cleanName.endsWith('/HEAD')) {
+          remote.push(cleanName);
+        }
+      } else {
+        local.push(name);
+      }
+    });
+
+    return {
+      current: summary.current,
+      local,
+      remote
+    };
+  },
+
   getCommitFiles: async (repoPath: string, commitHash: string) => {
     const git = getGitInstance(repoPath);
     // Uses git show --name-status to identify changed files and their status

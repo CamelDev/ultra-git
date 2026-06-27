@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List } from 'lucide-react'
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { DiffModal } from '../details/DiffModal'
 
@@ -15,6 +15,10 @@ const Sidebar: React.FC = () => {
   const [isStashDetailsOpen, setIsStashDetailsOpen] = useState(false)
   const [detailsStashIndex, setDetailsStashIndex] = useState<number | null>(null)
   const [detailsStashMessage, setDetailsStashMessage] = useState<string | null>(null)
+
+  const [isBranchModalOpen, setIsBranchModalOpen] = useState(false)
+  const [newBranchName, setNewBranchName] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
 
   const branch = activeRepo?.branch || 'main'
   const status = activeRepo?.status
@@ -112,57 +116,141 @@ const Sidebar: React.FC = () => {
     }
   }
 
+  const handleCreateBranchSubmit = async () => {
+    const name = newBranchName.trim()
+    if (!name || !activeRepo) return
+    try {
+      const res = await window.api.git.createBranch(activeRepo.path, name)
+      if (res.success) {
+        setIsBranchModalOpen(false)
+        setNewBranchName('')
+        setErrorMessage('')
+        await refreshRepo(activeRepo.id)
+      } else {
+        setErrorMessage(res.error || 'Failed to create branch.')
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'An error occurred.')
+    }
+  }
+
+  const handleCheckoutBranch = async (branchName: string) => {
+    if (!activeRepo || branchName === branch) return
+    try {
+      const res = await window.api.git.checkout(activeRepo.path, branchName)
+      if (res.success) {
+        await refreshRepo(activeRepo.id)
+      } else {
+        console.error('Failed to checkout branch:', res.error)
+      }
+    } catch (err) {
+      console.error('Error checking out branch:', err)
+    }
+  }
+
+  const localBranches = activeRepo?.branches?.local ?? [branch]
+  const remoteBranches = activeRepo?.branches?.remote ?? []
+
   return (
     <div className="sidebar" data-testid="sidebar">
       <div className="sidebar-section">
         <div className="sidebar-header">
           <span>Local</span>
-          <span>{status?.ahead + status?.behind || 0}</span>
+          <span>{localBranches.length}</span>
         </div>
-        <div className="sidebar-item active" style={{ display: 'flex', alignItems: 'center' }}>
-          <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
-          <span data-testid="sidebar-active-branch" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{branch}</span>
-          {(status?.ahead > 0 || status?.behind > 0) && (
-            <span 
-              className="branch-sync-badge" 
-              style={{ 
-                marginLeft: 'auto', 
-                display: 'inline-flex', 
-                alignItems: 'center', 
-                gap: '6px', 
-                fontSize: '11px', 
-                fontWeight: 700, 
-                padding: '2px 6px',
-                borderRadius: '4px',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                userSelect: 'none'
-              }}
-              data-testid="branch-sync-badge"
-            >
-              {status.ahead > 0 && (
-                <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-ahead">
-                  ↑<span>{status.ahead}</span>
-                </span>
-              )}
-              {status.behind > 0 && (
-                <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-behind">
-                  ↓<span>{status.behind}</span>
-                </span>
-              )}
-            </span>
-          )}
-        </div>
+        {localBranches.map((b) => {
+          const isActive = b === branch;
+          if (isActive) {
+            return (
+              <div className="sidebar-item active" style={{ display: 'flex', alignItems: 'center' }} key={b}>
+                <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+                <span data-testid="sidebar-active-branch" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
+                {(status?.ahead > 0 || status?.behind > 0) && (
+                  <span 
+                    className="branch-sync-badge" 
+                    style={{ 
+                      marginLeft: 'auto', 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '6px', 
+                      fontSize: '11px', 
+                      fontWeight: 700, 
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      userSelect: 'none'
+                    }}
+                    data-testid="branch-sync-badge"
+                  >
+                    {status.ahead > 0 && (
+                      <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-ahead">
+                        ↑<span>{status.ahead}</span>
+                      </span>
+                    )}
+                    {status.behind > 0 && (
+                      <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-behind">
+                        ↓<span>{status.behind}</span>
+                      </span>
+                    )}
+                  </span>
+                )}
+                <button
+                  className="stash-action-btn"
+                  style={{ 
+                    marginLeft: (status?.ahead > 0 || status?.behind > 0) ? '8px' : 'auto',
+                    flexShrink: 0,
+                    padding: 0,
+                    height: '24px',
+                    width: '24px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setNewBranchName('')
+                    setErrorMessage('')
+                    setIsBranchModalOpen(true)
+                  }}
+                  title="Create a new branch from latest local commit (HEAD)"
+                  data-testid="sidebar-create-branch-btn"
+                >
+                  <GitBranch size={14} />
+                </button>
+              </div>
+            );
+          } else {
+            return (
+              <div 
+                className="sidebar-item" 
+                style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} 
+                key={b}
+                onClick={() => handleCheckoutBranch(b)}
+                data-testid={`sidebar-branch-${b}`}
+              >
+                <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
+              </div>
+            );
+          }
+        })}
       </div>
 
       <div className="sidebar-section">
         <div className="sidebar-header">
           <span>Remote</span>
-          <span>1</span>
+          <span>{remoteBranches.length}</span>
         </div>
-        <div className="sidebar-item">
-          <Layers className="sidebar-item-icon" size={14} />
-          <span>origin/{branch}</span>
-        </div>
+        {remoteBranches.length === 0 ? (
+          <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>No remote branches</div>
+        ) : (
+          remoteBranches.map((rb) => (
+            <div key={rb} className="sidebar-item" style={{ display: 'flex', alignItems: 'center' }}>
+              <Layers className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rb}</span>
+            </div>
+          ))
+        )}
       </div>
 
       <div className="sidebar-section">
@@ -262,6 +350,102 @@ const Sidebar: React.FC = () => {
           stashIndex={detailsStashIndex}
           stashMessage={detailsStashMessage}
         />
+      )}
+
+      {isBranchModalOpen && (
+        <div 
+          className="diff-modal-overlay" 
+          style={{ zIndex: 1100 }} 
+          onClick={() => setIsBranchModalOpen(false)}
+        >
+          <div 
+            className="diff-modal-content" 
+            style={{ 
+              maxWidth: '400px', 
+              width: '90%', 
+              height: 'auto', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)', 
+              padding: 0 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="diff-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <GitBranch size={16} />
+                Create New Branch
+              </h2>
+              <button 
+                className="diff-modal-close" 
+                onClick={() => setIsBranchModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
+                data-testid="close-branch-modal-btn"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Create a new local branch starting from the latest commit of <strong>{branch}</strong>.
+              </div>
+              <input
+                type="text"
+                placeholder="Branch name..."
+                value={newBranchName}
+                onChange={(e) => {
+                  setNewBranchName(e.target.value)
+                  setErrorMessage('')
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleCreateBranchSubmit()
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  border: '1px solid var(--border)',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  outline: 'none'
+                }}
+                autoFocus
+                data-testid="new-branch-name-input"
+              />
+              {errorMessage && (
+                <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} data-testid="branch-error-message">
+                  {errorMessage}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px', backgroundColor: 'var(--bg-secondary)' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setIsBranchModalOpen(false)}
+                data-testid="cancel-branch-btn"
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleCreateBranchSubmit}
+                disabled={!newBranchName.trim()}
+                style={{ opacity: !newBranchName.trim() ? 0.5 : 1, cursor: !newBranchName.trim() ? 'not-allowed' : 'pointer' }}
+                data-testid="create-branch-submit-btn"
+              >
+                Create Branch
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

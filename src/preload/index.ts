@@ -10,6 +10,8 @@ const api = {
     pull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
     push: (repoPath: string, force?: boolean) => ipcRenderer.invoke('git:push', repoPath, force),
     checkout: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:checkout', repoPath, branchName),
+    createBranch: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:createBranch', repoPath, branchName),
+    getBranches: (repoPath: string) => ipcRenderer.invoke('git:getBranches', repoPath),
     getCommitFiles: (repoPath: string, commitHash: string) => ipcRenderer.invoke('git:getCommitFiles', repoPath, commitHash),
     getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => 
       ipcRenderer.invoke('git:getCommitFileDiff', repoPath, commitHash, filePath, oldPath, status),

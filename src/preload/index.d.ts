@@ -16,6 +16,8 @@ declare global {
         log: (repoPath: string, maxCount?: number) => Promise<IpcResponse<any>>;
         fetch: (repoPath: string) => Promise<IpcResponse<void>>;
         checkout: (repoPath: string, branchName: string) => Promise<IpcResponse<any>>;
+        createBranch: (repoPath: string, branchName: string) => Promise<IpcResponse<any>>;
+        getBranches: (repoPath: string) => Promise<IpcResponse<{ current: string, local: string[], remote: string[] }>>;
         getCommitFiles: (repoPath: string, commitHash: string) => Promise<IpcResponse<any[]>>;
         getCommitFileDiff: (
           repoPath: string,

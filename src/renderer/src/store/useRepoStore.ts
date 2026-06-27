@@ -30,6 +30,10 @@ export interface Repository {
   isLoading: boolean;
   error: string | null;
   identityId?: string;
+  branches?: {
+    local: string[];
+    remote: string[];
+  };
 }
 
 interface RepoState {
@@ -306,10 +310,11 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     });
 
     try {
-      const [statusRes, logRes, stashRes] = await Promise.all([
+      const [statusRes, logRes, stashRes, branchesRes] = await Promise.all([
         window.api.git.status(repo.path),
         window.api.git.log(repo.path),
-        window.api.git.stashList(repo.path)
+        window.api.git.stashList(repo.path),
+        window.api.git.getBranches(repo.path)
       ]);
 
       set((state) => {
@@ -323,6 +328,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
               branch: statusRes.success ? statusRes.data.current : r.branch,
               commits,
               stashes,
+              branches: branchesRes.success ? branchesRes.data : (r.branches || { local: [], remote: [] }),
               error: statusRes.success ? null : (statusRes.error ?? 'Unknown error'),
               isLoading: false
             };
