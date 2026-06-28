@@ -787,7 +787,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         </div>
 
         {conflictWarning && (
-          <div className="stash-conflict-banner">
+          <div className="stash-conflict-banner" data-testid="stash-conflict-banner">
             <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
             <span>Conflicts detected — resolve the conflict markers (&lt;&lt;&lt;&lt;&lt;&lt;&lt;) in your files manually, then mark as resolved.</span>
           </div>

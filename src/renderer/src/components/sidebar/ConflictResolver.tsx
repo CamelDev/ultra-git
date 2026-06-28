@@ -476,10 +476,12 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
                       }}>
                         ✓ Result
                       </div>
-                      <pre style={{
-                        flex: 1,
-                        margin: 0,
-                        padding: "12px",
+                      <pre 
+                        data-testid="conflict-result-preview"
+                        style={{
+                          flex: 1,
+                          margin: 0,
+                          padding: "12px",
                         fontSize: "12px",
                         fontFamily: "monospace",
                         color: "var(--text-primary)",

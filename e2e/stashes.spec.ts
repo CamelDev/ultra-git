@@ -163,4 +163,100 @@ test.describe('Git Stashes Improvements', () => {
       console.log('App closed.');
     }
   })
+
+  test('should support pop stash with conflicts and display the conflict banner', async () => {
+    console.log('[Stash Conflict Test] 1. Initializing stash content in sandbox...');
+    fs.writeFileSync(path.join(sandbox.dir, 'README.md'), '# Initial README\n')
+    await sandbox.git.add('README.md')
+    await sandbox.git.commit('Initial commit')
+
+    console.log('[Stash Conflict Test] 2. Modifying and stashing README...');
+    fs.writeFileSync(path.join(sandbox.dir, 'README.md'), '# Initial README\nStashed modification\n')
+    await sandbox.git.stash(['push', '-m', 'Stash to pop with conflict'])
+
+    console.log('[Stash Conflict Test] 3. Making conflicting modification on active branch...');
+    fs.writeFileSync(path.join(sandbox.dir, 'README.md'), '# Initial README\nConflicting branch modification\n')
+    await sandbox.git.add('README.md')
+    await sandbox.git.commit('Commit conflicting branch modification')
+
+    console.log('[Stash Conflict Test] 4. Launching Electron App...');
+    const { app, page } = await launchElectronApp()
+
+    // Listen for browser logs and page errors
+    page.on('console', msg => console.log('  [BROWSER CONSOLE]', msg.text()));
+    page.on('pageerror', err => console.error('  [BROWSER ERROR]', err.message));
+
+    try {
+      console.log('[Stash Conflict Test] 5. Clearing localStorage...');
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      console.log('[Stash Conflict Test] 6. Mocking dialog:openDirectory...');
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      console.log('[Stash Conflict Test] 7. Adding sandbox repository...');
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      console.log('[Stash Conflict Test] 8. Switching to repository tab...');
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      console.log('[Stash Conflict Test] 9. Verifying stash entry in sidebar...');
+      const stashItem = page.locator('[data-testid="stash-item-0"]')
+      await expect(stashItem).toBeVisible()
+      await expect(stashItem).toContainText('Stash to pop with conflict')
+
+      console.log('[Stash Conflict Test] 10. Selecting stash entry...');
+      await stashItem.click()
+      await page.waitForTimeout(300)
+
+      const popBtn = page.locator('[data-testid="stash-pop-btn-0"]')
+      await expect(popBtn).toBeVisible()
+
+      console.log('[Stash Conflict Test] 11. Mocking showMessageBox to Confirm Pop...');
+      await app.evaluate(async ({ ipcMain }) => {
+        ipcMain.removeHandler('dialog:showMessageBox')
+        ipcMain.handle('dialog:showMessageBox', async () => {
+          return { success: true, response: 1 } // Confirm index 1
+        })
+      })
+
+      console.log('[Stash Conflict Test] 12. Clicking Pop button...');
+      await popBtn.click()
+      await page.waitForTimeout(2000) // Increase wait to let git finish
+
+      console.log('[Stash Conflict Test] Debugging repository state...');
+      const debugStatus = await sandbox.git.status();
+      const debugStashes = await sandbox.git.stashList();
+      console.log('[Stash Conflict Test] Conflicted files:', debugStatus.conflicted);
+      console.log('[Stash Conflict Test] Git status files:', debugStatus.files);
+      console.log('[Stash Conflict Test] Remaining stashes count:', debugStashes.total);
+
+      console.log('[Stash Conflict Test] 13. Verifying stash conflict banner is visible...');
+      const conflictBanner = page.locator('[data-testid="stash-conflict-banner"]')
+      await expect(conflictBanner).toBeVisible()
+      await expect(conflictBanner).toContainText('Conflicts detected')
+
+      console.log('[Stash Conflict Test] 14. Checking git status for conflicts on disk...');
+      const gitStatus = await sandbox.git.status()
+      expect(gitStatus.conflicted).toContain('README.md')
+      console.log('[Stash Conflict Test] Stash pop conflict test finished successfully!');
+
+    } finally {
+      console.log('Closing app...');
+      await app.close()
+    }
+  })
 })
+

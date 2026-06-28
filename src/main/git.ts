@@ -402,14 +402,23 @@ export const gitService = {
   stashPop: async (repoPath: string, index: number) => {
     const git = getGitInstance(repoPath);
     try {
-      await git.raw(['stash', 'pop', `stash@{${index}}`]);
-      return { hadConflicts: false };
+      const result = await git.raw(['stash', 'pop', `stash@{${index}}`]);
+      const status = await git.status();
+      const hadConflicts = status.conflicted.length > 0;
+      return { hadConflicts };
     } catch (err: any) {
+      console.warn('gitService.stashPop: error caught:', err.message);
       // git stash pop exits with non-zero when there are conflicts
       const msg: string = err.message || '';
       if (msg.includes('CONFLICT') || msg.includes('conflict')) {
         return { hadConflicts: true };
       }
+      try {
+        const status = await git.status();
+        if (status.conflicted.length > 0) {
+          return { hadConflicts: true };
+        }
+      } catch (e) {}
       throw err;
     }
   },

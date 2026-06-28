@@ -141,20 +141,20 @@ Below is the directory of all existing end-to-end tests located under the `e2e/`
 
 The following is the roadmap of E2E tests to implement to achieve complete test coverage of all existing application features.
 
-### [ ] Interactive Conflict Resolver (`e2e/conflict-resolver.spec.ts`)
-- [ ] Verify that triggering a conflict on merge/rebase displays the merge conflict banner with a "Resolve Conflicts" action button.
-- [ ] Verify that clicking the "Resolve Conflicts" button opens the interactive `ConflictResolver` modal overlay.
-- [ ] Verify that the conflict resolver displays the **3-Pane Layout** containing Ours (left column), Theirs (middle column), and Result preview (right column).
-- [ ] Verify that conflict hunk navigation tabs work properly.
-- [ ] Verify choosing Ours, Theirs, or Both updates the Result preview pane accordingly.
-- [ ] Verify that clicking "Apply & Stage" writes the resolved hunk to disk, stages the file, and marks it resolved in the sidebar file checklist.
-- [ ] Verify that the "Abort Merge/Rebase" button aborts the git operation and closes the resolver.
-- [ ] Verify that the "Continue Rebase" or "Commit Merge" buttons are disabled until all conflicted files are resolved, and complete the operation on click.
+### [x] Interactive Conflict Resolver (`e2e/conflict-resolver.spec.ts`)
+- [x] Verify that triggering a conflict on merge/rebase displays the merge conflict banner with a "Resolve Conflicts" action button.
+- [x] Verify that clicking the "Resolve Conflicts" button opens the interactive `ConflictResolver` modal overlay.
+- [x] Verify that the conflict resolver displays the **3-Pane Layout** containing Ours (left column), Theirs (middle column), and Result preview (right column).
+- [x] Verify that conflict hunk navigation tabs work properly.
+- [x] Verify choosing Ours, Theirs, or Both updates the Result preview pane accordingly.
+- [x] Verify that clicking "Apply & Stage" writes the resolved hunk to disk, stages the file, and marks it resolved in the sidebar file checklist.
+- [x] Verify that the "Abort Merge/Rebase" button aborts the git operation and closes the resolver.
+- [x] Verify that the "Continue Rebase" or "Commit Merge" buttons are disabled until all conflicted files are resolved, and complete the operation on click.
 
-### [ ] Stash Pop with Conflicts (Append to `e2e/stashes.spec.ts`)
-- [ ] Trigger a stash pop where conflicts occur between local edits and stashed files.
-- [ ] Assert that the stash pop conflict banner is displayed in the sidebar.
-- [ ] Verify that conflicted files are listed in uncommitted changes with conflict markers.
+### [x] Stash Pop with Conflicts (Append to `e2e/stashes.spec.ts`)
+- [x] Trigger a stash pop where conflicts occur between local edits and stashed files.
+- [x] Assert that the stash pop conflict banner is displayed in the sidebar.
+- [x] Verify that conflicted files are listed in uncommitted changes with conflict markers.
 
 ### [ ] Toolbar: Stash All Changes (Append to `e2e/active-changes.spec.ts` or `e2e/stashes.spec.ts`)
 - [ ] Make uncommitted modifications in the repository.
