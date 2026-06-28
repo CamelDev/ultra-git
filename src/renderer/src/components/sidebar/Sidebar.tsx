@@ -710,6 +710,34 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath} <span style={{ color: 'var(--text-secondary)' }}>({wt.branch})</span></span>
                 </div>
                 <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                  {!isActiveRepo && (
+                    <>
+                      <button
+                        className="stash-action-btn"
+                        style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openMergeModal(e, wt.branch);
+                        }}
+                        title={`Merge ${wt.branch} into ${branch}`}
+                        data-testid={`merge-worktree-btn-${wt.branch}`}
+                      >
+                        <GitMerge size={12} />
+                      </button>
+                      <button
+                        className="stash-action-btn"
+                        style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openRebaseModal(e, wt.branch);
+                        }}
+                        title={`Rebase ${branch} onto ${wt.branch}`}
+                        data-testid={`rebase-worktree-btn-${wt.branch}`}
+                      >
+                        <GitCommit size={12} />
+                      </button>
+                    </>
+                  )}
                   <button
                     className="stash-action-btn"
                     style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}

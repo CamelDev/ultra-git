@@ -229,4 +229,78 @@ test.describe('Git Worktrees Integration', () => {
       await app.close();
     }
   });
+
+  test('should support merging and rebasing from another branch in a worktree', async () => {
+    const { app, page } = await launchElectronApp();
+
+    try {
+      // Mock openDirectory dialog to open our sandbox
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath };
+        });
+      }, sandbox.dir);
+
+      // Add sandbox repository
+      const addBtn = page.locator('[data-testid="add-repo-btn"]');
+      await expect(addBtn).toBeVisible();
+      await addBtn.click();
+
+      // Switch to sandbox tab
+      const tabs = page.locator('[data-testid="repo-tab"]');
+      await expect(tabs).toHaveCount(2);
+      await tabs.last().click();
+
+      // Find the worktree section and switch to the first worktree ('feature/wt-test')
+      const worktreeSection = page.locator('.sidebar-section:has-text("Worktree")');
+      await expect(worktreeSection).toBeVisible();
+      
+      const extraWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-test' });
+      await extraWtItem.click();
+      await page.waitForTimeout(500);
+
+      // Verify worktree is active (active class on worktree item)
+      await expect(extraWtItem).toHaveClass(/active/);
+
+      // Verify we can see the main repository's branch (defaultBranch) in the Local branches list,
+      // and it should have a merge and rebase button
+      const mainBranchItem = page.locator(`[data-testid="sidebar-branch-${defaultBranch}"]`);
+      await expect(mainBranchItem).toBeVisible();
+
+      // Hover over the branch item so the branch-actions container is visible
+      await mainBranchItem.hover();
+
+      const mergeBtn = mainBranchItem.locator(`[data-testid="merge-branch-btn-${defaultBranch}"]`);
+      await expect(mergeBtn).toBeVisible();
+
+      // We will perform a merge of 'defaultBranch' into the active worktree branch ('feature/wt-test')
+      await mergeBtn.click();
+
+      // Confirm merge in modal
+      const mergeModal = page.locator('.diff-modal-overlay');
+      await expect(mergeModal).toBeVisible();
+      await page.waitForTimeout(500); // let modal scale-in settle
+      const confirmMergeBtn = mergeModal.locator('[data-testid="confirm-merge-btn"]');
+      await confirmMergeBtn.click();
+      
+      // Wait for merge operation to finish and modal to disappear
+      await expect(mergeModal).toBeHidden();
+      await page.waitForTimeout(500); // settle time
+
+      // Since there are no conflicts, the merge should complete successfully.
+      // Now verify that the main worktree branch (which is inactive) has merge/rebase buttons in the Worktrees list
+      const mainWtItem = worktreeSection.locator('.sidebar-item').first();
+      await mainWtItem.hover();
+
+      const mainWtMergeBtn = mainWtItem.locator(`[data-testid="merge-worktree-btn-${defaultBranch}"]`);
+      await expect(mainWtMergeBtn).toBeVisible();
+
+      const mainWtRebaseBtn = mainWtItem.locator(`[data-testid="rebase-worktree-btn-${defaultBranch}"]`);
+      await expect(mainWtRebaseBtn).toBeVisible();
+
+    } finally {
+      await app.close();
+    }
+  });
 });

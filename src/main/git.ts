@@ -814,9 +814,17 @@ export const gitService = {
   },
 
   getMergeStatus: async (repoPath: string) => {
-    const mergeHeadPath = join(repoPath, '.git', 'MERGE_HEAD');
-    const rebaseApplyPath = join(repoPath, '.git', 'rebase-apply');
-    const rebaseMergePath = join(repoPath, '.git', 'rebase-merge');
+    const git = getGitInstance(repoPath);
+    let gitDir: string;
+    try {
+      gitDir = (await git.raw(['rev-parse', '--git-dir'])).trim();
+    } catch (e) {
+      gitDir = '.git';
+    }
+    const gitResolvedPath = resolve(repoPath, gitDir);
+    const mergeHeadPath = join(gitResolvedPath, 'MERGE_HEAD');
+    const rebaseApplyPath = join(gitResolvedPath, 'rebase-apply');
+    const rebaseMergePath = join(gitResolvedPath, 'rebase-merge');
 
     let isMerge = false;
     let isRebase = false;
