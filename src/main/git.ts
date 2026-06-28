@@ -846,8 +846,14 @@ export const gitService = {
 
   getTags: async (repoPath: string): Promise<string[]> => {
     const git = getGitInstance(repoPath);
-    const tags = await git.tags();
-    return tags.all;
+    try {
+      const result = await git.raw(['tag', '--sort=-creatordate']);
+      return result.split('\n').map(t => t.trim()).filter(Boolean);
+    } catch (e) {
+      console.error('getTags failed, falling back to basic tags listing:', e);
+      const tags = await git.tags();
+      return tags.all;
+    }
   },
 
   createTag: async (repoPath: string, tagName: string): Promise<void> => {

@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { launchElectronApp } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
+import path from 'path'
+import fs from 'fs'
 
 test.describe('Tag Creation from Latest Local Commit', () => {
   let sandbox: GitSandbox
@@ -160,6 +162,77 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       expect(updatedTagsList.all).not.toContain('v1.0.0')
 
       console.log('Tag creation, push, and deletion E2E tests verified successfully.')
+
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('should display local tags sorted from latest to oldest', async () => {
+    // 1. Create three tags sequentially at commits with explicit dates to establish distinct creation dates
+    console.log('[Tag Sort Test] 1. Initializing tags (v1.0.0, v1.0.1, v1.0.2)...')
+    
+    // Amend initial commit to 12:00:00
+    await sandbox.git.env({ GIT_COMMITTER_DATE: '2026-06-28T12:00:00' })
+      .raw(['commit', '--amend', '--date', '2026-06-28 12:00:00', '--no-edit'])
+    await sandbox.git.addTag('v1.0.0')
+    
+    // Commit 1 at 12:05:00
+    fs.writeFileSync(path.join(sandbox.dir, 'file1.txt'), 'content 1')
+    await sandbox.git.add('file1.txt')
+    await sandbox.git.env({ GIT_COMMITTER_DATE: '2026-06-28T12:05:00' })
+      .raw(['commit', '--date', '2026-06-28 12:05:00', '-m', 'commit 1'])
+    await sandbox.git.addTag('v1.0.1')
+    
+    // Commit 2 at 12:10:00
+    fs.writeFileSync(path.join(sandbox.dir, 'file2.txt'), 'content 2')
+    await sandbox.git.add('file2.txt')
+    await sandbox.git.env({ GIT_COMMITTER_DATE: '2026-06-28T12:10:00' })
+      .raw(['commit', '--date', '2026-06-28 12:10:00', '-m', 'commit 2'])
+    await sandbox.git.addTag('v1.0.2')
+
+    console.log('[Tag Sort Test] 2. Launching Electron App...')
+    const { app, page } = await launchElectronApp()
+
+    try {
+      console.log('[Tag Sort Test] 3. Clearing localStorage...')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      console.log('[Tag Sort Test] 4. Mocking dialog:openDirectory...')
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      console.log('[Tag Sort Test] 5. Clicking to add repository...')
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      console.log('[Tag Sort Test] 6. Switching to sandbox repository tab...')
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      console.log('[Tag Sort Test] 7. Verifying tag order (latest to oldest)...')
+      const tagsSection = page.locator('.sidebar-section:has-text("Tags")')
+      await expect(tagsSection).toBeVisible()
+
+      const tagItems = tagsSection.locator('.sidebar-item')
+      await expect(tagItems).toHaveCount(3)
+
+      // Expected order: v1.0.2, v1.0.1, v1.0.0
+      await expect(tagItems.nth(0)).toContainText('v1.0.2')
+      await expect(tagItems.nth(1)).toContainText('v1.0.1')
+      await expect(tagItems.nth(2)).toContainText('v1.0.0')
+
+      console.log('[Tag Sort Test] Tag sorting E2E verified successfully.')
 
     } finally {
       await app.close()
