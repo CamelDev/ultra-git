@@ -834,14 +834,17 @@ export const gitService = {
     const mergeHeadPath = join(gitResolvedPath, 'MERGE_HEAD');
     const rebaseApplyPath = join(gitResolvedPath, 'rebase-apply');
     const rebaseMergePath = join(gitResolvedPath, 'rebase-merge');
+    const cherryPickHeadPath = join(gitResolvedPath, 'CHERRY_PICK_HEAD');
 
     let isMerge = false;
     let isRebase = false;
+    let isCherryPick = false;
     try { await fs.promises.access(mergeHeadPath); isMerge = true; } catch { /* not a merge */ }
     try { await fs.promises.access(rebaseApplyPath); isRebase = true; } catch { /* not rebase-apply */ }
     try { await fs.promises.access(rebaseMergePath); isRebase = true; } catch { /* not rebase-merge */ }
+    try { await fs.promises.access(cherryPickHeadPath); isCherryPick = true; } catch { /* not a cherry-pick */ }
 
-    return { isMerge, isRebase, inProgress: isMerge || isRebase };
+    return { isMerge, isRebase, isCherryPick, inProgress: isMerge || isRebase || isCherryPick };
   },
 
   getTags: async (repoPath: string): Promise<string[]> => {
@@ -930,5 +933,38 @@ export const gitService = {
   removeWorktree: async (repoPath: string, targetPath: string): Promise<void> => {
     const git = getGitInstance(repoPath);
     await git.raw(['worktree', 'remove', targetPath]);
+  },
+
+  getBranchCommits: async (repoPath: string, branchName: string, maxCount = 100) => {
+    const git = getGitInstance(repoPath);
+    const logResult = await git.log([branchName, `--max-count=${maxCount}`]);
+    return logResult.all;
+  },
+
+  cherryPick: async (repoPath: string, commitHash: string) => {
+    const git = getGitInstance(repoPath);
+    try {
+      await git.raw(['cherry-pick', commitHash]);
+      return { success: true };
+    } catch (err: any) {
+      console.warn('gitService.cherryPick: error caught:', err.message);
+      const msg: string = err.message || '';
+      if (msg.includes('CONFLICT') || msg.includes('conflict') || msg.includes('Cherry-pick is not possible')) {
+        return { success: false, error: 'Conflicts detected during cherry-pick. Please resolve conflicts or abort.', hadConflicts: true };
+      }
+      return { success: false, error: err.message || 'Cherry-pick failed' };
+    }
+  },
+
+  abortCherryPick: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    await git.raw(['cherry-pick', '--abort']);
+    return { success: true };
+  },
+
+  continueCherryPick: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    await git.raw(['-c', 'core.editor=true', 'cherry-pick', '--continue']);
+    return { success: true };
   }
 };

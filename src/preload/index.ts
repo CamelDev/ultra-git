@@ -71,6 +71,10 @@ const api = {
     getWorktrees: (repoPath: string) => ipcRenderer.invoke('git:getWorktrees', repoPath),
     addWorktree: (repoPath: string, newPath: string, branch: string, baseBranch?: string) => ipcRenderer.invoke('git:addWorktree', repoPath, newPath, branch, baseBranch),
     removeWorktree: (repoPath: string, targetPath: string) => ipcRenderer.invoke('git:removeWorktree', repoPath, targetPath),
+    getBranchCommits: (repoPath: string, branchName: string, maxCount?: number) => ipcRenderer.invoke('git:getBranchCommits', repoPath, branchName, maxCount),
+    cherryPick: (repoPath: string, commitHash: string) => ipcRenderer.invoke('git:cherryPick', repoPath, commitHash),
+    abortCherryPick: (repoPath: string) => ipcRenderer.invoke('git:abortCherryPick', repoPath),
+    continueCherryPick: (repoPath: string) => ipcRenderer.invoke('git:continueCherryPick', repoPath),
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),

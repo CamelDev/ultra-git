@@ -649,6 +649,46 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:getBranchCommits', async (_, repoPath, branchName, maxCount) => {
+    try {
+      const data = await gitService.getBranchCommits(repoPath, branchName, maxCount)
+      return { success: true, data: JSON.parse(JSON.stringify(data)) }
+    } catch (error: any) {
+      console.error('Failed to get branch commits:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:cherryPick', async (_, repoPath, commitHash) => {
+    try {
+      const data = await gitService.cherryPick(repoPath, commitHash)
+      return { success: true, data }
+    } catch (error: any) {
+      console.error('Failed to cherry-pick:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:abortCherryPick', async (_, repoPath) => {
+    try {
+      const data = await gitService.abortCherryPick(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      console.error('Failed to abort cherry-pick:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:continueCherryPick', async (_, repoPath) => {
+    try {
+      const data = await gitService.continueCherryPick(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      console.error('Failed to continue cherry-pick:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
   createWindow()
 
   app.on('activate', function () {

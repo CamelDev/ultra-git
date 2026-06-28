@@ -21,6 +21,7 @@ interface ResolvedHunk {
 
 interface ConflictResolverProps {
   isRebase: boolean
+  isCherryPick?: boolean
   conflictedFiles: ConflictedFile[]
   onAbort: () => Promise<void>
   onComplete: () => Promise<void>
@@ -29,6 +30,7 @@ interface ConflictResolverProps {
 
 export const ConflictResolver: React.FC<ConflictResolverProps> = ({
   isRebase,
+  isCherryPick,
   conflictedFiles,
   onAbort,
   onComplete,
@@ -141,6 +143,26 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
     }
   }
 
+  const handleMarkResolvedNoMarkers = async () => {
+    if (!activeRepo || !selectedFile) return
+    try {
+      const res = await window.api.git.add(activeRepo.path, selectedFile)
+      if (res.success) {
+        setResolvedFiles(prev => new Set([...prev, selectedFile]))
+        // Select next unresolved file
+        const nextFile = conflictedFiles.find(f => f.path !== selectedFile && !resolvedFiles.has(f.path))
+        if (nextFile) {
+          setSelectedFile(nextFile.path)
+        }
+        await refreshRepo(activeRepo.id)
+      } else {
+        setErrorMsg(res.error || "Failed to stage file")
+      }
+    } catch (e: any) {
+      setErrorMsg(e.message || "Failed to stage file")
+    }
+  }
+
   const handleAbort = async () => {
     setIsAborting(true)
     try {
@@ -189,7 +211,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <AlertTriangle size={16} style={{ color: "#fbbf24", flexShrink: 0 }} />
           <span style={{ fontSize: "14px", fontWeight: 700, color: "#fbbf24" }}>
-            {isRebase ? "Rebase" : "Merge"} in progress
+            {isRebase ? "Rebase" : isCherryPick ? "Cherry-pick" : "Merge"} in progress
           </span>
           <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
             — {resolvedFiles.size} of {conflictedFiles.length} conflict{conflictedFiles.length !== 1 ? "s" : ""} resolved
@@ -204,7 +226,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
             data-testid="abort-merge-btn"
           >
             <XCircle size={13} />
-            {isAborting ? "Aborting\u2026" : `Abort ${isRebase ? "Rebase" : "Merge"}`}
+            {isAborting ? "Aborting\u2026" : `Abort ${isRebase ? "Rebase" : isCherryPick ? "Cherry-pick" : "Merge"}`}
           </button>
           <button
             className="btn-primary"
@@ -222,7 +244,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
             data-testid="complete-merge-btn"
           >
             <GitMerge size={13} />
-            {isCompleting ? "Committing\u2026" : (isRebase ? "Continue Rebase" : "Commit Merge")}
+            {isCompleting ? "Committing\u2026" : (isRebase ? "Continue Rebase" : isCherryPick ? "Continue Cherry-pick" : "Commit Merge")}
           </button>
           {onDismiss && (
             <button
@@ -326,9 +348,28 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
               Select a file to resolve
             </div>
           ) : hunks.length === 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "8px" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "12px" }}>
               <CheckCircle size={24} style={{ color: "#34d399" }} />
               <span style={{ color: "var(--text-secondary)", fontSize: "13px" }}>No conflict markers found in this file</span>
+              <button
+                className="btn-primary"
+                onClick={handleMarkResolvedNoMarkers}
+                disabled={resolvedFiles.has(selectedFile || "")}
+                style={{
+                  fontSize: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 16px",
+                  marginTop: "8px",
+                  opacity: resolvedFiles.has(selectedFile || "") ? 0.5 : 1,
+                  cursor: resolvedFiles.has(selectedFile || "") ? "not-allowed" : "pointer"
+                }}
+                data-testid="mark-resolved-no-markers-btn"
+              >
+                <Check size={14} />
+                Mark Resolved &amp; Stage
+              </button>
             </div>
           ) : (
             <>

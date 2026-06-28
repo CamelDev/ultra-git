@@ -1,10 +1,15 @@
 import React, { useState } from 'react'
-import { GitBranch, X, Tag } from 'lucide-react'
+import { GitBranch, X, Tag, Copy } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { CherryPickModal } from './CherryPickModal'
 
 const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
-const Toolbar: React.FC = () => {
+interface ToolbarProps {
+  onMergeConflicts?: (conflictedFiles: Array<{ path: string; status: string }>, isRebase: boolean, isCherryPick?: boolean) => void
+}
+
+const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
   const { getActiveRepo, refreshRepo, identities } = useRepoStore()
   const activeRepo = getActiveRepo()
   const [commitMessage, setCommitMessage] = useState('')
@@ -14,6 +19,7 @@ const Toolbar: React.FC = () => {
   const [isTagModalOpen, setIsTagModalOpen] = useState(false)
   const [newTagName, setNewTagName] = useState('')
   const [tagErrorMessage, setTagErrorMessage] = useState('')
+  const [isCherryPickModalOpen, setIsCherryPickModalOpen] = useState(false)
 
   const files = activeRepo?.status?.files as any[] || []
   const stagedFiles = files.filter((f) => f.index !== ' ' && f.index !== '?')
@@ -161,6 +167,19 @@ const Toolbar: React.FC = () => {
           >
             <GitBranch size={14} />
             Branch
+          </button>
+
+          <button
+            className="btn-stash"
+            onClick={() => {
+              setIsCherryPickModalOpen(true)
+            }}
+            title="Cherry pick from another branch"
+            data-testid="cherry-pick-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Copy size={14} />
+            Cherry pick from ...
           </button>
 
           <button
@@ -442,6 +461,24 @@ const Toolbar: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {activeRepo && (
+        <CherryPickModal
+          isOpen={isCherryPickModalOpen}
+          onClose={() => setIsCherryPickModalOpen(false)}
+          repoPath={activeRepo.path}
+          branches={activeRepo.branches || null}
+          currentBranch={activeRepo.branch}
+          onCherryPickInitiated={(conflictedFiles) => {
+            if (onMergeConflicts) {
+              onMergeConflicts(conflictedFiles, false, true)
+            }
+          }}
+          onSuccess={() => {
+            refreshRepo(activeRepo.id)
+          }}
+        />
       )}
     </div>
   )
