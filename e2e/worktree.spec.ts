@@ -303,4 +303,133 @@ test.describe('Git Worktrees Integration', () => {
       await app.close();
     }
   });
+
+  test('should support rebasing the active worktree branch onto another branch', async () => {
+    // 1. In the background, commit a new change to 'main' so that it is ahead of 'feature/wt-test'
+    console.log('[Worktree Rebase Test] 1. Creating commit on main branch...');
+    fs.writeFileSync(path.join(sandbox.dir, 'new-main-file.txt'), 'Main branch update');
+    await sandbox.git.checkout(defaultBranch);
+    await sandbox.git.add('new-main-file.txt');
+    await sandbox.git.commit('Commit in main branch');
+
+    console.log('[Worktree Rebase Test] 2. Launching Electron App...');
+    const { app, page } = await launchElectronApp();
+
+    try {
+      console.log('[Worktree Rebase Test] 3. Mocking dialog:openDirectory...');
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath };
+        });
+      }, sandbox.dir);
+
+      console.log('[Worktree Rebase Test] 4. Adding sandbox repository...');
+      const addBtn = page.locator('[data-testid="add-repo-btn"]');
+      await expect(addBtn).toBeVisible();
+      await addBtn.click();
+
+      const tabs = page.locator('[data-testid="repo-tab"]');
+      await expect(tabs).toHaveCount(2);
+      await tabs.last().click();
+
+      console.log('[Worktree Rebase Test] 5. Switching active worktree to feature/wt-test...');
+      const worktreeSection = page.locator('.sidebar-section:has-text("Worktree")');
+      const extraWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-test' });
+      await extraWtItem.click();
+      await page.waitForTimeout(500);
+
+      // Verify worktree is active
+      await expect(extraWtItem).toHaveClass(/active/);
+
+      console.log('[Worktree Rebase Test] 6. Triggering rebase on main branch...');
+      const mainBranchItem = page.locator(`[data-testid="sidebar-branch-${defaultBranch}"]`);
+      await mainBranchItem.hover();
+
+      const rebaseBtn = mainBranchItem.locator(`[data-testid="rebase-branch-btn-${defaultBranch}"]`);
+      await expect(rebaseBtn).toBeVisible();
+      await rebaseBtn.click();
+
+      console.log('[Worktree Rebase Test] 7. Confirming rebase in dialog...');
+      const rebaseModal = page.locator('.diff-modal-overlay');
+      await expect(rebaseModal).toBeVisible();
+      await page.waitForTimeout(500); // settle scale animation
+      const confirmRebaseBtn = rebaseModal.locator('[data-testid="confirm-merge-btn"]');
+      await confirmRebaseBtn.click();
+
+      console.log('[Worktree Rebase Test] 8. Verifying rebase modal closes...');
+      await expect(rebaseModal).toBeHidden();
+      await page.waitForTimeout(1000); // wait for git rebase and UI sync
+
+      console.log('[Worktree Rebase Test] 9. Verifying history directly in worktree directory...');
+      const wtGit = require('simple-git')(wtPath);
+      const log = await wtGit.log();
+      const messages = log.all.map((c: any) => c.message);
+      expect(messages).toContain('Commit in main branch');
+      console.log('[Worktree Rebase Test] Rebase inside worktree completed successfully!');
+
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('should support deleting a worktree via the sidebar and disk', async () => {
+    console.log('[Worktree Delete Test] 1. Launching Electron App...');
+    const { app, page } = await launchElectronApp();
+
+    try {
+      console.log('[Worktree Delete Test] 2. Mocking dialog:openDirectory...');
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath };
+        });
+      }, sandbox.dir);
+
+      console.log('[Worktree Delete Test] 3. Adding sandbox repository...');
+      const addBtn = page.locator('[data-testid="add-repo-btn"]');
+      await expect(addBtn).toBeVisible();
+      await addBtn.click();
+
+      const tabs = page.locator('[data-testid="repo-tab"]');
+      await expect(tabs).toHaveCount(2);
+      await tabs.last().click();
+      await page.waitForTimeout(500);
+
+      // Verify both worktrees are listed in sidebar
+      const worktreeSection = page.locator('.sidebar-section:has-text("Worktree")');
+      await expect(worktreeSection).toBeVisible();
+      
+      const extraWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-test' });
+      await expect(extraWtItem).toBeVisible();
+
+      console.log('[Worktree Delete Test] 4. Mocking dialog:showMessageBox to Confirm Remove...');
+      await app.evaluate(async ({ ipcMain }) => {
+        ipcMain.removeHandler('dialog:showMessageBox');
+        ipcMain.handle('dialog:showMessageBox', async () => {
+          return { success: true, response: 1 }; // Confirm Remove (1)
+        });
+      });
+
+      console.log('[Worktree Delete Test] 5. Clicking delete worktree button...');
+      await extraWtItem.hover();
+      const deleteWtBtn = page.locator('[data-testid="delete-worktree-btn-feature/wt-test"]');
+      await expect(deleteWtBtn).toBeVisible();
+      await deleteWtBtn.click();
+      
+      console.log('[Worktree Delete Test] 6. Verifying worktree is removed from sidebar UI...');
+      await expect(extraWtItem).not.toBeVisible();
+
+      console.log('[Worktree Delete Test] 7. Verifying worktree directory is removed from disk...');
+      expect(fs.existsSync(wtPath)).toBe(false);
+
+      console.log('[Worktree Delete Test] 8. Verifying worktree is pruned from Git list...');
+      const worktreesList = await sandbox.git.raw(['worktree', 'list']);
+      expect(worktreesList).not.toContain(wtPath);
+      console.log('[Worktree Delete Test] Worktree delete E2E verified successfully!');
+
+    } finally {
+      await app.close();
+    }
+  });
 });

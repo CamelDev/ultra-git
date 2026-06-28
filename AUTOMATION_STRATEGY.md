@@ -156,21 +156,21 @@ The following is the roadmap of E2E tests to implement to achieve complete test 
 - [x] Assert that the stash pop conflict banner is displayed in the sidebar.
 - [x] Verify that conflicted files are listed in uncommitted changes with conflict markers.
 
-### [ ] Toolbar: Stash All Changes (Append to `e2e/active-changes.spec.ts` or `e2e/stashes.spec.ts`)
-- [ ] Make uncommitted modifications in the repository.
-- [ ] Click "Stash all" in the toolbar.
-- [ ] Verify that uncommitted changes are cleared from the WIP panel and a new stash entry is added to the sidebar.
+### [x] Toolbar: Stash All Changes (Append to `e2e/active-changes.spec.ts` or `e2e/stashes.spec.ts`)
+- [x] Make uncommitted modifications in the repository.
+- [x] Click "Stash all" in the toolbar.
+- [x] Verify that uncommitted changes are cleared from the WIP panel and a new stash entry is added to the sidebar.
 
-### [ ] Force Delete Local Branch (Append to `e2e/branch-creation.spec.ts`)
-- [ ] Create a local branch and add a commit to it.
-- [ ] Switch to a different branch.
-- [ ] Click delete on the unmerged branch in the sidebar.
-- [ ] Mock the dialog prompt to confirm the force-delete choice.
-- [ ] Verify that the branch is force-deleted using `git branch -D`.
+### [x] Force Delete Local Branch (Append to `e2e/branch-creation.spec.ts`)
+- [x] Create a local branch and add a commit to it.
+- [x] Switch to a different branch.
+- [x] Click delete on the unmerged branch in the sidebar.
+- [x] Mock the dialog prompt to confirm the force-delete choice.
+- [x] Verify that the branch is force-deleted using `git branch -D`.
 
-### [ ] Worktree Management Actions (Append to `e2e/worktree.spec.ts`)
-- [ ] Verify rebasing inside a worktree by selecting a branch in a worktree context, clicking rebase, and checking the updated commits.
-- [ ] Verify deleting a worktree by clicking the trash icon next to an extra worktree in the sidebar, confirming, and checking that the worktree directory is deleted from disk and the sidebar list.
+### [x] Worktree Management Actions (Append to `e2e/worktree.spec.ts`)
+- [x] Verify rebasing inside a worktree by selecting a branch in a worktree context, clicking rebase, and checking the updated commits.
+- [x] Verify deleting a worktree by clicking the trash icon next to an extra worktree in the sidebar, confirming, and checking that the worktree directory is deleted from disk and the sidebar list.
 
 ### [ ] DiffModal: Binary File Detection (Append to `e2e/commit-diff.spec.ts`)
 - [ ] Commit a binary file (e.g. image or mock binary data).

@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { launchElectronApp } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
+import path from 'path'
+import fs from 'fs'
 
 test.describe('Branch Creation from Latest Local Commit', () => {
   let sandbox: GitSandbox
@@ -283,6 +285,90 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await expect(remoteItems.nth(2)).toContainText('origin/main')
       await expect(remoteItems.nth(3)).toContainText('origin/z-remote')
       
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('should support force deleting an unmerged branch', async () => {
+    console.log('1. Launching Electron App...')
+    const { app, page } = await launchElectronApp()
+
+    try {
+      console.log('2. Clearing localStorage...')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      console.log('3. Mocking dialog:openDirectory...')
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      console.log('4. Clicking to add repository...')
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      console.log('5. Switching to the newly added repository tab...')
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      // Create an unmerged branch and add a commit to it
+      console.log('6. Creating and committing to unmerged-branch...');
+      await sandbox.git.checkoutLocalBranch('unmerged-branch')
+      fs.writeFileSync(path.join(sandbox.dir, 'unmerged-file.txt'), 'Not merged content\n')
+      await sandbox.git.add('unmerged-file.txt')
+      await sandbox.git.commit('Commit on unmerged branch')
+
+      // Switch back to main branch
+      console.log('7. Switching back to main branch...');
+      await sandbox.git.checkout('main')
+
+      // Refresh app to ensure new branch list is loaded
+      await tabs.first().click()
+      await page.waitForTimeout(500)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      console.log('8. Verifying unmerged-branch exists in sidebar...');
+      const unmergedBranchItem = page.locator('[data-testid="sidebar-branch-unmerged-branch"]')
+      await expect(unmergedBranchItem).toBeVisible()
+
+      // Track dialog prompts
+      console.log('9. Mocking dialog:showMessageBox to always confirm (Delete and Force Delete)...')
+      await app.evaluate(async ({ ipcMain }) => {
+        let callCount = 0
+        ipcMain.removeHandler('dialog:showMessageBox')
+        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
+          callCount++
+          console.log(`[MAIN] showMessageBox prompt #${callCount} options:`, JSON.stringify(options))
+          return { success: true, response: 1 } // Confirm Delete (1) / Confirm Force Delete (1)
+        })
+      })
+
+      console.log('10. Triggering delete on unmerged-branch...');
+      await unmergedBranchItem.hover()
+      const deleteBtn = page.locator('[data-testid="delete-branch-btn-unmerged-branch"]')
+      await expect(deleteBtn).toBeVisible()
+      await deleteBtn.click()
+      await page.waitForTimeout(1500)
+
+      console.log('11. Verifying branch is deleted from UI...');
+      await expect(unmergedBranchItem).not.toBeVisible()
+
+      console.log('12. Verifying branch is deleted from Git repository on disk...');
+      const branches = await sandbox.git.branchLocal()
+      expect(branches.all).not.toContain('unmerged-branch')
+
+      console.log('Force delete branch E2E test finished successfully.')
+
     } finally {
       await app.close()
     }

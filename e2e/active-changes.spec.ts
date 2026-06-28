@@ -242,4 +242,71 @@ test.describe('Active Changes Panel', () => {
       await app.close()
     }
   })
+
+  test('should support stashing all changes via the toolbar', async () => {
+    const { app, page } = await launchElectronApp()
+    page.on('console', msg => console.log('PAGE LOG:', msg.text()))
+    page.on('pageerror', err => console.error('PAGE ERROR:', err.message))
+
+    try {
+      // Clear localStorage
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      // Mock openDirectory dialog to load sandbox repo
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, sandbox.dir)
+
+      // Click to add repository
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      // Create unstaged changes (untracked file + modified file)
+      fs.writeFileSync(path.join(sandbox.dir, 'untracked-stash.txt'), 'Stash untracked content\n')
+      fs.appendFileSync(path.join(sandbox.dir, 'README.md'), 'Modified README for stash\n')
+
+      // Switch tabs to trigger status refresh
+      await tabs.first().click()
+      await page.waitForTimeout(500)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      // Verify active changes panel is visible
+      const panel = page.locator('[data-testid="active-changes-panel"]')
+      await expect(panel).toBeVisible()
+
+      // Click Stash all button in toolbar
+      const stashAllBtn = page.locator('[data-testid="stash-all-btn"]')
+      await expect(stashAllBtn).toBeVisible()
+      await stashAllBtn.click()
+      await page.waitForTimeout(1000)
+
+      // Verify active changes panel is hidden (no uncommitted changes left)
+      await expect(panel).not.toBeVisible()
+
+      // Verify stash entry exists in sidebar
+      const stashItem = page.locator('[data-testid="stash-item-0"]')
+      await expect(stashItem).toBeVisible()
+      await expect(stashItem).toContainText('Initial commit')
+
+      // Check git stash list directly in sandbox to verify
+      const stashes = await sandbox.git.stashList()
+      expect(stashes.total).toBe(1)
+
+    } finally {
+      await app.close()
+    }
+  })
 })

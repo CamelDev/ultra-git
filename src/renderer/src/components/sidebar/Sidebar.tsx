@@ -752,6 +752,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                       style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                       onClick={(e) => handleDeleteWorktree(e, wt.path)}
                       title="Remove worktree"
+                      data-testid={`delete-worktree-btn-${wt.branch}`}
                     >
                       <Trash2 size={13} />
                     </button>
