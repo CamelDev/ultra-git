@@ -66,6 +66,8 @@ const api = {
     getTags: (repoPath: string) => ipcRenderer.invoke('git:getTags', repoPath),
     createTag: (repoPath: string, tagName: string) => ipcRenderer.invoke('git:createTag', repoPath, tagName),
     pushTags: (repoPath: string, remote?: string) => ipcRenderer.invoke('git:pushTags', repoPath, remote),
+    deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) =>
+      ipcRenderer.invoke('git:deleteTag', repoPath, tagName, deleteRemote, remote),
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),

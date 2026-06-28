@@ -51,13 +51,23 @@ declare global {
         getTags: (repoPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>;
         createTag: (repoPath: string, tagName: string) => Promise<{ success: boolean; error?: string }>;
         pushTags: (repoPath: string, remote?: string) => Promise<{ success: boolean; error?: string }>;
+        deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) => Promise<{ success: boolean; error?: string }>;
       };
       app: {
         openDirectory: () => Promise<{ canceled: boolean; path?: string }>;
         openFile: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) => Promise<{ canceled: boolean; path?: string }>;
         resolvePath: (repoPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
         copyToClipboard: (text: string) => Promise<{ success: boolean; error?: string }>;
-        showMessageBox: (options: { type: 'info' | 'warning' | 'error' | 'question'; title: string; message: string; buttons?: string[] }) => Promise<{ success: boolean; response?: number; error?: string }>;
+        showMessageBox: (options: {
+          type: 'info' | 'warning' | 'error' | 'question';
+          title: string;
+          message: string;
+          buttons?: string[];
+          defaultId?: number;
+          cancelId?: number;
+          checkboxLabel?: string;
+          checkboxChecked?: boolean;
+        }) => Promise<{ success: boolean; response?: number; checkboxChecked?: boolean; error?: string }>;
       };
     }
   }

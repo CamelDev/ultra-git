@@ -135,7 +135,31 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await pushTagsBtn.click()
       await page.waitForTimeout(500)
 
-      console.log('Tag creation and push E2E tests verified successfully.')
+      console.log('21. Mocking dialog:showMessageBox for deleting tag...')
+      await app.evaluate(async ({ ipcMain }) => {
+        ipcMain.removeHandler('dialog:showMessageBox')
+        ipcMain.handle('dialog:showMessageBox', async () => {
+          return { success: true, response: 1, checkboxChecked: false }
+        })
+      })
+
+      console.log('22. Verifying delete button on tag is visible (hovering first) and clicking it...')
+      const tagItemHover = page.locator('[data-testid="sidebar-tag-v1.0.0"]')
+      await tagItemHover.hover()
+      
+      const deleteTagBtn = page.locator('[data-testid="delete-tag-btn-v1.0.0"]')
+      await expect(deleteTagBtn).toBeVisible()
+      await deleteTagBtn.click()
+      await page.waitForTimeout(1000)
+
+      console.log('23. Verifying tag v1.0.0 is removed from the sidebar...')
+      await expect(tagItemHover).not.toBeVisible()
+
+      console.log('24. Verify Tag is deleted from local Git sandbox repository refs...')
+      const updatedTagsList = await sandbox.git.tags()
+      expect(updatedTagsList.all).not.toContain('v1.0.0')
+
+      console.log('Tag creation, push, and deletion E2E tests verified successfully.')
 
     } finally {
       await app.close()

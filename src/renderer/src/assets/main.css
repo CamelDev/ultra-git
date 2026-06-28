@@ -1089,4 +1089,15 @@ body {
   opacity: 1;
 }
 
+/* Tag Actions Hover Styles */
+.tag-actions {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-item:hover .tag-actions {
+  display: flex;
+}
+
 

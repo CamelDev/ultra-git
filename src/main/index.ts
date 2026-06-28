@@ -461,7 +461,7 @@ app.whenReady().then(() => {
   ipcMain.handle('dialog:showMessageBox', async (_, options) => {
     try {
       const result = await dialog.showMessageBox(mainWindow!, options)
-      return { success: true, response: result.response }
+      return { success: true, response: result.response, checkboxChecked: result.checkboxChecked }
     } catch (error: any) {
       return { success: false, error: error.message }
     }
@@ -603,6 +603,15 @@ app.whenReady().then(() => {
   ipcMain.handle('git:pushTags', async (_, repoPath, remote) => {
     try {
       await gitService.pushTags(repoPath, remote)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:deleteTag', async (_, repoPath, tagName, deleteRemote, remote) => {
+    try {
+      await gitService.deleteTag(repoPath, tagName, deleteRemote, remote)
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }

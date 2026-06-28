@@ -332,6 +332,49 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     }
   }
 
+  const handleDeleteTagClick = async (e: React.MouseEvent, tagName: string) => {
+    e.stopPropagation()
+    if (!activeRepo) return
+
+    const confirmRes = await window.api.app.showMessageBox({
+      type: 'question',
+      title: 'Delete Tag',
+      message: `Are you sure you want to delete tag '${tagName}'?`,
+      buttons: ['Cancel', 'Delete Tag'],
+      defaultId: 1,
+      cancelId: 0,
+      checkboxLabel: 'Delete this tag from remote (origin) as well',
+      checkboxChecked: false
+    })
+
+    if (!confirmRes.success || confirmRes.response !== 1) {
+      return
+    }
+
+    const deleteRemote = confirmRes.checkboxChecked || false
+
+    try {
+      const res = await window.api.git.deleteTag(activeRepo.path, tagName, deleteRemote)
+      if (res.success) {
+        await refreshRepo(activeRepo.id)
+      } else {
+        console.error('Failed to delete tag:', res.error)
+        await window.api.app.showMessageBox({
+          type: 'error',
+          title: 'Error',
+          message: `Failed to delete tag: ${res.error}`
+        })
+      }
+    } catch (err: any) {
+      console.error('Error deleting tag:', err)
+      await window.api.app.showMessageBox({
+        type: 'error',
+        title: 'Error',
+        message: `Error deleting tag: ${err.message || err}`
+      })
+    }
+  }
+
   const localBranches = activeRepo?.branches?.local ?? [branch]
   const remoteBranches = activeRepo?.branches?.remote ?? []
 
@@ -612,9 +655,22 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }} data-testid="no-tags-message">No tags</div>
         ) : (
           activeRepo.tags.map((tag) => (
-            <div key={tag} className="sidebar-item" style={{ display: 'flex', alignItems: 'center' }} data-testid={`sidebar-tag-${tag}`}>
-              <Tag className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag}</span>
+            <div key={tag} className="sidebar-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} data-testid={`sidebar-tag-${tag}`}>
+              <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <Tag className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag}</span>
+              </div>
+              <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                <button
+                  className="stash-action-btn delete"
+                  style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  onClick={(e) => handleDeleteTagClick(e, tag)}
+                  title="Delete tag"
+                  data-testid={`delete-tag-btn-${tag}`}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
             </div>
           ))
         )}
