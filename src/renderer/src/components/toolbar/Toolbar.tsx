@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { GitBranch, X } from 'lucide-react'
+import { GitBranch, X, Tag } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 
 const Toolbar: React.FC = () => {
@@ -9,6 +9,9 @@ const Toolbar: React.FC = () => {
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false)
   const [newBranchName, setNewBranchName] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false)
+  const [newTagName, setNewTagName] = useState('')
+  const [tagErrorMessage, setTagErrorMessage] = useState('')
 
   const files = activeRepo?.status?.files as any[] || []
   const stagedFiles = files.filter((f) => f.index !== ' ' && f.index !== '?')
@@ -100,6 +103,24 @@ const Toolbar: React.FC = () => {
     }
   }
 
+  const handleCreateTagSubmit = async () => {
+    const name = newTagName.trim()
+    if (!name || !activeRepo) return
+    try {
+      const res = await window.api.git.createTag(activeRepo.path, name)
+      if (res.success) {
+        setIsTagModalOpen(false)
+        setNewTagName('')
+        setTagErrorMessage('')
+        await refreshRepo(activeRepo.id)
+      } else {
+        setTagErrorMessage(res.error || 'Failed to create tag.')
+      }
+    } catch (err: any) {
+      setTagErrorMessage(err.message || 'An error occurred.')
+    }
+  }
+
   return (
     <div className="toolbar">
       <div
@@ -114,7 +135,7 @@ const Toolbar: React.FC = () => {
       </div>
 
       {activeRepo && (
-        <div className="toolbar-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             className="btn-stash"
             onClick={() => {
@@ -130,6 +151,25 @@ const Toolbar: React.FC = () => {
             Branch
           </button>
 
+          <button
+            className="btn-stash"
+            onClick={() => {
+              setNewTagName('')
+              setTagErrorMessage('')
+              setIsTagModalOpen(true)
+            }}
+            title="Create a new tag from latest local commit (HEAD)"
+            data-testid="create-tag-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Tag size={14} />
+            Tag
+          </button>
+        </div>
+      )}
+
+      {activeRepo && (
+        <div className="toolbar-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
           {files.length > 0 && (
             <>
               <button
@@ -290,6 +330,102 @@ const Toolbar: React.FC = () => {
                 data-testid="create-branch-submit-btn"
               >
                 Create Branch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isTagModalOpen && (
+        <div 
+          className="diff-modal-overlay" 
+          style={{ zIndex: 1100 }} 
+          onClick={() => setIsTagModalOpen(false)}
+        >
+          <div 
+            className="diff-modal-content" 
+            style={{ 
+              maxWidth: '400px', 
+              width: '90%', 
+              height: 'auto', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)', 
+              padding: 0 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="diff-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Tag size={16} />
+                Create New Tag
+              </h2>
+              <button 
+                className="diff-modal-close" 
+                onClick={() => setIsTagModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
+                data-testid="close-tag-modal-btn"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Create a new local tag at the latest commit of <strong>{activeRepo?.branch}</strong> (HEAD).
+              </div>
+              <input
+                type="text"
+                placeholder="Tag name (e.g. v1.0.0)..."
+                value={newTagName}
+                onChange={(e) => {
+                  setNewTagName(e.target.value)
+                  setTagErrorMessage('')
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleCreateTagSubmit()
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  border: '1px solid var(--border)',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  outline: 'none'
+                }}
+                autoFocus
+                data-testid="new-tag-name-input"
+              />
+              {tagErrorMessage && (
+                <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} data-testid="tag-error-message">
+                  {tagErrorMessage}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px', backgroundColor: 'var(--bg-secondary)' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setIsTagModalOpen(false)}
+                data-testid="cancel-tag-btn"
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleCreateTagSubmit}
+                disabled={!newTagName.trim()}
+                style={{ opacity: !newTagName.trim() ? 0.5 : 1, cursor: !newTagName.trim() ? 'not-allowed' : 'pointer' }}
+                data-testid="create-tag-submit-btn"
+              >
+                Create Tag
               </button>
             </div>
           </div>

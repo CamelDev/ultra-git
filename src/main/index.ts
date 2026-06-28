@@ -582,6 +582,33 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:getTags', async (_, repoPath) => {
+    try {
+      const data = await gitService.getTags(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:createTag', async (_, repoPath, tagName) => {
+    try {
+      await gitService.createTag(repoPath, tagName)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:pushTags', async (_, repoPath, remote) => {
+    try {
+      await gitService.pushTags(repoPath, remote)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   createWindow()
 
   app.on('activate', function () {

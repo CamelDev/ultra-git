@@ -34,6 +34,7 @@ export interface Repository {
     local: Array<{ name: string; ahead: number; behind: number } | string>;
     remote: string[];
   };
+  tags?: string[];
 }
 
 interface RepoState {
@@ -310,11 +311,12 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     });
 
     try {
-      const [statusRes, logRes, stashRes, branchesRes] = await Promise.all([
+      const [statusRes, logRes, stashRes, branchesRes, tagsRes] = await Promise.all([
         window.api.git.status(repo.path),
         window.api.git.log(repo.path),
         window.api.git.stashList(repo.path),
-        window.api.git.getBranches(repo.path)
+        window.api.git.getBranches(repo.path),
+        window.api.git.getTags(repo.path)
       ]);
 
       set((state) => {
@@ -329,6 +331,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
               commits,
               stashes,
               branches: branchesRes.success ? branchesRes.data : (r.branches || { local: [], remote: [] }),
+              tags: tagsRes.success ? tagsRes.data : (r.tags || []),
               error: statusRes.success ? null : (statusRes.error ?? 'Unknown error'),
               isLoading: false
             };

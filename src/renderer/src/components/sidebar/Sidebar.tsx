@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit } from "lucide-react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
@@ -289,6 +289,49 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     await refreshRepo(activeRepo.id)
   }
 
+  const handlePushTags = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!activeRepo) return
+
+    const confirmRes = await window.api.app.showMessageBox({
+      type: 'question',
+      title: 'Push Tags',
+      message: 'Are you sure you want to push all local tags to the remote (origin)?',
+      buttons: ['Cancel', 'Push Tags'],
+      defaultId: 1,
+      cancelId: 0
+    })
+
+    if (!confirmRes.success || confirmRes.response !== 1) {
+      return
+    }
+
+    try {
+      const res = await window.api.git.pushTags(activeRepo.path)
+      if (res.success) {
+        await window.api.app.showMessageBox({
+          type: 'info',
+          title: 'Success',
+          message: 'All local tags have been successfully pushed to the remote repository.'
+        })
+      } else {
+        console.error('Failed to push tags:', res.error)
+        await window.api.app.showMessageBox({
+          type: 'error',
+          title: 'Error',
+          message: `Failed to push tags: ${res.error}`
+        })
+      }
+    } catch (err: any) {
+      console.error('Error pushing tags:', err)
+      await window.api.app.showMessageBox({
+        type: 'error',
+        title: 'Error',
+        message: `Error pushing tags: ${err.message || err}`
+      })
+    }
+  }
+
   const localBranches = activeRepo?.branches?.local ?? [branch]
   const remoteBranches = activeRepo?.branches?.remote ?? []
 
@@ -548,10 +591,33 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-header">
+        <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>Tags</span>
-          <span>0</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>{activeRepo?.tags?.length ?? 0}</span>
+            {activeRepo?.tags && activeRepo.tags.length > 0 && (
+              <button
+                className="stash-action-btn"
+                style={{ padding: 2, height: 20, width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                onClick={handlePushTags}
+                title="Push all local tags to remote (origin)"
+                data-testid="sidebar-push-tags-btn"
+              >
+                <Upload size={12} />
+              </button>
+            )}
+          </div>
         </div>
+        {(!activeRepo?.tags || activeRepo.tags.length === 0) ? (
+          <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }} data-testid="no-tags-message">No tags</div>
+        ) : (
+          activeRepo.tags.map((tag) => (
+            <div key={tag} className="sidebar-item" style={{ display: 'flex', alignItems: 'center' }} data-testid={`sidebar-tag-${tag}`}>
+              <Tag className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag}</span>
+            </div>
+          ))
+        )}
       </div>
 
 

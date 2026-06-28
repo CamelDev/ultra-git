@@ -821,5 +821,21 @@ export const gitService = {
     try { await fs.promises.access(rebaseMergePath); isRebase = true; } catch { /* not rebase-merge */ }
 
     return { isMerge, isRebase, inProgress: isMerge || isRebase };
+  },
+
+  getTags: async (repoPath: string): Promise<string[]> => {
+    const git = getGitInstance(repoPath);
+    const tags = await git.tags();
+    return tags.all;
+  },
+
+  createTag: async (repoPath: string, tagName: string): Promise<void> => {
+    const git = getGitInstance(repoPath);
+    await git.addTag(tagName);
+  },
+
+  pushTags: async (repoPath: string, remote?: string): Promise<void> => {
+    const git = getGitInstance(repoPath);
+    await git.push(remote || 'origin', { '--tags': null });
   }
 };

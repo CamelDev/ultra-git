@@ -63,6 +63,9 @@ const api = {
     resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) =>
       ipcRenderer.invoke('git:resolveConflict', repoPath, filePath, resolvedContent),
     getMergeStatus: (repoPath: string) => ipcRenderer.invoke('git:getMergeStatus', repoPath),
+    getTags: (repoPath: string) => ipcRenderer.invoke('git:getTags', repoPath),
+    createTag: (repoPath: string, tagName: string) => ipcRenderer.invoke('git:createTag', repoPath, tagName),
+    pushTags: (repoPath: string, remote?: string) => ipcRenderer.invoke('git:pushTags', repoPath, remote),
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),

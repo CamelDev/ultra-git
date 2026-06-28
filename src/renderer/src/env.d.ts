@@ -48,6 +48,9 @@ declare global {
         getConflictFileDiff: (repoPath: string, filePath: string) => Promise<{ success: boolean; data?: { raw: string; hunks: Array<{ ours: string; base: string; theirs: string; startLine: number }> }; error?: string }>;
         resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) => Promise<{ success: boolean; error?: string }>;
         getMergeStatus: (repoPath: string) => Promise<{ success: boolean; data?: { isMerge: boolean; isRebase: boolean; inProgress: boolean }; error?: string }>;
+        getTags: (repoPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>;
+        createTag: (repoPath: string, tagName: string) => Promise<{ success: boolean; error?: string }>;
+        pushTags: (repoPath: string, remote?: string) => Promise<{ success: boolean; error?: string }>;
       };
       app: {
         openDirectory: () => Promise<{ canceled: boolean; path?: string }>;
