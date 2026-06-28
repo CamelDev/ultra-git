@@ -22,6 +22,7 @@ declare global {
         getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         add: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
         reset: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
+        resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => Promise<{ success: boolean; error?: string }>;
         addAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         resetAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         commit: (repoPath: string, message: string) => Promise<{ success: boolean; error?: string }>;
@@ -37,6 +38,15 @@ declare global {
         createRemoteRepo: (provider: string, token: string, repoName: string, makePublic: boolean) => Promise<{ success: boolean; data?: any; error?: string }>;
         watchRepo: (repoPath: string | null) => Promise<{ success: boolean; error?: string }>;
         onRepoChanged: (callback: (repoPath: string) => void) => () => void;
+        merge: (repoPath: string, sourceBranch: string, strategy: 'merge' | 'no-ff' | 'squash') => Promise<{ success: boolean; data?: { hadConflicts: boolean; conflictedFiles: Array<{ path: string; status: string }> }; error?: string }>;
+        rebase: (repoPath: string, ontoBranch: string) => Promise<{ success: boolean; data?: { hadConflicts: boolean; conflictedFiles: Array<{ path: string; status: string }> }; error?: string }>;
+        abortMerge: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        abortRebase: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        continueRebase: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        getConflictedFiles: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ path: string; status: string }>; error?: string }>;
+        getConflictFileDiff: (repoPath: string, filePath: string) => Promise<{ success: boolean; data?: { raw: string; hunks: Array<{ ours: string; base: string; theirs: string; startLine: number }> }; error?: string }>;
+        resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) => Promise<{ success: boolean; error?: string }>;
+        getMergeStatus: (repoPath: string) => Promise<{ success: boolean; data?: { isMerge: boolean; isRebase: boolean; inProgress: boolean }; error?: string }>;
       };
       app: {
         openDirectory: () => Promise<{ canceled: boolean; path?: string }>;

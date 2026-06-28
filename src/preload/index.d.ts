@@ -28,6 +28,7 @@ declare global {
           oldPath?: string,
           status?: string
         ) => Promise<IpcResponse<{ before: string, after: string, isBinary: boolean }>>;
+        resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => Promise<IpcResponse<void>>;
       },
       app: {
         openDirectory: () => Promise<{ canceled: boolean, path?: string }>;

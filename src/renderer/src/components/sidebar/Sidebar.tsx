@@ -1,9 +1,14 @@
-import React, { useState } from 'react'
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2 } from 'lucide-react'
-import { useRepoStore } from '../../store/useRepoStore'
-import { DiffModal } from '../details/DiffModal'
+import React, { useState } from "react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit } from "lucide-react"
+import { useRepoStore } from "../../store/useRepoStore"
+import { DiffModal } from "../details/DiffModal"
+import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  onMergeConflicts?: (conflictedFiles: Array<{ path: string; status: string }>, isRebase: boolean) => void
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const { getActiveRepo, refreshRepo } = useRepoStore()
   const activeRepo = getActiveRepo()
 
@@ -17,10 +22,14 @@ const Sidebar: React.FC = () => {
   const [detailsStashMessage, setDetailsStashMessage] = useState<string | null>(null)
 
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false)
-  const [newBranchName, setNewBranchName] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
-  const [branchModalMode, setBranchModalMode] = useState<'create' | 'rename'>('create')
-  const [branchToRename, setBranchToRename] = useState<string>('')
+  const [newBranchName, setNewBranchName] = useState("")
+  const [errorMessage, setErrorMessage] = useState("")
+  const [branchModalMode, setBranchModalMode] = useState<"create" | "rename">("create")
+  const [branchToRename, setBranchToRename] = useState<string>("")
+
+  const [mergeModalOpen, setMergeModalOpen] = useState(false)
+  const [mergeTargetBranch, setMergeTargetBranch] = useState("")
+  const [mergeOperation, setMergeOperation] = useState<MergeOperation>("merge")
 
   const branch = activeRepo?.branch || 'main'
   const status = activeRepo?.status
@@ -243,6 +252,43 @@ const Sidebar: React.FC = () => {
     }
   }
 
+  const openMergeModal = (e: React.MouseEvent, sourceBranch: string) => {
+    e.stopPropagation()
+    setMergeTargetBranch(sourceBranch)
+    setMergeOperation("merge")
+    setMergeModalOpen(true)
+  }
+
+  const openRebaseModal = (e: React.MouseEvent, sourceBranch: string) => {
+    e.stopPropagation()
+    setMergeTargetBranch(sourceBranch)
+    setMergeOperation("rebase")
+    setMergeModalOpen(true)
+  }
+
+  const handleMergeConfirm = async (strategy: MergeStrategy) => {
+    if (!activeRepo) return
+    if (mergeOperation === "merge") {
+      const res = await window.api.git.merge(activeRepo.path, mergeTargetBranch, strategy)
+      if (!res.success) throw new Error(res.error || "Merge failed")
+      if (res.data?.hadConflicts) {
+        setMergeModalOpen(false)
+        onMergeConflicts?.(res.data.conflictedFiles, false)
+        return
+      }
+    } else {
+      const res = await window.api.git.rebase(activeRepo.path, mergeTargetBranch)
+      if (!res.success) throw new Error(res.error || "Rebase failed")
+      if (res.data?.hadConflicts) {
+        setMergeModalOpen(false)
+        onMergeConflicts?.(res.data.conflictedFiles, true)
+        return
+      }
+    }
+    setMergeModalOpen(false)
+    await refreshRepo(activeRepo.id)
+  }
+
   const localBranches = activeRepo?.branches?.local ?? [branch]
   const remoteBranches = activeRepo?.branches?.remote ?? []
 
@@ -366,10 +412,28 @@ const Sidebar: React.FC = () => {
                     )}
                   </span>
                 )}
-                <div className="branch-actions" style={{ marginLeft: (currentAhead > 0 || currentBehind > 0) ? '8px' : 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                <div className="branch-actions" style={{ marginLeft: (currentAhead > 0 || currentBehind > 0) ? "8px" : "auto", display: "flex", gap: "4px", flexShrink: 0 }}>
                   <button
                     className="stash-action-btn"
-                    style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    onClick={(e) => openMergeModal(e, name)}
+                    title={`Merge ${name} into ${branch}`}
+                    data-testid={`merge-branch-btn-${name}`}
+                  >
+                    <GitMerge size={12} />
+                  </button>
+                  <button
+                    className="stash-action-btn"
+                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    onClick={(e) => openRebaseModal(e, name)}
+                    title={`Rebase ${branch} onto ${name}`}
+                    data-testid={`rebase-branch-btn-${name}`}
+                  >
+                    <GitCommit size={12} />
+                  </button>
+                  <button
+                    className="stash-action-btn"
+                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                     onClick={(e) => openRenameBranchModal(e, name)}
                     title="Rename branch"
                     data-testid={`rename-branch-btn-${name}`}
@@ -378,7 +442,7 @@ const Sidebar: React.FC = () => {
                   </button>
                   <button
                     className="stash-action-btn delete"
-                    style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                     onClick={(e) => handleDeleteBranch(e, name)}
                     title="Delete branch"
                     data-testid={`delete-branch-btn-${name}`}
@@ -505,6 +569,17 @@ const Sidebar: React.FC = () => {
           isStash={true}
           stashIndex={detailsStashIndex}
           stashMessage={detailsStashMessage}
+        />
+      )}
+
+      {mergeModalOpen && (
+        <MergeRebaseModal
+          isOpen={mergeModalOpen}
+          onClose={() => setMergeModalOpen(false)}
+          sourceBranch={mergeTargetBranch}
+          targetBranch={branch}
+          operation={mergeOperation}
+          onConfirm={handleMergeConfirm}
         />
       )}
 

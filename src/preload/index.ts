@@ -22,6 +22,8 @@ const api = {
       ipcRenderer.invoke('git:getCommitFileDiff', repoPath, commitHash, filePath, oldPath, status),
     add: (repoPath: string, filePath: string) => ipcRenderer.invoke('git:add', repoPath, filePath),
     reset: (repoPath: string, filePath: string) => ipcRenderer.invoke('git:reset', repoPath, filePath),
+    resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => 
+      ipcRenderer.invoke('git:resetToCommit', repoPath, commitHash, mode),
     addAll: (repoPath: string) => ipcRenderer.invoke('git:addAll', repoPath),
     resetAll: (repoPath: string) => ipcRenderer.invoke('git:resetAll', repoPath),
     commit: (repoPath: string, message: string) => ipcRenderer.invoke('git:commit', repoPath, message),
@@ -45,7 +47,20 @@ const api = {
       return () => {
         ipcRenderer.off('git:repo-changed', listener)
       }
-    }
+    },
+    merge: (repoPath: string, sourceBranch: string, strategy: 'merge' | 'no-ff' | 'squash') =>
+      ipcRenderer.invoke('git:merge', repoPath, sourceBranch, strategy),
+    rebase: (repoPath: string, ontoBranch: string) =>
+      ipcRenderer.invoke('git:rebase', repoPath, ontoBranch),
+    abortMerge: (repoPath: string) => ipcRenderer.invoke('git:abortMerge', repoPath),
+    abortRebase: (repoPath: string) => ipcRenderer.invoke('git:abortRebase', repoPath),
+    continueRebase: (repoPath: string) => ipcRenderer.invoke('git:continueRebase', repoPath),
+    getConflictedFiles: (repoPath: string) => ipcRenderer.invoke('git:getConflictedFiles', repoPath),
+    getConflictFileDiff: (repoPath: string, filePath: string) =>
+      ipcRenderer.invoke('git:getConflictFileDiff', repoPath, filePath),
+    resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) =>
+      ipcRenderer.invoke('git:resolveConflict', repoPath, filePath, resolvedContent),
+    getMergeStatus: (repoPath: string) => ipcRenderer.invoke('git:getMergeStatus', repoPath),
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),

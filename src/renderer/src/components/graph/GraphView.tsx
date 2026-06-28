@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch } from 'lucide-react'
+import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 
-const GraphView: React.FC = () => {
+interface GraphViewProps {
+  onOpenConflictResolver?: () => void
+}
+
+const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const { getActiveRepo, selectedCommitHash, setSelectedCommitHash, refreshRepo, identities, setRepoIdentity } = useRepoStore()
   const activeRepo = getActiveRepo()
   const commits = activeRepo?.commits || []
@@ -33,6 +37,13 @@ const GraphView: React.FC = () => {
   const [newBranchName, setNewBranchName] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [branchStartPoint, setBranchStartPoint] = useState('')
+
+  // Git Reset state
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false)
+  const [resetTargetCommit, setResetTargetCommit] = useState<any>(null)
+  const [resetMode, setResetMode] = useState<'soft' | 'hard'>('soft')
+  const [isResetting, setIsResetting] = useState(false)
+  const [resetError, setResetError] = useState('')
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -348,6 +359,26 @@ const GraphView: React.FC = () => {
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'An error occurred.')
+    }
+  }
+
+  const handleResetSubmit = async () => {
+    if (!activeRepo || !resetTargetCommit) return
+    setIsResetting(true)
+    setResetError('')
+    try {
+      const res = await window.api.git.resetToCommit(activeRepo.path, resetTargetCommit.hash, resetMode)
+      if (res.success) {
+        setIsResetModalOpen(false)
+        setResetTargetCommit(null)
+        await refreshRepo(activeRepo.id)
+      } else {
+        setResetError(res.error || 'Failed to reset repository.')
+      }
+    } catch (err: any) {
+      setResetError(err.message || 'An error occurred during reset.')
+    } finally {
+      setIsResetting(false)
     }
   }
 
@@ -755,8 +786,8 @@ const GraphView: React.FC = () => {
       )}
 
       {activeRepo?.status?.conflicted?.length > 0 && (
-        <div 
-          className="pull-conflict-banner" 
+        <div
+          className="pull-conflict-banner"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -772,7 +803,32 @@ const GraphView: React.FC = () => {
           data-testid="pull-conflict-banner"
         >
           <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-          <span>Merge conflicts detected in {activeRepo.status.conflicted.length} file(s). Please resolve conflict markers manually, stage, and commit.</span>
+          <span>
+            Merge conflicts detected in {activeRepo.status.conflicted.length} file(s).
+          </span>
+          {onOpenConflictResolver && (
+            <button
+              onClick={onOpenConflictResolver}
+              style={{
+                marginLeft: '8px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 10px',
+                borderRadius: '4px',
+                border: '1px solid rgba(239, 68, 68, 0.5)',
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#f87171',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'background 0.15s'
+              }}
+              data-testid="open-conflict-resolver-btn"
+            >
+              Resolve Conflicts <ArrowRight size={11} />
+            </button>
+          )}
         </div>
       )}
 
@@ -823,7 +879,7 @@ const GraphView: React.FC = () => {
                 )}
               </div>
               <div className="commit-message" title={c.message}>{c.message}</div>
-              <div className="commit-actions" style={{ width: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+              <div className="commit-actions" style={{ width: '60px', display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
                 <button
                   className="stash-action-btn"
                   style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
@@ -838,6 +894,21 @@ const GraphView: React.FC = () => {
                   data-testid={`commit-branch-btn-${c.hash}`}
                 >
                   <GitBranch size={13} />
+                </button>
+                <button
+                  className="stash-action-btn"
+                  style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setResetTargetCommit(c)
+                    setResetMode('soft')
+                    setResetError('')
+                    setIsResetModalOpen(true)
+                  }}
+                  title={`Reset branch to ${c.hash.substring(0, 7)}`}
+                  data-testid={`commit-reset-btn-${c.hash}`}
+                >
+                  <RotateCcw size={13} />
                 </button>
               </div>
               <div className="commit-author">{c.author_name}</div>
@@ -1284,6 +1355,163 @@ const GraphView: React.FC = () => {
                 data-testid="create-branch-submit-btn"
               >
                 Create Branch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isResetModalOpen && resetTargetCommit && (
+        <div 
+          className="diff-modal-overlay" 
+          style={{ zIndex: 1100 }} 
+          onClick={() => setIsResetModalOpen(false)}
+        >
+          <div 
+            className="diff-modal-content" 
+            style={{ 
+              maxWidth: '450px', 
+              width: '90%', 
+              height: 'auto', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)', 
+              padding: 0 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="diff-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <RotateCcw size={16} />
+                Reset Branch to Commit
+              </h2>
+              <button 
+                className="diff-modal-close" 
+                onClick={() => setIsResetModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
+                data-testid="close-reset-modal-btn"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* Commit info details */}
+              <div 
+                style={{ 
+                  backgroundColor: 'var(--bg-secondary)', 
+                  border: '1px solid var(--border)', 
+                  borderRadius: '6px', 
+                  padding: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent)' }}>TARGET COMMIT</span>
+                  <span style={{ fontSize: '11px', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                    {resetTargetCommit.hash.substring(0, 8)}
+                  </span>
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {resetTargetCommit.message}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  By {resetTargetCommit.author_name} &bull; {new Date(resetTargetCommit.date).toLocaleString()}
+                </div>
+              </div>
+
+              {/* Selection cards */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div 
+                  onClick={() => setResetMode('soft')}
+                  style={{
+                    border: resetMode === 'soft' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                    borderRadius: '6px',
+                    padding: '12px',
+                    cursor: 'pointer',
+                    backgroundColor: resetMode === 'soft' ? 'rgba(99, 102, 241, 0.05)' : 'transparent',
+                    transition: 'all 0.15s ease'
+                  }}
+                  data-testid="reset-mode-soft-card"
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <input 
+                      type="radio" 
+                      name="resetMode" 
+                      checked={resetMode === 'soft'} 
+                      onChange={() => setResetMode('soft')}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>Soft Reset (--soft)</strong>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', paddingLeft: '22px' }}>
+                    Keeps all your files intact. Changes between target commit and HEAD are kept in the staging area (marked as staged changes).
+                  </div>
+                </div>
+
+                <div 
+                  onClick={() => setResetMode('hard')}
+                  style={{
+                    border: resetMode === 'hard' ? '2px solid #ef4444' : '1px solid var(--border)',
+                    borderRadius: '6px',
+                    padding: '12px',
+                    cursor: 'pointer',
+                    backgroundColor: resetMode === 'hard' ? 'rgba(239, 68, 68, 0.05)' : 'transparent',
+                    transition: 'all 0.15s ease'
+                  }}
+                  data-testid="reset-mode-hard-card"
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <input 
+                      type="radio" 
+                      name="resetMode" 
+                      checked={resetMode === 'hard'} 
+                      onChange={() => setResetMode('hard')}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <strong style={{ fontSize: '13px', color: '#ef4444' }}>Hard Reset (--hard)</strong>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', paddingLeft: '22px' }}>
+                    Discards all modifications to tracked files. Your working tree and index will be reset to match the target commit exactly. 
+                    <span style={{ color: '#f87171', fontWeight: 600 }}> Warning: Any uncommitted changes will be permanently lost!</span>
+                  </div>
+                </div>
+              </div>
+
+              {resetError && (
+                <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} data-testid="reset-error-message">
+                  {resetError}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px', backgroundColor: 'var(--bg-secondary)' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setIsResetModalOpen(false)}
+                disabled={isResetting}
+                data-testid="cancel-reset-btn"
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleResetSubmit}
+                disabled={isResetting}
+                style={{ 
+                  backgroundColor: resetMode === 'hard' ? '#ef4444' : undefined,
+                  borderColor: resetMode === 'hard' ? '#ef4444' : undefined,
+                  opacity: isResetting ? 0.5 : 1, 
+                  cursor: isResetting ? 'not-allowed' : 'pointer' 
+                }}
+                data-testid="confirm-reset-btn"
+              >
+                {isResetting ? 'Resetting...' : `Reset Branch (${resetMode === 'hard' ? 'Hard' : 'Soft'})`}
               </button>
             </div>
           </div>

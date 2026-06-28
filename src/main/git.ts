@@ -2,6 +2,18 @@ import simpleGit, { SimpleGit, SimpleGitOptions } from 'simple-git';
 import fs from 'fs';
 import { join, resolve } from 'path';
 
+export interface ConflictedFile {
+  path: string;
+  status: 'UU' | 'AA' | 'DD' | 'AU' | 'UA' | 'DU' | 'UD';
+}
+
+export interface ConflictHunk {
+  ours: string;
+  base: string;
+  theirs: string;
+  startLine: number; // 1-indexed line where <<<<<<< begins
+}
+
 // Manage simple-git instances per repository path
 const gitInstances = new Map<string, SimpleGit>();
 
@@ -148,10 +160,13 @@ export const gitService = {
   },
 
   createBranch: async (repoPath: string, branchName: string, startPoint?: string) => {
+    console.log('[gitService.createBranch] called with:', { repoPath, branchName, startPoint });
     const git = getGitInstance(repoPath);
     if (startPoint) {
+      console.log(`[gitService.createBranch] Creating branch ${branchName} from startPoint: ${startPoint}`);
       return await git.checkoutBranch(branchName, startPoint);
     }
+    console.log(`[gitService.createBranch] Creating branch ${branchName} from HEAD`);
     return await git.checkoutLocalBranch(branchName);
   },
 
@@ -306,6 +321,11 @@ export const gitService = {
   reset: async (repoPath: string, filePath: string) => {
     const git = getGitInstance(repoPath);
     return await git.reset(['--', filePath]);
+  },
+
+  resetToCommit: async (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => {
+    const git = getGitInstance(repoPath);
+    return await git.reset([`--${mode}`, commitHash]);
   },
 
   addAll: async (repoPath: string) => {
@@ -620,5 +640,161 @@ export const gitService = {
     }
 
     return { success: true };
+  },
+
+  merge: async (
+    repoPath: string,
+    sourceBranch: string,
+    strategy: 'merge' | 'no-ff' | 'squash' = 'merge'
+  ) => {
+    const git = getGitInstance(repoPath);
+    const args: string[] = ['merge'];
+    if (strategy === 'no-ff') {
+      args.push('--no-ff');
+    } else if (strategy === 'squash') {
+      args.push('--squash');
+    }
+    args.push('--no-edit', sourceBranch);
+    try {
+      await git.raw(args);
+      return { hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
+    } catch (err: any) {
+      const msg: string = err.message || '';
+      if (msg.includes('CONFLICT') || msg.includes('Automatic merge failed')) {
+        const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+        return { hadConflicts: true, conflictedFiles };
+      }
+      throw err;
+    }
+  },
+
+  rebase: async (repoPath: string, ontoBranch: string) => {
+    const git = getGitInstance(repoPath);
+    try {
+      await git.rebase([ontoBranch]);
+      return { hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
+    } catch (err: any) {
+      const msg: string = err.message || '';
+      if (msg.includes('CONFLICT') || msg.includes('conflict')) {
+        const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+        return { hadConflicts: true, conflictedFiles };
+      }
+      throw err;
+    }
+  },
+
+  abortMerge: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    await git.raw(['merge', '--abort']);
+    return { success: true };
+  },
+
+  abortRebase: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    await git.raw(['rebase', '--abort']);
+    return { success: true };
+  },
+
+  continueRebase: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    await git.raw(['rebase', '--continue']);
+    return { success: true };
+  },
+
+  getConflictedFiles: async (repoPath: string): Promise<ConflictedFile[]> => {
+    const git = getGitInstance(repoPath);
+    // --porcelain=v1 gives XY STATUS lines, UU = both modified conflict
+    const raw = await git.raw(['status', '--porcelain=v1']);
+    const files: ConflictedFile[] = [];
+    for (const line of raw.split('\n')) {
+      if (line.length < 3) continue;
+      const xy = line.substring(0, 2);
+      const path = line.substring(3).trim();
+      const conflictCodes = ['UU', 'AA', 'DD', 'AU', 'UA', 'DU', 'UD'];
+      if (conflictCodes.includes(xy)) {
+        files.push({ path, status: xy as ConflictedFile['status'] });
+      }
+    }
+    return files;
+  },
+
+  getConflictFileDiff: async (repoPath: string, filePath: string) => {
+    const fullPath = join(repoPath, filePath);
+    let raw = '';
+    try {
+      raw = await fs.promises.readFile(fullPath, 'utf8');
+    } catch (e) {
+      return { raw: '', hunks: [] as ConflictHunk[] };
+    }
+    const hunks: ConflictHunk[] = [];
+    const lines = raw.split('\n');
+    let i = 0;
+    while (i < lines.length) {
+      if (lines[i].startsWith('<<<<<<<')) {
+        const startLine = i + 1; // 1-indexed
+        const oursLines: string[] = [];
+        const baseLines: string[] = [];
+        const theirsLines: string[] = [];
+        let section: 'ours' | 'base' | 'theirs' = 'ours';
+        i++;
+        while (i < lines.length) {
+          if (lines[i].startsWith('=======')) {
+            section = 'theirs';
+            i++;
+            continue;
+          }
+          if (lines[i].startsWith('|||||||')) {
+            // diff3 style — skip base section marker
+            section = 'base';
+            i++;
+            continue;
+          }
+          if (lines[i].startsWith('>>>>>>>')) {
+            i++;
+            break;
+          }
+          if (section === 'ours') oursLines.push(lines[i]);
+          else if (section === 'base') baseLines.push(lines[i]);
+          else theirsLines.push(lines[i]);
+          i++;
+        }
+        hunks.push({
+          ours: oursLines.join('\n'),
+          base: baseLines.join('\n'),
+          theirs: theirsLines.join('\n'),
+          startLine
+        });
+      } else {
+        i++;
+      }
+    }
+    return { raw, hunks };
+  },
+
+  resolveConflict: async (
+    repoPath: string,
+    filePath: string,
+    resolvedContent: string
+  ) => {
+    const fullPath = join(repoPath, filePath);
+    await fs.promises.writeFile(fullPath, resolvedContent, 'utf8');
+    // Stage the resolved file
+    const git = getGitInstance(repoPath);
+    await git.add(filePath);
+    return { success: true };
+  },
+
+  getMergeStatus: async (repoPath: string) => {
+    const mergeHeadPath = join(repoPath, '.git', 'MERGE_HEAD');
+    const rebaseApplyPath = join(repoPath, '.git', 'rebase-apply');
+    const rebaseMergePath = join(repoPath, '.git', 'rebase-merge');
+
+    let isMerge = false;
+    let isRebase = false;
+    try { await fs.promises.access(mergeHeadPath); isMerge = true; } catch { /* not a merge */ }
+    try { await fs.promises.access(rebaseApplyPath); isRebase = true; } catch { /* not rebase-apply */ }
+    try { await fs.promises.access(rebaseMergePath); isRebase = true; } catch { /* not rebase-merge */ }
+
+    return { isMerge, isRebase, inProgress: isMerge || isRebase };
   }
 };

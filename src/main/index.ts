@@ -206,6 +206,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:resetToCommit', async (_, repoPath, commitHash, mode) => {
+    try {
+      await gitService.resetToCommit(repoPath, commitHash, mode)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:addAll', async (_, repoPath) => {
     try {
       await gitService.addAll(repoPath)
@@ -478,6 +487,87 @@ app.whenReady().then(() => {
         }
       })
       return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:merge', async (_, repoPath, sourceBranch, strategy) => {
+    try {
+      const data = await gitService.merge(repoPath, sourceBranch, strategy)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:rebase', async (_, repoPath, ontoBranch) => {
+    try {
+      const data = await gitService.rebase(repoPath, ontoBranch)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:abortMerge', async (_, repoPath) => {
+    try {
+      const data = await gitService.abortMerge(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:abortRebase', async (_, repoPath) => {
+    try {
+      const data = await gitService.abortRebase(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:continueRebase', async (_, repoPath) => {
+    try {
+      const data = await gitService.continueRebase(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getConflictedFiles', async (_, repoPath) => {
+    try {
+      const data = await gitService.getConflictedFiles(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getConflictFileDiff', async (_, repoPath, filePath) => {
+    try {
+      const data = await gitService.getConflictFileDiff(repoPath, filePath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:resolveConflict', async (_, repoPath, filePath, resolvedContent) => {
+    try {
+      const data = await gitService.resolveConflict(repoPath, filePath, resolvedContent)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getMergeStatus', async (_, repoPath) => {
+    try {
+      const data = await gitService.getMergeStatus(repoPath)
+      return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
     }

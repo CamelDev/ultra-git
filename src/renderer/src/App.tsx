@@ -1,16 +1,85 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import TitleBar from './components/layout/TitleBar'
-import Sidebar from './components/sidebar/Sidebar'
-import Toolbar from './components/toolbar/Toolbar'
-import GraphView from './components/graph/GraphView'
-import DetailsPanel from './components/details/DetailsPanel'
-import { useRepoStore } from './store/useRepoStore'
-import { ActiveChanges } from './components/active-changes/ActiveChanges'
+import { useEffect, useState, useCallback, useRef } from "react"
+import TitleBar from "./components/layout/TitleBar"
+import Sidebar from "./components/sidebar/Sidebar"
+import Toolbar from "./components/toolbar/Toolbar"
+import GraphView from "./components/graph/GraphView"
+import DetailsPanel from "./components/details/DetailsPanel"
+import { useRepoStore } from "./store/useRepoStore"
+import { ActiveChanges } from "./components/active-changes/ActiveChanges"
+import { ConflictResolver } from "./components/sidebar/ConflictResolver"
+
+interface ConflictState {
+  active: boolean
+  isRebase: boolean
+  conflictedFiles: Array<{ path: string; status: string }>
+}
 
 function App() {
   const { addRepo, getActiveRepo, refreshRepo, initializeRepos } = useRepoStore()
   const activeRepo = getActiveRepo()
   const hasActiveChanges = !!(activeRepo?.status?.files && activeRepo.status.files.length > 0)
+
+  const [conflictState, setConflictState] = useState<ConflictState>({
+    active: false,
+    isRebase: false,
+    conflictedFiles: []
+  })
+
+  const handleMergeConflicts = (conflictedFiles: Array<{ path: string; status: string }>, isRebase: boolean) => {
+    setConflictState({ active: true, isRebase, conflictedFiles })
+  }
+
+  const handleAbortMerge = async () => {
+    if (!activeRepo) return
+    if (conflictState.isRebase) {
+      await window.api.git.abortRebase(activeRepo.path)
+    } else {
+      await window.api.git.abortMerge(activeRepo.path)
+    }
+    setConflictState({ active: false, isRebase: false, conflictedFiles: [] })
+    await refreshRepo(activeRepo.id)
+  }
+
+  const handleCompleteMerge = async () => {
+    if (!activeRepo) return
+    if (conflictState.isRebase) {
+      await window.api.git.continueRebase(activeRepo.path)
+    } else {
+      await window.api.git.commit(activeRepo.path, "Merge commit")
+    }
+    setConflictState({ active: false, isRebase: false, conflictedFiles: [] })
+    await refreshRepo(activeRepo.id)
+  }
+
+  // Auto-detect existing conflicts (e.g. from external merge or on app start)
+  const conflictedPaths = activeRepo?.status?.conflicted
+  useEffect(() => {
+    if (!activeRepo || conflictState.active) return
+    if (!conflictedPaths || conflictedPaths.length === 0) return
+
+    // Conflicts detected — figure out if merge or rebase is in progress
+    window.api.git.getMergeStatus(activeRepo.path).then(msRes => {
+      const isRebase = msRes.success && !!msRes.data?.isRebase
+      window.api.git.getConflictedFiles(activeRepo.path).then(cfRes => {
+        if (cfRes.success && cfRes.data && cfRes.data.length > 0) {
+          setConflictState({ active: true, isRebase, conflictedFiles: cfRes.data })
+        }
+      })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conflictedPaths?.length, activeRepo?.id])
+
+  const openConflictResolver = () => {
+    if (!activeRepo || conflictState.active) return
+    window.api.git.getMergeStatus(activeRepo.path).then(msRes => {
+      const isRebase = msRes.success && !!msRes.data?.isRebase
+      window.api.git.getConflictedFiles(activeRepo.path).then(cfRes => {
+        if (cfRes.success && cfRes.data) {
+          setConflictState({ active: true, isRebase, conflictedFiles: cfRes.data })
+        }
+      })
+    })
+  }
   
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebar-width')
@@ -218,7 +287,7 @@ function App() {
           '--active-changes-height': `${activeChangesHeight}px`
         } as React.CSSProperties}
       >
-        <Sidebar />
+        <Sidebar onMergeConflicts={handleMergeConflicts} />
         
         <div 
           className={`sidebar-resizer ${isDragging ? 'is-dragging' : ''}`}
@@ -239,14 +308,55 @@ function App() {
             </>
           )}
           <div className="git-log-and-details">
-            <GraphView />
-            <div 
-              className={`details-resizer ${isDetailsDragging ? 'is-dragging' : ''}`}
+            <GraphView onOpenConflictResolver={openConflictResolver} />
+            <div
+              className={`details-resizer ${isDetailsDragging ? "is-dragging" : ""}`}
               onPointerDown={startDetailsResize}
               data-testid="details-resizer"
             />
             <DetailsPanel />
           </div>
+
+          {/* Conflict Resolver Modal Overlay */}
+          {conflictState.active && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 2000,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(0, 0, 0, 0.65)',
+                backdropFilter: 'blur(4px)',
+                padding: '24px'
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  maxWidth: '1100px',
+                  height: '85vh',
+                  maxHeight: '800px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(251, 191, 36, 0.25)',
+                  overflow: 'hidden',
+                  boxShadow: '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)',
+                  animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}
+              >
+                <ConflictResolver
+                  isRebase={conflictState.isRebase}
+                  conflictedFiles={conflictState.conflictedFiles}
+                  onAbort={handleAbortMerge}
+                  onComplete={handleCompleteMerge}
+                  onDismiss={() => setConflictState(s => ({ ...s, active: false }))}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
