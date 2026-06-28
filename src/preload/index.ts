@@ -24,6 +24,8 @@ const api = {
     reset: (repoPath: string, filePath: string) => ipcRenderer.invoke('git:reset', repoPath, filePath),
     resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => 
       ipcRenderer.invoke('git:resetToCommit', repoPath, commitHash, mode),
+    squashCommits: (repoPath: string, commitHash: string, message: string) =>
+      ipcRenderer.invoke('git:squashCommits', repoPath, commitHash, message),
     addAll: (repoPath: string) => ipcRenderer.invoke('git:addAll', repoPath),
     resetAll: (repoPath: string) => ipcRenderer.invoke('git:resetAll', repoPath),
     commit: (repoPath: string, message: string) => ipcRenderer.invoke('git:commit', repoPath, message),

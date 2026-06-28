@@ -63,8 +63,12 @@ test.describe('Branch Creation from Specific Commit', () => {
       await page.waitForTimeout(300)
 
       console.log('8. Clicking the branch button inside the commit row...')
-      // Find the branch button inside the hovered row
-      const branchBtn = firstCommitRow.locator('.stash-action-btn')
+      // Retrieve hash to locate data-testid
+      const commitLog = await sandbox.git.log()
+      const firstCustomCommit = commitLog.all.find(commit => commit.message === 'First custom commit')
+      expect(firstCustomCommit).toBeDefined()
+
+      const branchBtn = firstCommitRow.locator(`[data-testid="commit-branch-btn-${firstCustomCommit!.hash}"]`)
       await expect(branchBtn).toBeVisible()
       await branchBtn.click()
       await page.waitForTimeout(300)
@@ -97,9 +101,7 @@ test.describe('Branch Creation from Specific Commit', () => {
       expect(currentBranch.trim()).toBe('branch-from-commit-1')
 
       console.log('15. Verifying the branch points to the correct commit (First custom commit)...')
-      // Get the hash of 'First custom commit' in sandbox
-      const commitLog = await sandbox.git.log()
-      const firstCustomCommit = commitLog.all.find(commit => commit.message === 'First custom commit')
+      // Reuse firstCustomCommit already retrieved
       expect(firstCustomCommit).toBeDefined()
       
       const newBranchHash = await sandbox.git.revparse(['HEAD'])

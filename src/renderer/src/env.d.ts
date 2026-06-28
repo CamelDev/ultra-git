@@ -23,6 +23,7 @@ declare global {
         add: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
         reset: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
         resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => Promise<{ success: boolean; error?: string }>;
+        squashCommits: (repoPath: string, commitHash: string, message: string) => Promise<{ success: boolean; error?: string }>;
         addAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         resetAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         commit: (repoPath: string, message: string) => Promise<{ success: boolean; error?: string }>;

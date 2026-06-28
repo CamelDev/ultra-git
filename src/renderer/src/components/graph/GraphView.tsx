@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw } from 'lucide-react'
+import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 
@@ -44,6 +44,17 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const [resetMode, setResetMode] = useState<'soft' | 'hard'>('soft')
   const [isResetting, setIsResetting] = useState(false)
   const [resetError, setResetError] = useState('')
+
+  // Git Squash state
+  const [isSquashModalOpen, setIsSquashModalOpen] = useState(false)
+  const [squashTargetCommit, setSquashTargetCommit] = useState<any>(null)
+  const [squashMessage, setSquashMessage] = useState('')
+  const [isSquashing, setIsSquashing] = useState(false)
+  const [squashError, setSquashError] = useState('')
+
+  const commitsToSquash = squashTargetCommit 
+    ? commits.slice(0, commits.findIndex(c => c.hash === squashTargetCommit.hash) + 1)
+    : []
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -379,6 +390,27 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
       setResetError(err.message || 'An error occurred during reset.')
     } finally {
       setIsResetting(false)
+    }
+  }
+
+  const handleSquashSubmit = async () => {
+    if (!activeRepo || !squashTargetCommit) return
+    setIsSquashing(true)
+    setSquashError('')
+    try {
+      const res = await window.api.git.squashCommits(activeRepo.path, squashTargetCommit.hash, squashMessage)
+      if (res.success) {
+        setIsSquashModalOpen(false)
+        setSquashTargetCommit(null)
+        setSquashMessage('')
+        await refreshRepo(activeRepo.id)
+      } else {
+        setSquashError(res.error || 'Failed to squash commits.')
+      }
+    } catch (err: any) {
+      setSquashError(err.message || 'An error occurred during squash.')
+    } finally {
+      setIsSquashing(false)
     }
   }
 
@@ -879,7 +911,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 )}
               </div>
               <div className="commit-message" title={c.message}>{c.message}</div>
-              <div className="commit-actions" style={{ width: '60px', display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+              <div className="commit-actions" style={{ width: '88px', display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
                 <button
                   className="stash-action-btn"
                   style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
@@ -909,6 +941,28 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   data-testid={`commit-reset-btn-${c.hash}`}
                 >
                   <RotateCcw size={13} />
+                </button>
+                <button
+                  className="stash-action-btn"
+                  style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const idx = commits.findIndex((commit) => commit.hash === c.hash)
+                    if (idx === -1) return
+                    const commitsToSquash = commits.slice(0, idx + 1)
+                    const combinedMessages = commitsToSquash
+                      .map((commit) => commit.message)
+                      .reverse()
+                      .join('\n\n')
+                    setSquashTargetCommit(c)
+                    setSquashMessage(combinedMessages)
+                    setSquashError('')
+                    setIsSquashModalOpen(true)
+                  }}
+                  title={`Squash this and newer commits`}
+                  data-testid={`commit-squash-btn-${c.hash}`}
+                >
+                  <Layers size={13} />
                 </button>
               </div>
               <div className="commit-author">{c.author_name}</div>
@@ -1512,6 +1566,166 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 data-testid="confirm-reset-btn"
               >
                 {isResetting ? 'Resetting...' : `Reset Branch (${resetMode === 'hard' ? 'Hard' : 'Soft'})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isSquashModalOpen && squashTargetCommit && (
+        <div 
+          className="diff-modal-overlay" 
+          style={{ zIndex: 1100 }} 
+          onClick={() => setIsSquashModalOpen(false)}
+        >
+          <div 
+            className="diff-modal-content" 
+            style={{ 
+              maxWidth: '500px', 
+              width: '90%', 
+              height: 'auto', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)', 
+              padding: 0 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="diff-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Layers size={16} />
+                Squash Commits (This and Newer)
+              </h2>
+              <button 
+                className="diff-modal-close" 
+                onClick={() => setIsSquashModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
+                data-testid="close-squash-modal-btn"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
+              
+              {/* Safety Warning */}
+              {activeRepo?.status?.files && activeRepo.status.files.length > 0 && (
+                <div 
+                  style={{ 
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+                    border: '1px solid #ef4444', 
+                    borderRadius: '6px', 
+                    padding: '12px',
+                    color: '#ef4444',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}
+                  data-testid="squash-dirty-warning"
+                >
+                  <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertTriangle size={14} />
+                    Uncommitted Changes Detected
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    You have uncommitted modifications. Please stash or commit your changes before squashing commits.
+                  </div>
+                </div>
+              )}
+
+              {/* Targets Summary */}
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                This will combine <strong>{commitsToSquash.length}</strong> commits (from the selected commit up to HEAD) into a single commit on top of <strong>{commits[commitsToSquash.length]?.hash ? commits[commitsToSquash.length].hash.substring(0, 7) : 'the parent'}</strong>.
+              </div>
+
+              {/* Commits List */}
+              <div 
+                style={{ 
+                  backgroundColor: 'var(--bg-secondary)', 
+                  border: '1px solid var(--border)', 
+                  borderRadius: '6px', 
+                  maxHeight: '150px',
+                  overflowY: 'auto',
+                  padding: '8px'
+                }}
+              >
+                <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px', paddingLeft: '4px' }}>
+                  COMMITS TO BE SQUASHED (NEWEST FIRST)
+                </div>
+                {commitsToSquash.map((commit, idx) => (
+                  <div 
+                    key={commit.hash} 
+                    style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      padding: '6px 4px',
+                      borderBottom: idx === commitsToSquash.length - 1 ? 'none' : '1px solid var(--border)',
+                      fontSize: '11px'
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '320px', color: 'var(--text-primary)' }}>
+                      {commit.message}
+                    </span>
+                    <span style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                      {commit.hash.substring(0, 7)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Message text area */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  SQUASHED COMMIT MESSAGE
+                </label>
+                <textarea 
+                  rows={6}
+                  value={squashMessage}
+                  onChange={(e) => setSquashMessage(e.target.value)}
+                  style={{
+                    backgroundColor: 'var(--bg-primary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    padding: '10px',
+                    fontSize: '12px',
+                    color: 'var(--text-primary)',
+                    fontFamily: 'inherit',
+                    resize: 'vertical'
+                  }}
+                  data-testid="squash-message-input"
+                  placeholder="Enter commit message for the squashed commit..."
+                />
+              </div>
+
+              {squashError && (
+                <div style={{ color: '#ef4444', fontSize: '12px' }} data-testid="squash-error-message">
+                  {squashError}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px', backgroundColor: 'var(--bg-secondary)' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setIsSquashModalOpen(false)}
+                disabled={isSquashing}
+                data-testid="cancel-squash-btn"
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleSquashSubmit}
+                disabled={isSquashing || (activeRepo?.status?.files && activeRepo.status.files.length > 0)}
+                style={{ 
+                  opacity: (isSquashing || (activeRepo?.status?.files && activeRepo.status.files.length > 0)) ? 0.5 : 1, 
+                  cursor: (isSquashing || (activeRepo?.status?.files && activeRepo.status.files.length > 0)) ? 'not-allowed' : 'pointer' 
+                }}
+                data-testid="confirm-squash-btn"
+              >
+                {isSquashing ? 'Squashing...' : 'Confirm Squash'}
               </button>
             </div>
           </div>

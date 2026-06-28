@@ -215,6 +215,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:squashCommits', async (_, repoPath, commitHash, message) => {
+    try {
+      await gitService.squashCommits(repoPath, commitHash, message)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:addAll', async (_, repoPath) => {
     try {
       await gitService.addAll(repoPath)

@@ -328,6 +328,31 @@ export const gitService = {
     return await git.reset([`--${mode}`, commitHash]);
   },
 
+  squashCommits: async (repoPath: string, commitHash: string, message: string) => {
+    const git = getGitInstance(repoPath);
+    
+    // Safety check: check if the working tree has uncommitted changes
+    const status = await git.status();
+    if (status.files.length > 0) {
+      throw new Error('Cannot squash with uncommitted changes. Please stash or commit them first.');
+    }
+
+    // Find the parent of commitHash
+    let parentHash = '';
+    try {
+      const parentRaw = await git.raw(['rev-parse', `${commitHash}^`]);
+      parentHash = parentRaw.trim();
+    } catch (err) {
+      throw new Error('Target commit has no parent (it may be the initial commit) and cannot be squashed.');
+    }
+
+    // Soft reset to the parent of the target commit
+    await git.reset(['--soft', parentHash]);
+
+    // Commit with the new squash message
+    await git.commit(message);
+  },
+
   addAll: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
     return await git.add('.');
