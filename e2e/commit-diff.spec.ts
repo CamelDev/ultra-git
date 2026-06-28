@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import { launchElectronApp } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 import path from 'path'
+import fs from 'fs'
 
 test.describe('Commit Changed Files and Split Diff Modal', () => {
   let sandbox: GitSandbox
@@ -308,6 +309,75 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       await page.waitForTimeout(300)
       const secondLastCommit = commitItems.nth(23)
       await expect(secondLastCommit).toHaveClass(/active/)
+
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('should support binary file detection in diff modal', async () => {
+    // 1. Commit a mock binary file containing null bytes to the sandbox
+    console.log('[Binary File Diff Test] 1. Creating and committing a binary file...');
+    fs.writeFileSync(path.join(sandbox.dir, 'mock-image.png'), 'PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89')
+    await sandbox.git.add('mock-image.png')
+    await sandbox.git.commit('Add binary mock-image.png')
+
+    console.log('[Binary File Diff Test] 2. Launching Electron App...');
+    const { app, page } = await launchElectronApp()
+
+    try {
+      console.log('[Binary File Diff Test] 3. Clearing localStorage...');
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      console.log('[Binary File Diff Test] 4. Mocking dialog:openDirectory...');
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, sandbox.dir)
+
+      console.log('[Binary File Diff Test] 5. Clicking to add repository...');
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      console.log('[Binary File Diff Test] 6. Switching to sandbox repository tab...');
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      console.log('[Binary File Diff Test] 7. Finding top commit adding binary file...');
+      const commitItems = page.locator('.commit-item')
+      const topCommit = commitItems.first()
+      await expect(topCommit).toContainText('Add binary mock-image.png')
+
+      console.log('[Binary File Diff Test] 8. Selecting commit...');
+      await topCommit.click()
+      await page.waitForTimeout(500)
+
+      console.log('[Binary File Diff Test] 9. Clicking file item to open diff...');
+      const fileItem = page.locator('.details-panel .file-item').first()
+      await expect(fileItem).toContainText('mock-image.png')
+      await fileItem.click()
+      await page.waitForTimeout(500)
+
+      console.log('[Binary File Diff Test] 10. Asserting binary placeholder message in DiffModal...');
+      const diffModalOverlay = page.locator('.diff-modal-overlay')
+      await expect(diffModalOverlay).toBeVisible()
+
+      const binaryPlaceholder = page.locator('[data-testid="binary-file-placeholder"]')
+      await expect(binaryPlaceholder).toBeVisible()
+      await expect(binaryPlaceholder).toContainText('Binary file (diff not available as text)')
+
+      console.log('[Binary File Diff Test] 11. Closing diff modal...');
+      await page.keyboard.press('Escape')
+      await expect(diffModalOverlay).toBeHidden()
+      console.log('[Binary File Diff Test] Binary file E2E test finished successfully!')
 
     } finally {
       await app.close()

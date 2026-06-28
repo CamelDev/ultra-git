@@ -172,13 +172,13 @@ The following is the roadmap of E2E tests to implement to achieve complete test 
 - [x] Verify rebasing inside a worktree by selecting a branch in a worktree context, clicking rebase, and checking the updated commits.
 - [x] Verify deleting a worktree by clicking the trash icon next to an extra worktree in the sidebar, confirming, and checking that the worktree directory is deleted from disk and the sidebar list.
 
-### [ ] DiffModal: Binary File Detection (Append to `e2e/commit-diff.spec.ts`)
-- [ ] Commit a binary file (e.g. image or mock binary data).
-- [ ] Select the commit and click the binary file to view its diff.
-- [ ] Verify that the `DiffModal` shows the placeholder message: `"Binary file (diff not available as text)"` instead of rendering text lines.
+### [x] DiffModal: Binary File Detection (Append to `e2e/commit-diff.spec.ts`)
+- [x] Commit a binary file (e.g. image or mock binary data).
+- [x] Select the commit and click the binary file to view its diff.
+- [x] Verify that the `DiffModal` shows the placeholder message: `"Binary file (diff not available as text)"` instead of rendering text lines.
 
-### [ ] Settings: Reset Layout (Append to `e2e/sidebar.spec.ts` or `e2e/details.spec.ts`)
-- [ ] Resize the sidebar and details panels to custom widths.
-- [ ] Click the settings cog and choose "Reset Layout".
-- [ ] Verify that the panel widths are restored to their default styles.
+### [x] Settings: Reset Layout (Append to `e2e/sidebar.spec.ts` or `e2e/details.spec.ts`)
+- [x] Resize the sidebar and details panels to custom widths.
+- [x] Click the settings cog and choose "Reset Layout".
+- [x] Verify that the panel widths are restored to their default styles.
 

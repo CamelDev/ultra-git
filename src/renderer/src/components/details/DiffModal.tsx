@@ -492,6 +492,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
             )}
             {!loading && !error && isBinary && (
               <div
+                data-testid="binary-file-placeholder"
                 style={{
                   padding: '60px',
                   textAlign: 'center',

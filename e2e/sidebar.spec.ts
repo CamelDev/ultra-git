@@ -82,4 +82,75 @@ test.describe('Resizable Left Sidebar', () => {
       await app.close();
     }
   });
+
+  test('should reset sidebar and details panel widths on choosing Reset Layout', async () => {
+    const { app, page } = await launchElectronApp();
+    await page.setViewportSize({ width: 1600, height: 900 });
+
+    try {
+      // Clear localStorage
+      await page.evaluate(() => localStorage.clear());
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(1000);
+
+      const sidebar = page.locator('[data-testid="sidebar"]');
+      const details = page.locator('.details-panel');
+      const sidebarResizer = page.locator('[data-testid="sidebar-resizer"]');
+      const detailsResizer = page.locator('[data-testid="details-resizer"]');
+
+      // Helper function to drag resizers
+      const dragResizerBy = async (resizer: typeof sidebarResizer, deltaX: number) => {
+        const rBox = await resizer.boundingBox();
+        expect(rBox).toBeTruthy();
+        const currentX = rBox!.x + rBox!.width / 2;
+        const currentY = rBox!.y + rBox!.height / 2;
+        
+        await page.mouse.move(currentX, currentY);
+        await page.mouse.down();
+        await page.mouse.move(currentX + deltaX, currentY, { steps: 10 });
+        await page.mouse.up();
+        await page.waitForTimeout(300); // Allow layout to settle
+      };
+
+      // 1. Resize sidebar right by 100px (280px -> 380px)
+      await dragResizerBy(sidebarResizer, 100);
+      let sidebarBox = await sidebar.boundingBox();
+      expect(sidebarBox!.width).toBe(380);
+
+      // 2. Resize details panel left by 100px (380px -> 480px)
+      await dragResizerBy(detailsResizer, -100);
+      let detailsBox = await details.boundingBox();
+      expect(detailsBox!.width).toBe(480);
+
+      // 3. Open settings dropdown
+      const settingsCog = page.locator('[data-testid="settings-cog-btn"]');
+      await expect(settingsCog).toBeVisible();
+      await settingsCog.click();
+      await page.waitForTimeout(300);
+
+      // 4. Click Reset Layout
+      const resetBtn = page.locator('[data-testid="reset-layout-btn"]');
+      await expect(resetBtn).toBeVisible();
+      await resetBtn.click();
+      await page.waitForTimeout(500);
+
+      // 5. Verify widths are reset to default (sidebar: 280, details: 380)
+      sidebarBox = await sidebar.boundingBox();
+      expect(sidebarBox!.width).toBe(280);
+
+      detailsBox = await details.boundingBox();
+      expect(detailsBox!.width).toBe(380);
+
+      // 6. Verify localStorage values are updated
+      const storedSidebarWidth = await page.evaluate(() => localStorage.getItem('sidebar-width'));
+      expect(storedSidebarWidth).toBe('280');
+
+      const storedDetailsWidth = await page.evaluate(() => localStorage.getItem('details-width'));
+      expect(storedDetailsWidth).toBe('380');
+
+    } finally {
+      await app.close();
+    }
+  });
 });
