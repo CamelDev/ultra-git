@@ -134,9 +134,9 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:createBranch', async (_, repoPath, branchName) => {
+  ipcMain.handle('git:createBranch', async (_, repoPath, branchName, startPoint) => {
     try {
-      const data = await gitService.createBranch(repoPath, branchName)
+      const data = await gitService.createBranch(repoPath, branchName, startPoint)
       return { success: true, data: JSON.parse(JSON.stringify(data)) }
     } catch (error: any) {
       return { success: false, error: error.message }

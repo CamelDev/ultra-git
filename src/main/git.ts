@@ -147,8 +147,11 @@ export const gitService = {
     return await git.checkout(branchName);
   },
 
-  createBranch: async (repoPath: string, branchName: string) => {
+  createBranch: async (repoPath: string, branchName: string, startPoint?: string) => {
     const git = getGitInstance(repoPath);
+    if (startPoint) {
+      return await git.checkoutBranch(branchName, startPoint);
+    }
     return await git.checkoutLocalBranch(branchName);
   },
 

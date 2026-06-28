@@ -1079,4 +1079,14 @@ body {
   background-color: var(--hover);
 }
 
+/* Commit Actions Hover Styles */
+.commit-actions button {
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+}
+
+.commit-item:hover .commit-actions button {
+  opacity: 1;
+}
+
 
