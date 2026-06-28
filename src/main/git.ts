@@ -230,6 +230,10 @@ export const gitService = {
       }
     });
 
+    // Sort local and remote branches alphabetically
+    local.sort((a, b) => a.name.localeCompare(b.name));
+    remote.sort((a, b) => a.localeCompare(b));
+
     return {
       current: summary.current,
       local,
@@ -845,5 +849,63 @@ export const gitService = {
     if (deleteRemote) {
       await git.raw(['push', remote || 'origin', '--delete', tagName]);
     }
+  },
+
+  getWorktrees: async (repoPath: string): Promise<Array<{ path: string; branch: string; hash: string }>> => {
+    const git = getGitInstance(repoPath);
+    try {
+      const output = await git.raw(['worktree', 'list', '--porcelain']);
+      const worktrees: Array<{ path: string; branch: string; hash: string }> = [];
+      const lines = output.split('\n');
+      
+      let currentWorktree: any = null;
+      for (const line of lines) {
+        if (line.startsWith('worktree ')) {
+          if (currentWorktree && currentWorktree.path) {
+            if (!currentWorktree.branch) currentWorktree.branch = '(detached HEAD)';
+            worktrees.push(currentWorktree);
+          }
+          currentWorktree = { path: line.substring(9).trim(), branch: '', hash: '' };
+        } else if (line.startsWith('HEAD ')) {
+          if (currentWorktree) currentWorktree.hash = line.substring(5).trim();
+        } else if (line.startsWith('branch ')) {
+          let branchName = line.substring(7).trim();
+          if (branchName.startsWith('refs/heads/')) {
+            branchName = branchName.substring(11);
+          }
+          if (currentWorktree) currentWorktree.branch = branchName;
+        }
+      }
+      if (currentWorktree && currentWorktree.path) {
+        if (!currentWorktree.branch) currentWorktree.branch = '(detached HEAD)';
+        worktrees.push(currentWorktree);
+      }
+      return worktrees;
+    } catch (e) {
+      console.error('Error fetching worktrees:', e);
+      return [];
+    }
+  },
+
+  addWorktree: async (repoPath: string, newPath: string, branch: string, baseBranch?: string): Promise<void> => {
+    const git = getGitInstance(repoPath);
+    const summary = await git.branch();
+    const localBranches = summary.all.filter(b => !b.startsWith('remotes/'));
+    const branchExistsLocally = localBranches.includes(branch);
+
+    if (branchExistsLocally) {
+      await git.raw(['worktree', 'add', newPath, branch]);
+    } else {
+      const cmd = ['worktree', 'add', '-b', branch, newPath];
+      if (baseBranch) {
+        cmd.push(baseBranch);
+      }
+      await git.raw(cmd);
+    }
+  },
+
+  removeWorktree: async (repoPath: string, targetPath: string): Promise<void> => {
+    const git = getGitInstance(repoPath);
+    await git.raw(['worktree', 'remove', targetPath]);
   }
 };

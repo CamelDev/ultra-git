@@ -30,6 +30,9 @@ declare global {
         ) => Promise<IpcResponse<{ before: string, after: string, isBinary: boolean }>>;
         resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => Promise<IpcResponse<void>>;
         squashCommits: (repoPath: string, commitHash: string, message: string) => Promise<IpcResponse<void>>;
+        getWorktrees: (repoPath: string) => Promise<IpcResponse<Array<{ path: string; branch: string; hash: string }>>>;
+        addWorktree: (repoPath: string, newPath: string, branch: string, baseBranch?: string) => Promise<IpcResponse<void>>;
+        removeWorktree: (repoPath: string, targetPath: string) => Promise<IpcResponse<void>>;
       },
       app: {
         openDirectory: () => Promise<{ canceled: boolean, path?: string }>;

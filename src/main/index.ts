@@ -614,6 +614,37 @@ app.whenReady().then(() => {
       await gitService.deleteTag(repoPath, tagName, deleteRemote, remote)
       return { success: true }
     } catch (error: any) {
+      console.error('Failed to delete tag:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:getWorktrees', async (_, repoPath) => {
+    try {
+      const data = await gitService.getWorktrees(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      console.error('Failed to get worktrees:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:addWorktree', async (_, repoPath, newPath, branch, baseBranch) => {
+    try {
+      await gitService.addWorktree(repoPath, newPath, branch, baseBranch)
+      return { success: true }
+    } catch (error: any) {
+      console.error('Failed to add worktree:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:removeWorktree', async (_, repoPath, targetPath) => {
+    try {
+      await gitService.removeWorktree(repoPath, targetPath)
+      return { success: true }
+    } catch (error: any) {
+      console.error('Failed to remove worktree:', error)
       return { success: false, error: error.message }
     }
   })

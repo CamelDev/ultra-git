@@ -11,7 +11,7 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron. I
 ### 2. Comprehensive Left Sidebar
 - **Navigating Repositories**: Display the current repository name and a branch dropdown at the top.
 - **Viewing Filter**: A toggle to filter Local and Remote branches, Stashes, and WIP.
-- **Sections**: Include collapsibles for Local Branches, Remote Branches, Stashes, Tags, and future integrations (Pull Requests, Issues, Teams, Cloud Patches).
+- **Sections**: Include collapsibles for Local Branches, Remote Branches, Stashes, Tags, Worktrees, and future integrations (Pull Requests, Issues, Teams, Cloud Patches).
 
 ### 3. Visual Commit Graph
 - A central component of the UI must be a rich, interactive visual commit graph (Main Content Area).
@@ -30,6 +30,12 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron. I
 
 ### 6. Standard Toolbar Git Operations
 - Provide an easily accessible toolbar at the top of the interface for common actions: Undo, Redo, Pull, Push, Branch, Stash, Pop, and opening an external Terminal.
+
+### 7. Git Worktrees
+- **Isolated Working Directories**: Support creating and removing Git worktrees to work on multiple branches concurrently.
+- **Unified Repository Tabs**: Selecting a worktree loads its contents (active branch, log, status) in the same tab instead of switching or opening new tabs.
+- **Worktree Branches isolation**: Branches checked out in extra worktrees are hidden from the normal "Local Branches" list to reduce clutter, showing only in the "Worktrees" section.
+- **Safety Constraints**: Renaming, deleting, or creating branches is disabled when inside an active worktree to prevent workspace conflicts.
 
 ## Architecture Tech Stack
 

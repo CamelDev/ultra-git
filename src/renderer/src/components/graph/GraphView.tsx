@@ -7,10 +7,14 @@ interface GraphViewProps {
   onOpenConflictResolver?: () => void
 }
 
+const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
 const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const { getActiveRepo, selectedCommitHash, setSelectedCommitHash, refreshRepo, identities, setRepoIdentity } = useRepoStore()
   const activeRepo = getActiveRepo()
   const commits = activeRepo?.commits || []
+  const mainWtPath = activeRepo?.worktrees?.[0]?.path;
+  const isCurrentRepoWorktree = mainWtPath ? normalizePath(activeRepo.path) !== normalizePath(mainWtPath) : false;
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [isPulling, setIsPulling] = useState(false)
@@ -914,15 +918,26 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               <div className="commit-actions" style={{ width: '88px', display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
                 <button
                   className="stash-action-btn"
-                  style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                  style={{ 
+                    padding: 0, 
+                    height: '24px', 
+                    width: '24px', 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    opacity: isCurrentRepoWorktree ? 0.5 : 1,
+                    cursor: isCurrentRepoWorktree ? 'not-allowed' : 'pointer'
+                  }}
                   onClick={(e) => {
+                    if (isCurrentRepoWorktree) return;
                     e.stopPropagation()
                     setBranchStartPoint(c.hash)
                     setNewBranchName('')
                     setErrorMessage('')
                     setIsBranchModalOpen(true)
                   }}
-                  title={`Create branch from ${c.hash.substring(0, 7)}`}
+                  disabled={isCurrentRepoWorktree}
+                  title={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : `Create branch from ${c.hash.substring(0, 7)}`}
                   data-testid={`commit-branch-btn-${c.hash}`}
                 >
                   <GitBranch size={13} />

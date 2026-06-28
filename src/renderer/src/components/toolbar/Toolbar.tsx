@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { GitBranch, X, Tag } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 
+const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
 const Toolbar: React.FC = () => {
   const { getActiveRepo, refreshRepo, identities } = useRepoStore()
   const activeRepo = getActiveRepo()
@@ -18,6 +20,8 @@ const Toolbar: React.FC = () => {
   const unstagedFiles = files.filter((f) => f.working_dir !== ' ' || f.index === '?')
 
   const isIdentityRequiredAndMissing = !!(activeRepo && identities.length > 1 && !activeRepo.identityId)
+  const mainWtPath = activeRepo?.worktrees?.[0]?.path;
+  const isCurrentRepoWorktree = mainWtPath ? normalizePath(activeRepo.path) !== normalizePath(mainWtPath) : false;
 
   const handleStageAll = async () => {
     if (!activeRepo) return
@@ -139,13 +143,21 @@ const Toolbar: React.FC = () => {
           <button
             className="btn-stash"
             onClick={() => {
+              if (isCurrentRepoWorktree) return;
               setNewBranchName('')
               setErrorMessage('')
               setIsBranchModalOpen(true)
             }}
-            title="Create a new branch from latest local commit (HEAD)"
+            disabled={isCurrentRepoWorktree}
+            title={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : "Create a new branch from latest local commit (HEAD)"}
             data-testid="create-branch-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '6px',
+              opacity: isCurrentRepoWorktree ? 0.5 : 1,
+              cursor: isCurrentRepoWorktree ? 'not-allowed' : 'pointer'
+            }}
           >
             <GitBranch size={14} />
             Branch

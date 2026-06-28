@@ -68,6 +68,9 @@ const api = {
     pushTags: (repoPath: string, remote?: string) => ipcRenderer.invoke('git:pushTags', repoPath, remote),
     deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) =>
       ipcRenderer.invoke('git:deleteTag', repoPath, tagName, deleteRemote, remote),
+    getWorktrees: (repoPath: string) => ipcRenderer.invoke('git:getWorktrees', repoPath),
+    addWorktree: (repoPath: string, newPath: string, branch: string, baseBranch?: string) => ipcRenderer.invoke('git:addWorktree', repoPath, newPath, branch, baseBranch),
+    removeWorktree: (repoPath: string, targetPath: string) => ipcRenderer.invoke('git:removeWorktree', repoPath, targetPath),
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),

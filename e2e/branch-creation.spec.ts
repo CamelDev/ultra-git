@@ -54,7 +54,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await expect(activeBranch).toContainText('main')
 
       console.log('6.1. Verifying remote tracking branch is origin/main...')
-      const remoteSection = page.locator('.sidebar-section').nth(1)
+      const remoteSection = page.locator('.sidebar-section:has-text("Remote")')
       await expect(remoteSection).toContainText('origin/main')
       await expect(remoteSection).not.toContainText('origin/feature-cool')
 
@@ -215,6 +215,74 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await expect(renamedMainBranchItem).not.toBeVisible()
       console.log('Branch rename and deletion E2E tests verified successfully.')
 
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('should display local and remote branches sorted alphabetically', async () => {
+    console.log('1. Creating additional local and remote branches out of order...')
+    // Create local branches: z-local, a-local, m-local (main is already there)
+    await sandbox.git.raw(['branch', 'z-local'])
+    await sandbox.git.raw(['branch', 'a-local'])
+    await sandbox.git.raw(['branch', 'm-local'])
+    
+    // Create remote tracking branches out of order: origin/z-remote, origin/a-remote, origin/m-remote (origin/main is already there)
+    await sandbox.git.raw(['update-ref', 'refs/remotes/origin/z-remote', 'HEAD'])
+    await sandbox.git.raw(['update-ref', 'refs/remotes/origin/a-remote', 'HEAD'])
+    await sandbox.git.raw(['update-ref', 'refs/remotes/origin/m-remote', 'HEAD'])
+
+    console.log('2. Launching Electron App...')
+    const { app, page } = await launchElectronApp()
+
+    try {
+      console.log('3. Clearing localStorage...')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      console.log('4. Mocking dialog:openDirectory...')
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      console.log('5. Clicking to add repository...')
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      console.log('6. Switching to the newly added repository tab...')
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      // Expected local branches (alphabetical order): a-local, m-local, main, z-local
+      const localSection = page.locator('.sidebar-section').first()
+      const branchItems = localSection.locator('.sidebar-item')
+      
+      console.log('7. Verifying local branches order in the sidebar...')
+      await expect(branchItems).toHaveCount(4)
+      await expect(branchItems.nth(0)).toContainText('a-local')
+      await expect(branchItems.nth(1)).toContainText('m-local')
+      await expect(branchItems.nth(2)).toContainText('main')
+      await expect(branchItems.nth(3)).toContainText('z-local')
+
+      // Expected remote branches (alphabetical order): origin/a-remote, origin/m-remote, origin/main, origin/z-remote
+      const remoteSection = page.locator('.sidebar-section:has-text("Remote")')
+      const remoteItems = remoteSection.locator('.sidebar-item')
+      
+      console.log('8. Verifying remote branches order in the sidebar...')
+      await expect(remoteItems).toHaveCount(4)
+      await expect(remoteItems.nth(0)).toContainText('origin/a-remote')
+      await expect(remoteItems.nth(1)).toContainText('origin/m-remote')
+      await expect(remoteItems.nth(2)).toContainText('origin/main')
+      await expect(remoteItems.nth(3)).toContainText('origin/z-remote')
+      
     } finally {
       await app.close()
     }

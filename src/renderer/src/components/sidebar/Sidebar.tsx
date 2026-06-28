@@ -1,22 +1,24 @@
 import React, { useState } from "react"
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload } from "lucide-react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Folder, Plus, Copy } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
+
+const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
 interface SidebarProps {
   onMergeConflicts?: (conflictedFiles: Array<{ path: string; status: string }>, isRebase: boolean) => void
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
-  const { getActiveRepo, refreshRepo } = useRepoStore()
+  const { getActiveRepo, refreshRepo, switchActiveRepoPath } = useRepoStore()
   const activeRepo = getActiveRepo()
 
   const [selectedStashIndex, setSelectedStashIndex] = useState<number | null>(null)
   const [conflictWarning, setConflictWarning] = useState(false)
   const [poppingIndex, setPoppingIndex] = useState<number | null>(null)
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null)
-  
+
   const [isStashDetailsOpen, setIsStashDetailsOpen] = useState(false)
   const [detailsStashIndex, setDetailsStashIndex] = useState<number | null>(null)
   const [detailsStashMessage, setDetailsStashMessage] = useState<string | null>(null)
@@ -30,6 +32,18 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const [mergeModalOpen, setMergeModalOpen] = useState(false)
   const [mergeTargetBranch, setMergeTargetBranch] = useState("")
   const [mergeOperation, setMergeOperation] = useState<MergeOperation>("merge")
+
+  const [isWorktreeModalOpen, setIsWorktreeModalOpen] = useState(false)
+  const [newWorktreeBranch, setNewWorktreeBranch] = useState("")
+  const [newWorktreePath, setNewWorktreePath] = useState("")
+  const [baseBranch, setBaseBranch] = useState("")
+
+  const openWorktreeModal = () => {
+    setBaseBranch(activeRepo?.branch || 'main')
+    setNewWorktreeBranch('')
+    setNewWorktreePath('')
+    setIsWorktreeModalOpen(true)
+  }
 
   const branch = activeRepo?.branch || 'main'
   const status = activeRepo?.status
@@ -240,6 +254,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
 
   const handleCheckoutBranch = async (branchName: string) => {
     if (!activeRepo || branchName === branch) return
+
+    const wt = activeRepo.worktrees?.find(w => w.branch === branchName);
+    if (wt && normalizePath(wt.path) !== normalizePath(activeRepo.path)) {
+      handleSwitchWorktree(wt.path);
+      return;
+    }
+
     try {
       const res = await window.api.git.checkout(activeRepo.path, branchName)
       if (res.success) {
@@ -375,8 +396,104 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     }
   }
 
-  const localBranches = activeRepo?.branches?.local ?? [branch]
-  const remoteBranches = activeRepo?.branches?.remote ?? []
+  const handleCopyWorktreePath = async (e: React.MouseEvent, path: string) => {
+    e.stopPropagation()
+    try {
+      await window.api.app.copyToClipboard(path)
+    } catch (err) {
+      console.error('Error copying path:', err)
+    }
+  }
+
+  const handleDeleteWorktree = async (e: React.MouseEvent, path: string) => {
+    e.stopPropagation()
+    if (!activeRepo) return
+
+    const confirmRes = await window.api.app.showMessageBox({
+      type: 'warning',
+      title: 'Remove Worktree',
+      message: `Are you sure you want to remove the worktree at ${path}? Uncommitted changes might be lost.`,
+      buttons: ['Cancel', 'Remove'],
+      defaultId: 1,
+      cancelId: 0
+    })
+
+    if (!confirmRes.success || confirmRes.response !== 1) {
+      return
+    }
+
+    try {
+      const res = await window.api.git.removeWorktree(activeRepo.path, path)
+      if (res.success) {
+        await refreshRepo(activeRepo.id)
+      } else {
+        await window.api.app.showMessageBox({
+          type: 'error',
+          title: 'Error',
+          message: `Failed to remove worktree: ${res.error}`
+        })
+      }
+    } catch (err: any) {
+      console.error('Error removing worktree:', err)
+    }
+  }
+
+  const handleAddWorktreeSubmit = async () => {
+    if (!activeRepo || !newWorktreePath || !newWorktreeBranch) return
+    setIsWorktreeModalOpen(false)
+    try {
+      const res = await window.api.git.addWorktree(activeRepo.path, newWorktreePath, newWorktreeBranch, baseBranch)
+      if (res.success) {
+        await refreshRepo(activeRepo.id)
+      } else {
+        await window.api.app.showMessageBox({
+          type: 'error',
+          title: 'Error',
+          message: `Failed to add worktree: ${res.error}`
+        })
+      }
+    } catch (err: any) {
+      console.error('Error adding worktree:', err)
+    } finally {
+      setNewWorktreeBranch("")
+      setNewWorktreePath("")
+      setBaseBranch("")
+    }
+  }
+
+  const handleSwitchWorktree = async (path: string) => {
+    try {
+      await switchActiveRepoPath(path)
+    } catch (err) {
+      console.error('Error switching to worktree:', err)
+    }
+  }
+
+  const mainWtPath = activeRepo?.worktrees?.[0]?.path;
+  const currentRepoPath = activeRepo?.path;
+  const isCurrentRepoWorktree = mainWtPath ? normalizePath(currentRepoPath) !== normalizePath(mainWtPath) : false;
+
+  const localBranches = [...(activeRepo?.branches?.local ?? [branch])]
+    .filter((b) => {
+      const name = typeof b === 'string' ? b : b.name;
+      const wt = activeRepo?.worktrees?.find(w => w.branch === name);
+      if (wt) {
+        const isMain = normalizePath(wt.path) === normalizePath(mainWtPath);
+        if (!isMain) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const nameA = typeof a === 'string' ? a : a.name;
+      const nameB = typeof b === 'string' ? b : b.name;
+      return nameA.localeCompare(nameB);
+    });
+  const remoteBranches = [...(activeRepo?.branches?.remote ?? [])].sort((a, b) => a.localeCompare(b))
+
+  const allLocalBranches = [...(activeRepo?.branches?.local?.map((b) => typeof b === 'string' ? b : b.name) || [])].sort((a, b) => a.localeCompare(b));
+  const allRemoteBranches = [...(activeRepo?.branches?.remote || [])].sort((a, b) => a.localeCompare(b));
 
   return (
     <div className="sidebar" data-testid="sidebar">
@@ -392,6 +509,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           const isActive = name === branch;
           const currentAhead = isActive ? (status?.ahead ?? ahead) : ahead;
           const currentBehind = isActive ? (status?.behind ?? behind) : behind;
+          const isWTBranch = mainWtPath ? activeRepo?.worktrees?.some(wt => wt.branch === name && normalizePath(wt.path) !== normalizePath(mainWtPath)) : false;
 
           if (isActive) {
             return (
@@ -399,15 +517,15 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
                 <span data-testid="sidebar-active-branch" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
                 {(currentAhead > 0 || currentBehind > 0) && (
-                  <span 
-                    className="branch-sync-badge" 
-                    style={{ 
-                      marginLeft: 'auto', 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '6px', 
-                      fontSize: '11px', 
-                      fontWeight: 700, 
+                  <span
+                    className="branch-sync-badge"
+                    style={{
+                      marginLeft: 'auto',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '11px',
+                      fontWeight: 700,
                       padding: '2px 6px',
                       borderRadius: '4px',
                       backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -431,20 +549,31 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                   <button
                     className="stash-action-btn"
                     style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                    onClick={(e) => openRenameBranchModal(e, name)}
-                    title="Rename branch"
+                    onClick={(e) => !isWTBranch && openRenameBranchModal(e, name)}
+                    title={isWTBranch ? "Cannot rename branch checked out in a worktree" : "Rename branch"}
+                    disabled={isWTBranch}
                     data-testid="sidebar-rename-branch-btn"
                   >
-                    <Edit2 size={13} />
+                    <Edit2 size={13} color={isWTBranch ? "var(--text-secondary)" : undefined} />
                   </button>
                   <button
                     className="stash-action-btn"
-                    style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                    onClick={(e) => openCreateBranchModal(e)}
-                    title="Create a new branch from latest local commit (HEAD)"
+                    style={{
+                      padding: 0,
+                      height: '24px',
+                      width: '24px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: isCurrentRepoWorktree ? 0.5 : 1,
+                      cursor: isCurrentRepoWorktree ? 'not-allowed' : 'pointer'
+                    }}
+                    onClick={(e) => !isCurrentRepoWorktree && openCreateBranchModal(e)}
+                    title={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : "Create a new branch from latest local commit (HEAD)"}
+                    disabled={isCurrentRepoWorktree}
                     data-testid="sidebar-create-branch-btn"
                   >
-                    <GitBranch size={13} />
+                    <GitBranch size={13} color={isCurrentRepoWorktree ? "var(--text-secondary)" : undefined} />
                   </button>
                   <button
                     className="stash-action-btn delete"
@@ -453,16 +582,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                     title="Cannot delete the currently checked out branch"
                     data-testid="sidebar-delete-branch-btn"
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={13} color="var(--text-secondary)" />
                   </button>
                 </div>
               </div>
             );
           } else {
+            const isWTBranch = mainWtPath ? activeRepo?.worktrees?.some(wt => wt.branch === name && normalizePath(wt.path) !== normalizePath(mainWtPath)) : false;
             return (
-              <div 
-                className="sidebar-item" 
-                style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} 
+              <div
+                className="sidebar-item"
+                style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
                 key={name}
                 onClick={() => handleCheckoutBranch(name)}
                 data-testid={`sidebar-branch-${name}`}
@@ -470,15 +600,15 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
                 {(currentAhead > 0 || currentBehind > 0) && (
-                  <span 
-                    className="branch-sync-badge" 
-                    style={{ 
-                      marginLeft: 'auto', 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '6px', 
-                      fontSize: '11px', 
-                      fontWeight: 700, 
+                  <span
+                    className="branch-sync-badge"
+                    style={{
+                      marginLeft: 'auto',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '11px',
+                      fontWeight: 700,
                       padding: '2px 6px',
                       borderRadius: '4px',
                       backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -520,26 +650,89 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                   <button
                     className="stash-action-btn"
                     style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                    onClick={(e) => openRenameBranchModal(e, name)}
-                    title="Rename branch"
+                    onClick={(e) => !isWTBranch && openRenameBranchModal(e, name)}
+                    title={isWTBranch ? "Cannot rename branch checked out in a worktree" : "Rename branch"}
+                    disabled={isWTBranch}
                     data-testid={`rename-branch-btn-${name}`}
                   >
-                    <Edit2 size={13} />
+                    <Edit2 size={13} color={isWTBranch ? "var(--text-secondary)" : undefined} />
                   </button>
                   <button
                     className="stash-action-btn delete"
                     style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                    onClick={(e) => handleDeleteBranch(e, name)}
-                    title="Delete branch"
+                    onClick={(e) => !isWTBranch && handleDeleteBranch(e, name)}
+                    title={isWTBranch ? "Cannot delete branch checked out in a worktree" : "Delete branch"}
+                    disabled={isWTBranch}
                     data-testid={`delete-branch-btn-${name}`}
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={13} color={isWTBranch ? "var(--text-secondary)" : undefined} />
                   </button>
                 </div>
               </div>
             );
           }
         })}
+      </div>
+
+      <div className="sidebar-section">
+        <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>Worktree Branches</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>{activeRepo?.worktrees?.length ?? 0}</span>
+            <button
+              className="stash-action-btn"
+              style={{ padding: 2, height: 20, width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={openWorktreeModal}
+              title="Add new worktree"
+              data-testid="add-worktree-btn"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
+        {(!activeRepo?.worktrees || activeRepo.worktrees.length === 0) ? (
+          <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>No worktrees</div>
+        ) : (
+          activeRepo.worktrees.map((wt, index) => {
+            const isActiveRepo = normalizePath(wt.path) === normalizePath(activeRepo.path);
+            const isMainWorktree = index === 0;
+            const shortPath = wt.path.split(/[/\\]/).pop();
+            return (
+              <div
+                key={wt.path}
+                className={`sidebar-item ${isActiveRepo ? 'active' : ''}`}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: isActiveRepo ? 'default' : 'pointer' }}
+                onClick={() => !isActiveRepo && handleSwitchWorktree(wt.path)}
+                title={wt.path}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <Folder className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath} <span style={{ color: 'var(--text-secondary)' }}>({wt.branch})</span></span>
+                </div>
+                <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                  <button
+                    className="stash-action-btn"
+                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    onClick={(e) => handleCopyWorktreePath(e, wt.path)}
+                    title="Copy path"
+                  >
+                    <Copy size={13} />
+                  </button>
+                  {!isMainWorktree && !isActiveRepo && (
+                    <button
+                      className="stash-action-btn delete"
+                      style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                      onClick={(e) => handleDeleteWorktree(e, wt.path)}
+                      title="Remove worktree"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })
+        )}
       </div>
 
       <div className="sidebar-section">
@@ -633,6 +826,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         )}
       </div>
 
+
+
       <div className="sidebar-section">
         <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>Tags</span>
@@ -706,21 +901,21 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       )}
 
       {isBranchModalOpen && (
-        <div 
-          className="diff-modal-overlay" 
-          style={{ zIndex: 1100 }} 
+        <div
+          className="diff-modal-overlay"
+          style={{ zIndex: 1100 }}
           onClick={() => setIsBranchModalOpen(false)}
         >
-          <div 
-            className="diff-modal-content" 
-            style={{ 
-              maxWidth: '400px', 
-              width: '90%', 
-              height: 'auto', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)', 
-              padding: 0 
+          <div
+            className="diff-modal-content"
+            style={{
+              maxWidth: '400px',
+              width: '90%',
+              height: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+              padding: 0
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -730,8 +925,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 <GitBranch size={16} />
                 {branchModalMode === 'create' ? 'Create New Branch' : 'Rename Branch'}
               </h2>
-              <button 
-                className="diff-modal-close" 
+              <button
+                className="diff-modal-close"
                 onClick={() => setIsBranchModalOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
                 data-testid="close-branch-modal-btn"
@@ -799,6 +994,167 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 data-testid="create-branch-submit-btn"
               >
                 {branchModalMode === 'create' ? 'Create Branch' : 'Rename'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Worktree Modal */}
+      {isWorktreeModalOpen && (
+        <div className="modal-overlay" style={{ zIndex: 1000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="modal-content" style={{ backgroundColor: 'var(--bg-primary)', borderRadius: '8px', width: '400px', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Create New Worktree</h3>
+              <button
+                onClick={() => setIsWorktreeModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>Branch Name (existing or new)</label>
+                <input
+                  type="text"
+                  value={newWorktreeBranch}
+                  onChange={(e) => setNewWorktreeBranch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                  placeholder="e.g., feature/new-idea"
+                  autoFocus
+                  data-testid="worktree-branch-input"
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>Base Branch (starting point)</label>
+                <select
+                  value={baseBranch}
+                  onChange={(e) => setBaseBranch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                  data-testid="worktree-base-branch-select"
+                >
+                  <option value={branch}>Current: {branch}</option>
+                  {allLocalBranches.filter(b => b !== branch).length > 0 && (
+                    <optgroup label="Local Branches">
+                      {allLocalBranches.filter(b => b !== branch).map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {allRemoteBranches.length > 0 && (
+                    <optgroup label="Remote Branches">
+                      {allRemoteBranches.map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>Destination Path</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={newWorktreePath}
+                    onChange={(e) => setNewWorktreePath(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '13px',
+                      outline: 'none'
+                    }}
+                    placeholder="e.g., ../ultra-git-feature"
+                    data-testid="worktree-path-input"
+                  />
+                  <button
+                    className="btn-secondary"
+                    style={{ padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={async () => {
+                      try {
+                        const result = await window.api.app.openDirectory()
+                        if (result && !result.canceled && result.path) setNewWorktreePath(result.path)
+                      } catch (err) {
+                        console.error('Error selecting directory:', err)
+                      }
+                    }}
+                    title="Browse for directory"
+                  >
+                    Browse...
+                  </button>
+                </div>
+                {activeRepo && newWorktreePath.trim() !== '' && (() => {
+                  const nParent = activeRepo.path.replace(/\\/g, '/').toLowerCase();
+                  const nChild = newWorktreePath.replace(/\\/g, '/').toLowerCase();
+                  if (nChild === nParent || nChild.startsWith(nParent + '/')) {
+                    return (
+                      <div style={{ color: '#ef4444', fontSize: '12px', display: 'flex', alignItems: 'flex-start', gap: '4px', marginTop: '2px' }}>
+                        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <span>Worktrees shouldn't be created inside the repository directory. Please select a path outside the repository.</span>
+                      </div>
+                    )
+                  }
+                  return null;
+                })()}
+              </div>
+            </div>
+
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px', backgroundColor: 'var(--bg-secondary)' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setIsWorktreeModalOpen(false)}
+                data-testid="worktree-cancel-btn"
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleAddWorktreeSubmit}
+                disabled={!newWorktreeBranch.trim() || !newWorktreePath.trim() || (activeRepo && (() => {
+                  const nParent = activeRepo.path.replace(/\\/g, '/').toLowerCase();
+                  const nChild = newWorktreePath.replace(/\\/g, '/').toLowerCase();
+                  return nChild === nParent || nChild.startsWith(nParent + '/');
+                })())}
+                style={{
+                  opacity: (!newWorktreeBranch.trim() || !newWorktreePath.trim() || (activeRepo && (() => {
+                    const nParent = activeRepo.path.replace(/\\/g, '/').toLowerCase();
+                    const nChild = newWorktreePath.replace(/\\/g, '/').toLowerCase();
+                    return nChild === nParent || nChild.startsWith(nParent + '/');
+                  })())) ? 0.5 : 1,
+                  cursor: (!newWorktreeBranch.trim() || !newWorktreePath.trim() || (activeRepo && (() => {
+                    const nParent = activeRepo.path.replace(/\\/g, '/').toLowerCase();
+                    const nChild = newWorktreePath.replace(/\\/g, '/').toLowerCase();
+                    return nChild === nParent || nChild.startsWith(nParent + '/');
+                  })())) ? 'not-allowed' : 'pointer'
+                }}
+                data-testid="worktree-create-submit-btn"
+              >
+                Create
               </button>
             </div>
           </div>

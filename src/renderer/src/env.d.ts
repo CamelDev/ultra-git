@@ -52,6 +52,9 @@ declare global {
         createTag: (repoPath: string, tagName: string) => Promise<{ success: boolean; error?: string }>;
         pushTags: (repoPath: string, remote?: string) => Promise<{ success: boolean; error?: string }>;
         deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) => Promise<{ success: boolean; error?: string }>;
+        getWorktrees: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ path: string; branch: string; hash: string }>; error?: string }>;
+        addWorktree: (repoPath: string, newPath: string, branch: string, baseBranch?: string) => Promise<{ success: boolean; error?: string }>;
+        removeWorktree: (repoPath: string, targetPath: string) => Promise<{ success: boolean; error?: string }>;
       };
       app: {
         openDirectory: () => Promise<{ canceled: boolean; path?: string }>;

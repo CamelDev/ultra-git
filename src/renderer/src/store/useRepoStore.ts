@@ -35,6 +35,7 @@ export interface Repository {
     remote: string[];
   };
   tags?: string[];
+  worktrees?: Array<{ path: string; branch: string; hash: string }>;
 }
 
 interface RepoState {
@@ -50,6 +51,7 @@ interface RepoState {
   refreshRepo: (id: string) => Promise<void>;
   setSelectedCommitHash: (hash: string | null) => void;
   initializeRepos: (paths: string[], activePath: string | null) => Promise<void>;
+  switchActiveRepoPath: (path: string) => Promise<void>;
   
   // Helper to get active repo
   getActiveRepo: () => Repository | undefined;
@@ -61,7 +63,7 @@ interface RepoState {
   setRepoIdentity: (repoId: string, identityId: string | undefined) => Promise<void>;
 }
 
-const normalizePath = (p: string) => p.toLowerCase().replace(/\\/g, '/');
+const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '');
 
 const saveToLocalStorage = (repositories: Repository[], activeId: string | null) => {
   try {
@@ -129,7 +131,16 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       return;
     }
 
-    const name = resolvedPath.split(/[\\/]/).pop() || resolvedPath;
+    let name = resolvedPath.split(/[\\/]/).pop() || resolvedPath;
+    try {
+      const wtRes = await window.api.git.getWorktrees(resolvedPath);
+      if (wtRes.success && wtRes.data && wtRes.data.length > 0) {
+        const mainPath = wtRes.data[0].path;
+        name = mainPath.split(/[\\/]/).pop() || name;
+      }
+    } catch (e) {
+      console.error('Failed to get worktrees for naming', e);
+    }
     const id = Math.random().toString(36).substring(7);
 
     const repoIdentities = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('repo-identities') || '{}') : {};
@@ -175,6 +186,34 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     window.api.git.watchRepo(resolvedPath).catch(err => console.error('Failed to watch repo on add', err));
     await get().refreshRepo(id);
+  },
+
+  switchActiveRepoPath: async (path: string) => {
+    const { repositories, activeId } = get();
+    if (!activeId) return;
+
+    let resolvedPath = path;
+    try {
+      const res = await window.api.app.resolvePath(path);
+      if (res.success && res.path) {
+        resolvedPath = res.path;
+      }
+    } catch (e) {
+      console.error('Failed to resolve path', e);
+    }
+
+    set((state) => ({
+      repositories: state.repositories.map(r => 
+        r.id === activeId ? { ...r, path: resolvedPath, isLoading: true } : r
+      )
+    }));
+
+    window.api.git.watchRepo(resolvedPath).catch(err => 
+      console.error('Failed to watch repo on path switch', err)
+    );
+
+    await get().refreshRepo(activeId);
+    saveToLocalStorage(get().repositories, activeId);
   },
 
   removeRepo: (id: string) => {
@@ -223,8 +262,17 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const globalIdList = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [];
 
     // Build Repository objects
-    const newRepos: Repository[] = uniquePaths.map((p) => {
-      const name = p.split(/[\\/]/).pop() || p;
+    const newRepos: Repository[] = await Promise.all(uniquePaths.map(async (p) => {
+      let name = p.split(/[\\/]/).pop() || p;
+      try {
+        const wtRes = await window.api.git.getWorktrees(p);
+        if (wtRes.success && wtRes.data && wtRes.data.length > 0) {
+          const mainPath = wtRes.data[0].path;
+          name = mainPath.split(/[\\/]/).pop() || name;
+        }
+      } catch (e) {
+        console.error('Failed to get worktrees for naming on init', e);
+      }
       const id = Math.random().toString(36).substring(7);
       const normalized = normalizePath(p);
       let identityId = repoIdentities[normalized];
@@ -257,7 +305,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         error: null,
         identityId
       };
-    });
+    }));
 
     // Resolve active path
     let resolvedActivePath = activePath;
@@ -311,12 +359,13 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     });
 
     try {
-      const [statusRes, logRes, stashRes, branchesRes, tagsRes] = await Promise.all([
+      const [statusRes, logRes, stashRes, branchesRes, tagsRes, worktreesRes] = await Promise.all([
         window.api.git.status(repo.path),
         window.api.git.log(repo.path),
         window.api.git.stashList(repo.path),
         window.api.git.getBranches(repo.path),
-        window.api.git.getTags(repo.path)
+        window.api.git.getTags(repo.path),
+        window.api.git.getWorktrees(repo.path)
       ]);
 
       set((state) => {
@@ -324,6 +373,10 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         const stashes = stashRes.success ? (stashRes.data ?? []) : [];
         const updatedRepos = state.repositories.map(r => {
           if (r.id === id) {
+            const wts = worktreesRes.success ? worktreesRes.data : (r.worktrees || []);
+            const mainPath = wts[0]?.path || r.path;
+            const mainName = mainPath.split(/[\\/]/).pop() || r.name;
+
             return {
               ...r,
               status: statusRes.success ? statusRes.data : null,
@@ -332,6 +385,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
               stashes,
               branches: branchesRes.success ? branchesRes.data : (r.branches || { local: [], remote: [] }),
               tags: tagsRes.success ? tagsRes.data : (r.tags || []),
+              worktrees: wts,
+              name: mainName,
               error: statusRes.success ? null : (statusRes.error ?? 'Unknown error'),
               isLoading: false
             };
