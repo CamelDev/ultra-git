@@ -39,7 +39,7 @@ This command runs `electron-vite build` and subsequently triggers `playwright te
 
 ## 4. E2E Test Suite Inventory
 
-Below is the directory of all existing end-to-end tests located under the `e2e/` folder.
+Below is the directory of all end-to-end tests located under the `e2e/` folder.
 
 ### Application Lifecycle & Sanity
 #### `e2e/example.spec.ts`
@@ -57,6 +57,7 @@ Below is the directory of all existing end-to-end tests located under the `e2e/`
 
 #### `e2e/sidebar.spec.ts`
 * **should resize the sidebar and persist the width**: Tests dragging the sidebar resize border to adjust its panel width and asserts that the new width is saved to `localStorage` and loaded on launch.
+* **should reset sidebar and details panel widths on choosing Reset Layout**: Verifies that dragging sidebar/details resizers, choosing "Reset Layout" from settings, restores both panel widths to default sizes (sidebar: `280px`, details: `380px`).
 
 #### `e2e/details.spec.ts`
 * **should resize the details panel and persist the width**: Tests dragging the commit details panel resize border, verifying that its width is persisted to `localStorage`.
@@ -70,6 +71,7 @@ Below is the directory of all existing end-to-end tests located under the `e2e/`
 #### `e2e/branch-creation.spec.ts`
 * **should create a new branch, switch to it, show actual remote, list multiple branches, and checkout on click**: Checks toolbar branch creation, switching active branches, listing them in the sidebar, and clicking a branch to check it out.
 * **should display local and remote branches sorted alphabetically**: Asserts that local and remote branches lists are rendered sorted alphabetically to prevent disorganized views.
+* **should support force deleting an unmerged branch**: Verifies that trying to delete a branch containing commits not merged into `main` triggers a warning, and confirming the action force deletes the branch from the sidebar and from disk (`git branch -D`).
 
 #### `e2e/commit-branch-creation.spec.ts`
 * **should create branch from a specific commit in history**: Verifies clicking the branch creation button next to a historical commit hash inside the log and confirms a new branch starts from that exact commit.
@@ -79,7 +81,7 @@ Below is the directory of all existing end-to-end tests located under the `e2e/`
 
 ---
 
-### Commit Operations (Reset & Squash)
+### Commit Operations (Reset, Squash, & Conflict Resolution)
 #### `e2e/commit-reset.spec.ts`
 * **should perform a soft reset to a specific commit**: Checks selecting a commit, choosing the Soft Reset option, and verifying that HEAD moves back but the changes remain in the staging area.
 * **should perform a hard reset to a specific commit**: Checks hard resetting to a selected commit, verifying that HEAD updates and the working tree is completely wiped clean.
@@ -88,6 +90,10 @@ Below is the directory of all existing end-to-end tests located under the `e2e/`
 * **should successfully squash commits into one when worktree is clean**: Tests selecting a commit node, editing the squash message, squashing all newer commits above it into a single commit, and verifying the updated git log.
 * **should display warning and disable confirm button when worktree is dirty**: Verifies that commit squashing is disabled when the workspace has uncommitted changes to prevent data loss.
 
+#### `e2e/conflict-resolver.spec.ts`
+* **should support resolving conflicts hunk-by-hunk and committing the resolution**: Asserts that merge conflicts auto-open the conflict resolver modal showing the 3-pane layout, allows selecting Ours/Theirs/Both hunks, previews the output, applies resolutions to disk, and commits the merge successfully.
+* **should support aborting a merge conflict**: Verifies aborting merge conflicts closes the resolver and returns the repository to a clean state.
+
 ---
 
 ### Code Diff & Selection Details
@@ -95,10 +101,12 @@ Below is the directory of all existing end-to-end tests located under the `e2e/`
 * **should display changed files and support standard diff functions**: Asserts that selecting a commit populates the selection details panel, showing modified files and status badges, and clicks a file to open a split code diff.
 * **should support Esc key closing, auto-scrolling to deep changes, and overview ruler**: Checks that the `DiffModal` closes on ESC keypress, automatically scrolls to the first line of code changes, and jumps viewport lines when clicking the vertical **Diff Overview Ruler**.
 * **should support keyboard arrow navigation and auto-scrolling of selected commits**: Tests using `ArrowUp` / `ArrowDown` to navigate commits in the log, verifying that the selected commit changes and is scrolled into view.
+* **should support binary file detection in diff modal**: Verifies that committing a binary file containing null bytes and viewing its diff shows the text-not-available placeholder instead of rendering lines.
 
 #### `e2e/active-changes.spec.ts`
 * **should display active changes, support staging/unstaging, and open diff modal**: Checks that unstaged changes show in the active changes panel, supports "Stage" / "Unstage" actions, and opens the split diff viewer for working directory files.
 * **should show warning dialog and not commit if nothing is staged**: Verifies that attempting to commit changes without staging first triggers a warning message dialog and blocks the commit.
+* **should support stashing all changes via the toolbar**: Verifies that clicking "Stash all" in the toolbar stashes staged/unstaged changes, hides the active changes WIP panel, and adds a new stash to the sidebar.
 
 ---
 
@@ -107,6 +115,8 @@ Below is the directory of all existing end-to-end tests located under the `e2e/`
 * **should satisfy all worktree requirements: load in-place, hide worktree branch, and restrict branch actions**: Tests that worktrees load within the unified tab view, checked-out worktree branches are hidden from the normal "Local Branches" sidebar list to avoid clutter, and branch creation/deleting/renaming is disabled inside active worktrees.
 * **should support picking a base branch during worktree creation**: Tests choosing an existing local or remote branch as the starting base for a new worktree.
 * **should support merging and rebasing from another branch in a worktree**: Verifies merging and rebasing operations executing successfully inside a worktree.
+* **should support rebasing the active worktree branch onto another branch**: Verifies that performing a rebase from within an active worktree replays commits from the target branch onto the worktree branch.
+* **should support deleting a worktree via the sidebar and disk**: Verifies clicking the sidebar trash icon next to an inactive extra worktree confirms removal, deletes the directory from disk, and prunes the worktree from the git repository.
 
 ---
 
@@ -133,52 +143,5 @@ Below is the directory of all existing end-to-end tests located under the `e2e/`
 
 ### Stash Operations
 #### `e2e/stashes.spec.ts`
-* **should display stash action buttons and support details view, pop confirmation, and delete confirmation**: Verifies popping a stash (handling pop conflicts), dropping stashes, listing stash entries, and viewing stash files diffs.
-
----
-
-## 5. E2E Test Suite Implementation Plan
-
-The following is the roadmap of E2E tests to implement to achieve complete test coverage of all existing application features.
-
-### [x] Interactive Conflict Resolver (`e2e/conflict-resolver.spec.ts`)
-- [x] Verify that triggering a conflict on merge/rebase displays the merge conflict banner with a "Resolve Conflicts" action button.
-- [x] Verify that clicking the "Resolve Conflicts" button opens the interactive `ConflictResolver` modal overlay.
-- [x] Verify that the conflict resolver displays the **3-Pane Layout** containing Ours (left column), Theirs (middle column), and Result preview (right column).
-- [x] Verify that conflict hunk navigation tabs work properly.
-- [x] Verify choosing Ours, Theirs, or Both updates the Result preview pane accordingly.
-- [x] Verify that clicking "Apply & Stage" writes the resolved hunk to disk, stages the file, and marks it resolved in the sidebar file checklist.
-- [x] Verify that the "Abort Merge/Rebase" button aborts the git operation and closes the resolver.
-- [x] Verify that the "Continue Rebase" or "Commit Merge" buttons are disabled until all conflicted files are resolved, and complete the operation on click.
-
-### [x] Stash Pop with Conflicts (Append to `e2e/stashes.spec.ts`)
-- [x] Trigger a stash pop where conflicts occur between local edits and stashed files.
-- [x] Assert that the stash pop conflict banner is displayed in the sidebar.
-- [x] Verify that conflicted files are listed in uncommitted changes with conflict markers.
-
-### [x] Toolbar: Stash All Changes (Append to `e2e/active-changes.spec.ts` or `e2e/stashes.spec.ts`)
-- [x] Make uncommitted modifications in the repository.
-- [x] Click "Stash all" in the toolbar.
-- [x] Verify that uncommitted changes are cleared from the WIP panel and a new stash entry is added to the sidebar.
-
-### [x] Force Delete Local Branch (Append to `e2e/branch-creation.spec.ts`)
-- [x] Create a local branch and add a commit to it.
-- [x] Switch to a different branch.
-- [x] Click delete on the unmerged branch in the sidebar.
-- [x] Mock the dialog prompt to confirm the force-delete choice.
-- [x] Verify that the branch is force-deleted using `git branch -D`.
-
-### [x] Worktree Management Actions (Append to `e2e/worktree.spec.ts`)
-- [x] Verify rebasing inside a worktree by selecting a branch in a worktree context, clicking rebase, and checking the updated commits.
-- [x] Verify deleting a worktree by clicking the trash icon next to an extra worktree in the sidebar, confirming, and checking that the worktree directory is deleted from disk and the sidebar list.
-
-### [x] DiffModal: Binary File Detection (Append to `e2e/commit-diff.spec.ts`)
-- [x] Commit a binary file (e.g. image or mock binary data).
-- [x] Select the commit and click the binary file to view its diff.
-- [x] Verify that the `DiffModal` shows the placeholder message: `"Binary file (diff not available as text)"` instead of rendering text lines.
-
-### [x] Settings: Reset Layout (Append to `e2e/sidebar.spec.ts` or `e2e/details.spec.ts`)
-- [x] Resize the sidebar and details panels to custom widths.
-- [x] Click the settings cog and choose "Reset Layout".
-- [x] Verify that the panel widths are restored to their default styles.
-
+* **should display stash action buttons and support details view, pop confirmation, and delete confirmation**: Verifies popping a stash, dropping stashes, listing stash entries, and viewing stash files diffs.
+* **should support pop stash with conflicts and display the conflict banner**: Verifies popping a stash with merge conflicts correctly sets conflict warning state and shows the warning banner in the sidebar.
