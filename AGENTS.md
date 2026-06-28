@@ -29,7 +29,7 @@ This document defines the specialized roles and guidelines for the AI agents col
     - Establishing and enforcing testing standards across the project.
 
 ## Interaction Guidelines
-- Updates to the project structure and primary logic must be documented in a [walkthrough](file:///C:/Users/Kamil/.gemini/antigravity/brain/3f5e3ae8-1a5c-40aa-9f06-9babe626447f/walkthrough.md).
+- Updates to the project structure and primary logic must be documented in a [walkthrough](~/.gemini/antigravity-ide/brain/<conversation-id>/walkthrough.md).
 - Any deviations from the initial tech stack (Bun, Electron, React) require review.
 - All Git operations should be designed for maximum transparency and user safety (Undo/Redo, visual diffs).
 - All new features must be covered by appropriate unit tests and end-to-end (E2E) tests, ideally using Playwright.
