@@ -9,7 +9,11 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron, R
 * **Native Repository Loader**: Open local repositories using a native directory selection dialog.
 * **Workspace Persistence**: Active and open repositories are saved to `localStorage` and automatically restored when the application starts.
 
-### 2. Alphabetic Sidebar Navigation
+### 2. Folder-Grouped Sidebar Navigation
+* **Folder-Grouped Tree View**: Local and remote branches are grouped by folder structures (delimited by `/`).
+  * Collapsible/expandable folder nodes with custom icons (`Folder` and chevrons).
+  * The folder containing the active branch is auto-expanded by default.
+  * The top-level remote name (e.g., `origin/`) is automatically stripped under the Remote section to avoid redundant nesting.
 * **Local Branches**: Sorted alphabetically, showing the active branch with dynamic Ahead/Behind counts (`↑` / `↓`) compared to the remote-tracking branch.
   * **Branch Management**: Create local branches from HEAD, rename branches, and delete branches (includes safe checking and force-delete prompts for unmerged changes).
   * **Advanced Merging & Rebasing**: Merge branches using strategy presets (Fast-forward if possible, Always create merge commit `--no-ff`, and Squash commits `--squash`), or perform rebases onto selected branches.
@@ -19,7 +23,7 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron, R
   * **Worktree Isolation**: Automatically hides branches checked out in extra worktrees from the local branches list to avoid workspace clutter.
   * **Safety Constraints**: Branch deletion, renaming, or creation is automatically restricted inside active worktrees to prevent workspace corruption.
   * **Worktree Actions**: Merge/rebase worktree branches, copy paths, or remove worktrees via `git worktree remove`.
-* **Remote Branches**: Alphabetic listing of all remote branches.
+* **Remote Branches**: Alphabetic listing of all remote branches (organized as a tree view without top-level remote name nodes).
 * **Stashes**: Lists all stash entries with relative timestamps and descriptions.
   * **Stash Details**: View stash files and diffs.
   * **Stash Operations**: Pop stashes back into the workspace (with merge conflict warning banners) or drop stashes.
@@ -33,6 +37,7 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron, R
   * `Empty circle`: Commit exists locally only (ahead of remote).
   * `Filled circle`: Commit is pushed and in-sync.
 * **Keyboard Navigation**: Use `ArrowUp` / `ArrowDown` to navigate commits, which automatically scrolls the active item into view and loads its details.
+* **Cherry-Picking**: Select a commit from the commit history graph/log and cherry-pick it directly into your currently checked out branch (handles clean merges and conflict-trigger flows).
 * **Sync Panel Operations**:
   * **Pull**: Pull changes from the tracking remote. Automatically displays a banner and opens the Conflict Resolver if conflicts arise.
   * **Push**: Push commits. Warns if behind remote, providing options to pull first or force push.
@@ -146,7 +151,7 @@ Before starting, ensure you have initialized GSD (Git-based Software Development
 - [x] Implement Merge, Rebase, and worktree actions.
 - [x] Build conflict detection logic and Conflict Resolution UI.
 - [x] Implement hunk-by-hunk resolution selector (Ours, Theirs, Both) and Result preview.
-- [ ] Implement Git Cherry-pick options.
+- [x] Implement Git Cherry-pick options.
 
 ### Phase 7: Polish & Extra Integrations
 - [x] Refine dark mode theme, resizable panels, and layout state saving.

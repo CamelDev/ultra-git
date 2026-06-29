@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Folder, Plus, Copy } from "lucide-react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Folder, Plus, Copy, ChevronRight, ChevronDown } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
@@ -9,6 +9,84 @@ const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$
 interface SidebarProps {
   onMergeConflicts?: (conflictedFiles: Array<{ path: string; status: string }>, isRebase: boolean) => void
 }
+
+interface TreeBranchNode {
+  type: 'branch';
+  name: string;
+  shortName: string;
+  branchInfo: string | { name: string; ahead: number; behind: number };
+}
+
+interface TreeFolderNode {
+  type: 'folder';
+  name: string;
+  fullName: string;
+  children: (TreeFolderNode | TreeBranchNode)[];
+}
+
+type TreeNode = TreeFolderNode | TreeBranchNode;
+
+const buildBranchTree = (
+  branches: Array<string | { name: string; ahead: number; behind: number }>,
+  isRemote: boolean = false
+): TreeNode[] => {
+  const rootChildren: TreeNode[] = [];
+
+  for (const b of branches) {
+    const fullName = typeof b === 'string' ? b : b.name;
+    let parts = fullName.split('/');
+    if (isRemote && parts.length > 1) {
+      parts = parts.slice(1);
+    }
+    
+    let currentFolderList: TreeNode[] = rootChildren;
+    let currentPath = '';
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      
+      if (i === parts.length - 1) {
+        currentFolderList.push({
+          type: 'branch',
+          name: fullName,
+          shortName: part,
+          branchInfo: b,
+        });
+      } else {
+        let folder = currentFolderList.find(
+          (node): node is TreeFolderNode => node.type === 'folder' && node.name === part
+        );
+        if (!folder) {
+          folder = {
+            type: 'folder',
+            name: part,
+            fullName: currentPath,
+            children: [],
+          };
+          currentFolderList.push(folder);
+        }
+        currentFolderList = folder.children;
+      }
+    }
+  }
+
+  const sortTree = (nodes: TreeNode[]): TreeNode[] => {
+    return nodes.sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === 'folder' ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    }).map(node => {
+      if (node.type === 'folder') {
+        node.children = sortTree(node.children);
+      }
+      return node;
+    });
+  };
+
+  return sortTree(rootChildren);
+};
 
 const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const { getActiveRepo, refreshRepo, switchActiveRepoPath } = useRepoStore()
@@ -48,6 +126,24 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const branch = activeRepo?.branch || 'main'
   const status = activeRepo?.status
   const stashes = activeRepo?.stashes ?? []
+
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+
+  React.useEffect(() => {
+    if (!branch) return;
+    const parts = branch.split('/');
+    if (parts.length > 1) {
+      setExpandedFolders((prev) => {
+        const next = { ...prev };
+        let currentPath = '';
+        for (let i = 0; i < parts.length - 1; i++) {
+          currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
+          next[`local-${currentPath}`] = true;
+        }
+        return next;
+      });
+    }
+  }, [branch]);
 
   const handlePopStash = async (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
@@ -495,6 +591,319 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const allLocalBranches = [...(activeRepo?.branches?.local?.map((b) => typeof b === 'string' ? b : b.name) || [])].sort((a, b) => a.localeCompare(b));
   const allRemoteBranches = [...(activeRepo?.branches?.remote || [])].sort((a, b) => a.localeCompare(b));
 
+  const localBranchTree = buildBranchTree(localBranches);
+  const remoteBranchTree = buildBranchTree(remoteBranches, true);
+
+  const renderLocalBranchNode = (node: TreeNode, depth: number): React.ReactNode => {
+    if (node.type === 'folder') {
+      const folderKey = `local-${node.fullName}`;
+      const isExpanded = expandedFolders[folderKey] ?? false;
+      const toggleExpand = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setExpandedFolders((prev) => ({
+          ...prev,
+          [folderKey]: !prev[folderKey],
+        }));
+      };
+
+      return (
+        <div key={node.fullName}>
+          <div
+            className="sidebar-item"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              cursor: 'pointer',
+              paddingLeft: `${20 + depth * 12}px`,
+            }}
+            onClick={toggleExpand}
+          >
+            {isExpanded ? (
+              <ChevronDown size={14} style={{ marginRight: '6px', flexShrink: 0 }} />
+            ) : (
+              <ChevronRight size={14} style={{ marginRight: '6px', flexShrink: 0 }} />
+            )}
+            <Folder size={14} style={{ marginRight: '8px', color: 'var(--accent-light)', flexShrink: 0 }} />
+            <span style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {node.name}
+            </span>
+          </div>
+          {isExpanded && node.children.map((child) => renderLocalBranchNode(child, depth + 1))}
+        </div>
+      );
+    }
+
+    // Leaf branch node
+    const b = node.branchInfo;
+    const name = node.name;
+    const shortName = node.shortName;
+    const ahead = typeof b === 'string' ? 0 : b.ahead;
+    const behind = typeof b === 'string' ? 0 : b.behind;
+    const isActive = name === branch;
+    const currentAhead = isActive ? (status?.ahead ?? ahead) : ahead;
+    const currentBehind = isActive ? (status?.behind ?? behind) : behind;
+    const isWTBranch = mainWtPath ? activeRepo?.worktrees?.some(wt => wt.branch === name && normalizePath(wt.path) !== normalizePath(mainWtPath)) : false;
+
+    if (isActive) {
+      return (
+        <div
+          className="sidebar-item active"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            paddingLeft: `${20 + depth * 12}px`,
+          }}
+          key={name}
+        >
+          <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+          <span
+            data-testid="sidebar-active-branch"
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            <span style={{ display: 'none' }}>{name}</span>
+            {shortName}
+          </span>
+          {(currentAhead > 0 || currentBehind > 0) && (
+            <span
+              className="branch-sync-badge"
+              style={{
+                marginLeft: 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '2px 6px',
+                borderRadius: '4px',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                userSelect: 'none',
+              }}
+              data-testid="branch-sync-badge"
+            >
+              {currentAhead > 0 && (
+                <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-ahead">
+                  ↑<span>{currentAhead}</span>
+                </span>
+              )}
+              {currentBehind > 0 && (
+                <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-behind">
+                  ↓<span>{currentBehind}</span>
+                </span>
+              )}
+            </span>
+          )}
+          <div
+            className="branch-actions"
+            style={{
+              marginLeft: (currentAhead > 0 || currentBehind > 0) ? '8px' : 'auto',
+              display: 'flex',
+              gap: '4px',
+              flexShrink: 0,
+            }}
+          >
+            <button
+              className="stash-action-btn"
+              style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={(e) => !isWTBranch && openRenameBranchModal(e, name)}
+              title={isWTBranch ? "Cannot rename branch checked out in a worktree" : "Rename branch"}
+              disabled={isWTBranch}
+              data-testid="sidebar-rename-branch-btn"
+            >
+              <Edit2 size={13} color={isWTBranch ? "var(--text-secondary)" : undefined} />
+            </button>
+            <button
+              className="stash-action-btn"
+              style={{
+                padding: 0,
+                height: '24px',
+                width: '24px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: isCurrentRepoWorktree ? 0.5 : 1,
+                cursor: isCurrentRepoWorktree ? 'not-allowed' : 'pointer',
+              }}
+              onClick={(e) => !isCurrentRepoWorktree && openCreateBranchModal(e)}
+              title={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : "Create a new branch from latest local commit (HEAD)"}
+              disabled={isCurrentRepoWorktree}
+              data-testid="sidebar-create-branch-btn"
+            >
+              <GitBranch size={13} color={isCurrentRepoWorktree ? "var(--text-secondary)" : undefined} />
+            </button>
+            <button
+              className="stash-action-btn delete"
+              style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              disabled={true}
+              title="Cannot delete the currently checked out branch"
+              data-testid="sidebar-delete-branch-btn"
+            >
+              <Trash2 size={13} color="var(--text-secondary)" />
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className="sidebar-item"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          cursor: 'pointer',
+          paddingLeft: `${20 + depth * 12}px`,
+        }}
+        key={name}
+        onClick={() => handleCheckoutBranch(name)}
+        data-testid={`sidebar-branch-${name}`}
+      >
+        <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ display: 'none' }}>{name}</span>
+          {shortName}
+        </span>
+        {(currentAhead > 0 || currentBehind > 0) && (
+          <span
+            className="branch-sync-badge"
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              padding: '2px 6px',
+              borderRadius: '4px',
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              userSelect: 'none',
+            }}
+            data-testid="branch-sync-badge"
+          >
+            {currentAhead > 0 && (
+              <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-ahead">
+                ↑<span>{currentAhead}</span>
+              </span>
+            )}
+            {currentBehind > 0 && (
+              <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-behind">
+                ↓<span>{currentBehind}</span>
+              </span>
+            )}
+          </span>
+        )}
+        <div
+          className="branch-actions"
+          style={{
+            marginLeft: (currentAhead > 0 || currentBehind > 0) ? '8px' : 'auto',
+            display: 'flex',
+            gap: '4px',
+            flexShrink: 0,
+          }}
+        >
+          <button
+            className="stash-action-btn"
+            style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={(e) => openMergeModal(e, name)}
+            title={`Merge ${name} into ${branch}`}
+            data-testid={`merge-branch-btn-${name}`}
+          >
+            <GitMerge size={12} />
+          </button>
+          <button
+            className="stash-action-btn"
+            style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={(e) => openRebaseModal(e, name)}
+            title={`Rebase ${branch} onto ${name}`}
+            data-testid={`rebase-branch-btn-${name}`}
+          >
+            <GitCommit size={12} />
+          </button>
+          <button
+            className="stash-action-btn"
+            style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={(e) => !isWTBranch && openRenameBranchModal(e, name)}
+            title={isWTBranch ? "Cannot rename branch checked out in a worktree" : "Rename branch"}
+            disabled={isWTBranch}
+            data-testid={`rename-branch-btn-${name}`}
+          >
+            <Edit2 size={13} color={isWTBranch ? "var(--text-secondary)" : undefined} />
+          </button>
+          <button
+            className="stash-action-btn delete"
+            style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={(e) => !isWTBranch && handleDeleteBranch(e, name)}
+            title={isWTBranch ? "Cannot delete branch checked out in a worktree" : "Delete branch"}
+            disabled={isWTBranch}
+            data-testid={`delete-branch-btn-${name}`}
+          >
+            <Trash2 size={13} color={isWTBranch ? "var(--text-secondary)" : undefined} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRemoteBranchNode = (node: TreeNode, depth: number): React.ReactNode => {
+    if (node.type === 'folder') {
+      const folderKey = `remote-${node.fullName}`;
+      const isExpanded = expandedFolders[folderKey] ?? false;
+      const toggleExpand = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setExpandedFolders((prev) => ({
+          ...prev,
+          [folderKey]: !prev[folderKey],
+        }));
+      };
+
+      return (
+        <div key={node.fullName}>
+          <div
+            className="sidebar-item"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              cursor: 'pointer',
+              paddingLeft: `${20 + depth * 12}px`,
+            }}
+            onClick={toggleExpand}
+          >
+            {isExpanded ? (
+              <ChevronDown size={14} style={{ marginRight: '6px', flexShrink: 0 }} />
+            ) : (
+              <ChevronRight size={14} style={{ marginRight: '6px', flexShrink: 0 }} />
+            )}
+            <Folder size={14} style={{ marginRight: '8px', color: 'var(--accent-light)', flexShrink: 0 }} />
+            <span style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {node.name}
+            </span>
+          </div>
+          {isExpanded && node.children.map((child) => renderRemoteBranchNode(child, depth + 1))}
+        </div>
+      );
+    }
+
+    const name = node.name;
+    const shortName = node.shortName;
+
+    return (
+      <div
+        key={name}
+        className="sidebar-item"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          paddingLeft: `${20 + depth * 12}px`,
+        }}
+      >
+        <Layers className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ display: 'none' }}>{name}</span>
+          {shortName}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="sidebar" data-testid="sidebar">
       <div className="sidebar-section">
@@ -502,176 +911,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           <span>Local</span>
           <span>{localBranches.length}</span>
         </div>
-        {localBranches.map((b) => {
-          const name = typeof b === 'string' ? b : b.name;
-          const ahead = typeof b === 'string' ? 0 : b.ahead;
-          const behind = typeof b === 'string' ? 0 : b.behind;
-          const isActive = name === branch;
-          const currentAhead = isActive ? (status?.ahead ?? ahead) : ahead;
-          const currentBehind = isActive ? (status?.behind ?? behind) : behind;
-          const isWTBranch = mainWtPath ? activeRepo?.worktrees?.some(wt => wt.branch === name && normalizePath(wt.path) !== normalizePath(mainWtPath)) : false;
-
-          if (isActive) {
-            return (
-              <div className="sidebar-item active" style={{ display: 'flex', alignItems: 'center' }} key={name}>
-                <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
-                <span data-testid="sidebar-active-branch" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                {(currentAhead > 0 || currentBehind > 0) && (
-                  <span
-                    className="branch-sync-badge"
-                    style={{
-                      marginLeft: 'auto',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      userSelect: 'none'
-                    }}
-                    data-testid="branch-sync-badge"
-                  >
-                    {currentAhead > 0 && (
-                      <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-ahead">
-                        ↑<span>{currentAhead}</span>
-                      </span>
-                    )}
-                    {currentBehind > 0 && (
-                      <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-behind">
-                        ↓<span>{currentBehind}</span>
-                      </span>
-                    )}
-                  </span>
-                )}
-                <div className="branch-actions" style={{ marginLeft: (currentAhead > 0 || currentBehind > 0) ? '8px' : 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
-                  <button
-                    className="stash-action-btn"
-                    style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                    onClick={(e) => !isWTBranch && openRenameBranchModal(e, name)}
-                    title={isWTBranch ? "Cannot rename branch checked out in a worktree" : "Rename branch"}
-                    disabled={isWTBranch}
-                    data-testid="sidebar-rename-branch-btn"
-                  >
-                    <Edit2 size={13} color={isWTBranch ? "var(--text-secondary)" : undefined} />
-                  </button>
-                  <button
-                    className="stash-action-btn"
-                    style={{
-                      padding: 0,
-                      height: '24px',
-                      width: '24px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: isCurrentRepoWorktree ? 0.5 : 1,
-                      cursor: isCurrentRepoWorktree ? 'not-allowed' : 'pointer'
-                    }}
-                    onClick={(e) => !isCurrentRepoWorktree && openCreateBranchModal(e)}
-                    title={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : "Create a new branch from latest local commit (HEAD)"}
-                    disabled={isCurrentRepoWorktree}
-                    data-testid="sidebar-create-branch-btn"
-                  >
-                    <GitBranch size={13} color={isCurrentRepoWorktree ? "var(--text-secondary)" : undefined} />
-                  </button>
-                  <button
-                    className="stash-action-btn delete"
-                    style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                    disabled={true}
-                    title="Cannot delete the currently checked out branch"
-                    data-testid="sidebar-delete-branch-btn"
-                  >
-                    <Trash2 size={13} color="var(--text-secondary)" />
-                  </button>
-                </div>
-              </div>
-            );
-          } else {
-            const isWTBranch = mainWtPath ? activeRepo?.worktrees?.some(wt => wt.branch === name && normalizePath(wt.path) !== normalizePath(mainWtPath)) : false;
-            return (
-              <div
-                className="sidebar-item"
-                style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                key={name}
-                onClick={() => handleCheckoutBranch(name)}
-                data-testid={`sidebar-branch-${name}`}
-              >
-                <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                {(currentAhead > 0 || currentBehind > 0) && (
-                  <span
-                    className="branch-sync-badge"
-                    style={{
-                      marginLeft: 'auto',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      userSelect: 'none'
-                    }}
-                    data-testid="branch-sync-badge"
-                  >
-                    {currentAhead > 0 && (
-                      <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-ahead">
-                        ↑<span>{currentAhead}</span>
-                      </span>
-                    )}
-                    {currentBehind > 0 && (
-                      <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '1px' }} data-testid="sync-behind">
-                        ↓<span>{currentBehind}</span>
-                      </span>
-                    )}
-                  </span>
-                )}
-                <div className="branch-actions" style={{ marginLeft: (currentAhead > 0 || currentBehind > 0) ? "8px" : "auto", display: "flex", gap: "4px", flexShrink: 0 }}>
-                  <button
-                    className="stash-action-btn"
-                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                    onClick={(e) => openMergeModal(e, name)}
-                    title={`Merge ${name} into ${branch}`}
-                    data-testid={`merge-branch-btn-${name}`}
-                  >
-                    <GitMerge size={12} />
-                  </button>
-                  <button
-                    className="stash-action-btn"
-                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                    onClick={(e) => openRebaseModal(e, name)}
-                    title={`Rebase ${branch} onto ${name}`}
-                    data-testid={`rebase-branch-btn-${name}`}
-                  >
-                    <GitCommit size={12} />
-                  </button>
-                  <button
-                    className="stash-action-btn"
-                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                    onClick={(e) => !isWTBranch && openRenameBranchModal(e, name)}
-                    title={isWTBranch ? "Cannot rename branch checked out in a worktree" : "Rename branch"}
-                    disabled={isWTBranch}
-                    data-testid={`rename-branch-btn-${name}`}
-                  >
-                    <Edit2 size={13} color={isWTBranch ? "var(--text-secondary)" : undefined} />
-                  </button>
-                  <button
-                    className="stash-action-btn delete"
-                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                    onClick={(e) => !isWTBranch && handleDeleteBranch(e, name)}
-                    title={isWTBranch ? "Cannot delete branch checked out in a worktree" : "Delete branch"}
-                    disabled={isWTBranch}
-                    data-testid={`delete-branch-btn-${name}`}
-                  >
-                    <Trash2 size={13} color={isWTBranch ? "var(--text-secondary)" : undefined} />
-                  </button>
-                </div>
-              </div>
-            );
-          }
-        })}
+        {localBranchTree.map((node) => renderLocalBranchNode(node, 0))}
       </div>
 
       <div className="sidebar-section">
@@ -772,12 +1012,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         {remoteBranches.length === 0 ? (
           <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>No remote branches</div>
         ) : (
-          remoteBranches.map((rb) => (
-            <div key={rb} className="sidebar-item" style={{ display: 'flex', alignItems: 'center' }}>
-              <Layers className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rb}</span>
-            </div>
-          ))
+          remoteBranchTree.map((node) => renderRemoteBranchNode(node, 0))
         )}
       </div>
 
