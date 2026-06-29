@@ -224,32 +224,38 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
             disabled={isAborting || isCompleting}
             style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}
             data-testid="abort-merge-btn"
+            data-tooltip={`Abort the current ${isRebase ? 'rebase' : isCherryPick ? 'cherry-pick' : 'merge'} process`}
           >
             <XCircle size={13} />
             {isAborting ? "Aborting\u2026" : `Abort ${isRebase ? "Rebase" : isCherryPick ? "Cherry-pick" : "Merge"}`}
           </button>
-          <button
-            className="btn-primary"
-            onClick={handleComplete}
-            disabled={!allResolved || isCompleting || isAborting}
-            title={!allResolved ? `Still ${conflictedFiles.filter(f => !resolvedFiles.has(f.path)).length} file(s) to resolve` : undefined}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "12px",
-              opacity: !allResolved ? 0.45 : 1,
-              cursor: !allResolved ? "not-allowed" : "pointer"
-            }}
-            data-testid="complete-merge-btn"
+          <div
+            data-tooltip={!allResolved ? `Still ${conflictedFiles.filter(f => !resolvedFiles.has(f.path)).length} file(s) to resolve` : "Complete the conflict resolution and commit changes"}
+            style={{ display: "inline-flex" }}
           >
-            <GitMerge size={13} />
-            {isCompleting ? "Committing\u2026" : (isRebase ? "Continue Rebase" : isCherryPick ? "Continue Cherry-pick" : "Commit Merge")}
-          </button>
+            <button
+              className="btn-primary"
+              onClick={handleComplete}
+              disabled={!allResolved || isCompleting || isAborting}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "12px",
+                opacity: !allResolved ? 0.45 : 1,
+                cursor: !allResolved ? "not-allowed" : "pointer",
+                width: "100%"
+              }}
+              data-testid="complete-merge-btn"
+            >
+              <GitMerge size={13} />
+              {isCompleting ? "Committing\u2026" : (isRebase ? "Continue Rebase" : isCherryPick ? "Continue Cherry-pick" : "Commit Merge")}
+            </button>
+          </div>
           {onDismiss && (
             <button
               onClick={onDismiss}
-              title="Minimize — conflicts remain active"
+              data-tooltip="Minimize — conflicts remain active"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -327,7 +333,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
                     whiteSpace: "nowrap",
                     textDecoration: isResolved ? "line-through" : "none",
                     flex: 1
-                  }} title={f.path}>
+                  }} data-tooltip={f.path}>
                     {f.path.split("/").pop() || f.path}
                   </span>
                   {isSelected && <ChevronRight size={12} style={{ color: "#a78bfa", flexShrink: 0 }} />}
@@ -366,6 +372,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
                   cursor: resolvedFiles.has(selectedFile || "") ? "not-allowed" : "pointer"
                 }}
                 data-testid="mark-resolved-no-markers-btn"
+                data-tooltip="Mark this file as resolved and stage it"
               >
                 <Check size={14} />
                 Mark Resolved &amp; Stage
@@ -388,6 +395,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
                   <button
                     key={idx}
                     onClick={() => setActiveHunk(idx)}
+                    data-tooltip={`View conflict hunk #${idx + 1}`}
                     style={{
                       padding: "3px 10px",
                       borderRadius: "4px",
@@ -406,25 +414,29 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
                   </button>
                 ))}
                 <div style={{ marginLeft: "auto", display: "flex", gap: "6px" }}>
-                  <button
-                    className="btn-primary"
-                    onClick={handleMarkResolved}
-                    disabled={resolvedFiles.has(selectedFile || "") || !allHunksResolved}
-                    title={!allHunksResolved ? "Pick a resolution for every conflict hunk first" : "Write resolved content to disk and stage the file"}
-                    style={{
-                      fontSize: "11px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      padding: "4px 12px",
-                      opacity: (!allHunksResolved || resolvedFiles.has(selectedFile || "")) ? 0.5 : 1,
-                      cursor: (!allHunksResolved || resolvedFiles.has(selectedFile || "")) ? "not-allowed" : "pointer"
-                    }}
-                    data-testid="mark-resolved-btn"
+                  <div
+                    data-tooltip={!allHunksResolved ? "Pick a resolution for every conflict hunk first" : "Write resolved content to disk and stage the file"}
+                    style={{ display: "inline-flex" }}
                   >
-                    <Check size={12} />
-                    Apply &amp; Stage
-                  </button>
+                    <button
+                      className="btn-primary"
+                      onClick={handleMarkResolved}
+                      disabled={resolvedFiles.has(selectedFile || "") || !allHunksResolved}
+                      style={{
+                        fontSize: "11px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        padding: "4px 12px",
+                        opacity: (!allHunksResolved || resolvedFiles.has(selectedFile || "")) ? 0.5 : 1,
+                        cursor: (!allHunksResolved || resolvedFiles.has(selectedFile || "")) ? "not-allowed" : "pointer"
+                      }}
+                      data-testid="mark-resolved-btn"
+                    >
+                      <Check size={12} />
+                      Apply &amp; Stage
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -449,6 +461,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
                       <button
                         key={opt.key}
                         onClick={() => resolveHunk(activeHunk, opt.key)}
+                        data-tooltip={opt.key === 'ours' ? "Accept current changes (ours)" : opt.key === 'theirs' ? "Accept incoming changes (theirs)" : "Accept both changes"}
                         style={{
                           padding: "4px 12px",
                           borderRadius: "4px",
@@ -466,7 +479,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
                     ))}
                     <button
                       onClick={() => loadFileDiff(selectedFile!)}
-                      title="Reload from disk"
+                      data-tooltip="Reload from disk"
                       style={{
                         marginLeft: "auto",
                         padding: "4px 8px",
@@ -583,7 +596,7 @@ const HunkPane: React.FC<HunkPaneProps> = ({ label, content, color, isSelected, 
       outline: "none"
     }}
     onClick={onClick}
-    title="Click to accept this side"
+    data-tooltip="Click to accept this side"
   >
     <div style={{
       padding: "6px 12px",

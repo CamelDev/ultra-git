@@ -20,6 +20,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenRepo }) => {
           className="landing-btn" 
           onClick={onOpenRepo}
           data-testid="landing-open-repo-btn"
+          data-tooltip="Open a local Git repository from your computer"
         >
           <FolderOpen size={16} />
           <span>Open GIT repository</span>

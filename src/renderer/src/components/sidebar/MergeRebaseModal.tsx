@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react"
+import React, { useState } from "react"
 import { GitMerge, GitCommit, X, Loader, AlertTriangle } from "lucide-react"
 
 export type MergeStrategy = "merge" | "no-ff" | "squash"
@@ -100,6 +100,7 @@ export const MergeRebaseModal: React.FC<MergeRebaseModalProps> = ({
             onClick={onClose}
             style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", padding: 4 }}
             data-testid="close-merge-modal-btn"
+            data-tooltip="Close modal"
           >
             <X size={16} />
           </button>
@@ -220,7 +221,7 @@ export const MergeRebaseModal: React.FC<MergeRebaseModalProps> = ({
           gap: "8px",
           background: "var(--bg-secondary)"
         }}>
-          <button className="btn-secondary" onClick={onClose} disabled={isLoading} data-testid="cancel-merge-btn">
+          <button className="btn-secondary" onClick={onClose} disabled={isLoading} data-testid="cancel-merge-btn" data-tooltip="Cancel and close modal">
             Cancel
           </button>
           <button
@@ -235,6 +236,7 @@ export const MergeRebaseModal: React.FC<MergeRebaseModalProps> = ({
               borderColor: isMerge ? "#a78bfa" : "#34d399"
             }}
             data-testid="confirm-merge-btn"
+            data-tooltip={isMerge ? `Merge ${sourceBranch} into ${targetBranch}` : `Rebase ${targetBranch} onto ${sourceBranch}`}
           >
             {isLoading && <Loader size={12} style={{ animation: "spin 1s linear infinite" }} />}
             {isMerge

@@ -62,6 +62,7 @@ const TitleBar: React.FC = () => {
             size={15}
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
             data-testid="settings-cog-btn"
+            data-tooltip="Global Settings"
           />
           {isSettingsOpen && (
             <div className="settings-dropdown">
@@ -75,6 +76,7 @@ const TitleBar: React.FC = () => {
                     setIsSettingsOpen(false)
                   }}
                   data-testid="manage-identities-btn"
+                  data-tooltip="Manage Git identities and profiles"
                 >
                   Manage Identities
                 </button>
@@ -85,6 +87,7 @@ const TitleBar: React.FC = () => {
                   className="settings-dropdown-action"
                   onClick={handleResetLayout}
                   data-testid="reset-layout-btn"
+                  data-tooltip="Reset application layout to default"
                 >
                   Reset Layout
                 </span>
@@ -107,10 +110,11 @@ const TitleBar: React.FC = () => {
               size={12} 
               onClick={(e) => handleCloseTab(e, tab.id)}
               data-testid="close-tab-btn"
+              data-tooltip="Close Tab"
             />
           </div>
         ))}
-        <div className="add-tab-btn" onClick={handleAddRepo} title="Open Repository" data-testid="add-repo-btn">
+        <div className="add-tab-btn" onClick={handleAddRepo} data-tooltip="Open Repository" data-testid="add-repo-btn">
           <Plus size={16} />
         </div>
       </div>

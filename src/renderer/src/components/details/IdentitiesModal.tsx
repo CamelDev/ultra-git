@@ -210,7 +210,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
           <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
             Manage Git Identities
           </h2>
-          <button className="diff-modal-close" onClick={onClose} data-testid="identities-close-btn">
+          <button className="diff-modal-close" onClick={onClose} data-testid="identities-close-btn" data-tooltip="Close modal">
             <X size={16} />
           </button>
         </div>
@@ -263,7 +263,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={identity.label}>
+                          <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} data-tooltip={identity.label}>
                             {identity.label}
                           </span>
                           {identity.provider && identity.provider !== 'custom' && (
@@ -284,7 +284,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                           className="btn-secondary" 
                           style={{ padding: '6px', border: 'none', color: 'var(--text-secondary)', backgroundColor: 'transparent' }}
                           onClick={() => handleStartEdit(identity)}
-                          title="Edit profile"
+                          data-tooltip="Edit profile"
                           data-testid={`edit-profile-${identity.label}`}
                         >
                           <Pencil size={12} />
@@ -299,7 +299,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                             }
                             removeIdentity(identity.id)
                           }}
-                          title="Delete profile"
+                          data-tooltip="Delete profile"
                           data-testid={`delete-profile-${identity.label}`}
                         >
                           <Trash2 size={12} />
@@ -378,6 +378,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                       opacity: editingId && !isActive ? 0.4 : 1
                     }}
                     data-testid={`provider-tab-${prov}`}
+                    data-tooltip={`Select ${tabName} identity provider`}
                   >
                     {renderProviderIcon(prov, 12)}
                     <span>{tabName}</span>
@@ -426,6 +427,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                           setConnectedUser(null)
                           setPersonalAccessToken('')
                         }}
+                        data-tooltip="Disconnect provider account"
                       >
                         Disconnect
                       </button>
@@ -466,6 +468,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                           onClick={handleConnectToken}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 12px' }}
                           data-testid="connect-token-btn"
+                          data-tooltip="Connect token to account"
                         >
                           {isValidating && <Loader2 size={12} className="spin-animation" />}
                           <span>{isValidating ? 'Connecting...' : 'Connect'}</span>
@@ -546,6 +549,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 10px' }}
                     onClick={handleBrowseSshKey}
                     data-testid="ssh-key-browse-btn"
+                    data-tooltip="Browse SSH key files"
                   >
                     <FolderOpen size={14} />
                     <span>Browse</span>
@@ -562,6 +566,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                     style={{ flex: 1 }}
                     onClick={handleReset}
                     data-testid="cancel-edit-btn"
+                    data-tooltip="Cancel changes and reset form"
                   >
                     Cancel
                   </button>
@@ -571,6 +576,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                   className="btn-primary" 
                   style={{ flex: 2, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                   data-testid="save-profile-btn"
+                  data-tooltip={editingId ? "Save changes to profile" : "Create new Git identity profile"}
                 >
                   <Plus size={14} />
                   <span>{editingId ? 'Save Changes' : 'Add Profile'}</span>

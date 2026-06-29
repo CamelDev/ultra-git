@@ -129,7 +129,7 @@ export const ActiveChanges: React.FC = () => {
                         marginRight: '8px',
                         flex: 1
                       }}
-                      title={file.path}
+                      data-tooltip={file.path}
                     >
                       {file.path}
                     </span>
@@ -142,7 +142,7 @@ export const ActiveChanges: React.FC = () => {
                         e.stopPropagation()
                         handleStageFile(file.path)
                       }}
-                      title="Stage changes"
+                      data-tooltip="Stage changes"
                       style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
                       <span>Stage</span>
@@ -191,7 +191,7 @@ export const ActiveChanges: React.FC = () => {
                         marginRight: '8px',
                         flex: 1
                       }}
-                      title={oldPath ? `${oldPath} -> ${file.path}` : file.path}
+                      data-tooltip={oldPath ? `${oldPath} -> ${file.path}` : file.path}
                     >
                       {oldPath ? `${oldPath} -> ${file.path}` : file.path}
                     </span>
@@ -204,7 +204,7 @@ export const ActiveChanges: React.FC = () => {
                         e.stopPropagation()
                         handleUnstageFile(file.path)
                       }}
-                      title="Unstage changes"
+                      data-tooltip="Unstage changes"
                       style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
                       <ArrowLeft size={12} />

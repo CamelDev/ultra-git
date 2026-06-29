@@ -543,6 +543,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
             onClick={onClose}
             style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
             data-testid="cherry-pick-modal-close"
+            data-tooltip="Close modal"
           >
             <X size={16} />
           </button>
@@ -635,6 +636,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
           <button
             onClick={handleCherryPick}
             disabled={!selectedCommitHash || cherryPickLoading}
+            data-tooltip="Cherry pick selected commit into current branch"
             style={{
               padding: '6px 16px',
               fontSize: '13px',
@@ -749,7 +751,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
                           flex: 1,
                           color: isFileSelected ? 'var(--text-primary)' : 'var(--text-secondary)'
                         }}
-                        title={file.path}
+                        data-tooltip={file.path}
                       >
                         {file.path}
                       </span>

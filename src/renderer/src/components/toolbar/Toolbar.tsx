@@ -155,7 +155,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
               setIsBranchModalOpen(true)
             }}
             disabled={isCurrentRepoWorktree}
-            title={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : "Create a new branch from latest local commit (HEAD)"}
+            data-tooltip={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : "Create a new branch from latest local commit (HEAD)"}
             data-testid="create-branch-btn"
             style={{ 
               display: 'flex', 
@@ -174,7 +174,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
             onClick={() => {
               setIsCherryPickModalOpen(true)
             }}
-            title="Cherry pick from another branch"
+            data-tooltip="Cherry pick from another branch"
             data-testid="cherry-pick-btn"
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
@@ -189,7 +189,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
               setTagErrorMessage('')
               setIsTagModalOpen(true)
             }}
-            title="Create a new tag from latest local commit (HEAD)"
+            data-tooltip="Create a new tag from latest local commit (HEAD)"
             data-testid="create-tag-btn"
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
@@ -208,6 +208,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                 onClick={handleStageAll}
                 disabled={unstagedFiles.length === 0}
                 style={{ opacity: unstagedFiles.length === 0 ? 0.5 : 1, cursor: unstagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
+                data-tooltip="Stage all unstaged changes"
               >
                 Stage all
               </button>
@@ -216,6 +217,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                 onClick={handleUnstageAll}
                 disabled={stagedFiles.length === 0}
                 style={{ opacity: stagedFiles.length === 0 ? 0.5 : 1, cursor: stagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
+                data-tooltip="Unstage all staged changes"
               >
                 Unstage all
               </button>
@@ -224,7 +226,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                 onClick={handleStashAll}
                 disabled={files.length === 0}
                 style={{ opacity: files.length === 0 ? 0.5 : 1, cursor: files.length === 0 ? 'not-allowed' : 'pointer' }}
-                title="Stash all uncommitted changes (staged and unstaged)"
+                data-tooltip="Stash all uncommitted changes (staged and unstaged)"
                 data-testid="stash-all-btn"
               >
                 Stash all
@@ -261,7 +263,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                     cursor: (commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing) ? 'not-allowed' : 'pointer' 
                   }}
                   data-testid="commit-btn"
-                  title={isIdentityRequiredAndMissing ? "Please select a Git identity to enable committing" : undefined}
+                  data-tooltip={isIdentityRequiredAndMissing ? "Please select a Git identity to enable committing" : undefined}
                 >
                   Commit
                 </button>
@@ -301,6 +303,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                 onClick={() => setIsBranchModalOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
                 data-testid="close-branch-modal-btn"
+                data-tooltip="Close modal"
               >
                 <X size={16} />
               </button>
@@ -350,6 +353,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                 className="btn-secondary"
                 onClick={() => setIsBranchModalOpen(false)}
                 data-testid="cancel-branch-btn"
+                data-tooltip="Cancel and close modal"
               >
                 Cancel
               </button>
@@ -359,6 +363,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                 disabled={!newBranchName.trim()}
                 style={{ opacity: !newBranchName.trim() ? 0.5 : 1, cursor: !newBranchName.trim() ? 'not-allowed' : 'pointer' }}
                 data-testid="create-branch-submit-btn"
+                data-tooltip="Create branch"
               >
                 Create Branch
               </button>
@@ -397,6 +402,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                 onClick={() => setIsTagModalOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
                 data-testid="close-tag-modal-btn"
+                data-tooltip="Close modal"
               >
                 <X size={16} />
               </button>
@@ -446,6 +452,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                 className="btn-secondary"
                 onClick={() => setIsTagModalOpen(false)}
                 data-testid="cancel-tag-btn"
+                data-tooltip="Cancel and close modal"
               >
                 Cancel
               </button>
@@ -455,6 +462,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                 disabled={!newTagName.trim()}
                 style={{ opacity: !newTagName.trim() ? 0.5 : 1, cursor: !newTagName.trim() ? 'not-allowed' : 'pointer' }}
                 data-testid="create-tag-submit-btn"
+                data-tooltip="Create tag"
               >
                 Create Tag
               </button>

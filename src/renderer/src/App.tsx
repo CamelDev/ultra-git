@@ -8,6 +8,7 @@ import { useRepoStore } from "./store/useRepoStore"
 import { ActiveChanges } from "./components/active-changes/ActiveChanges"
 import { ConflictResolver } from "./components/sidebar/ConflictResolver"
 import LandingPage from "./components/layout/LandingPage"
+import { useTooltip } from "./hooks/useTooltip"
 
 interface ConflictState {
   active: boolean
@@ -20,6 +21,7 @@ function App() {
   const { addRepo, getActiveRepo, refreshRepo, initializeRepos } = useRepoStore()
   const activeRepo = getActiveRepo()
   const [isInitialized, setIsInitialized] = useState(false)
+  useTooltip()
 
   const handleOpenRepo = async () => {
     console.log('Renderer: Requesting openDirectory dialog')

@@ -115,7 +115,7 @@ const DetailsPanel: React.FC = () => {
                     e.currentTarget.style.backgroundColor = 'transparent'
                     e.currentTarget.style.color = copied ? '#10b981' : 'var(--text-secondary)'
                   }}
-                  title="Copy full SHA"
+                  data-tooltip="Copy full SHA"
                 >
                   {copied ? <Check size={12} /> : <Copy size={12} />}
                 </button>
@@ -169,7 +169,7 @@ const DetailsPanel: React.FC = () => {
                 marginRight: '8px', 
                 flex: 1 
               }} 
-              title={file.path}
+              data-tooltip={file.path}
             >
               {file.path}
             </span>

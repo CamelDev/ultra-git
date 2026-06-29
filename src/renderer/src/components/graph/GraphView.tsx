@@ -549,6 +549,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               fontWeight: 600
             }}
             data-testid="pull-btn"
+            data-tooltip="Pull changes from remote repository"
           >
             <ArrowDown size={14} className={isPulling ? 'spin-animation' : ''} />
             <span>{isPulling ? 'Pulling...' : 'Pull'}</span>
@@ -588,6 +589,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 borderRight: 'none'
               }}
               data-testid="push-btn"
+              data-tooltip="Push changes to remote repository"
             >
               <ArrowUp size={14} className={isPushing ? 'spin-animation' : ''} />
               <span>{isPushing ? 'Pushing...' : 'Push'}</span>
@@ -623,6 +625,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 borderLeft: '1px solid var(--border)'
               }}
               data-testid="push-dropdown-btn"
+              data-tooltip="Push Options"
             >
               <ChevronDown size={14} />
             </button>
@@ -663,6 +666,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   }}
                   className="dropdown-item-hover"
                   data-testid="push-option"
+                  data-tooltip="Push commits to tracking remote branch"
                 >
                   Push
                 </button>
@@ -684,6 +688,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   }}
                   className="dropdown-item-hover"
                   data-testid="force-push-option"
+                  data-tooltip="Force push commits to tracking remote branch (overwrite remote history)"
                 >
                   Force Push
                 </button>
@@ -732,6 +737,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   }}
                   className="dropdown-item-hover"
                   data-testid="set-upstream-option"
+                  data-tooltip="Set default remote branch for tracking"
                 >
                   Set Upstream...
                 </button>
@@ -767,6 +773,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   }}
                   className="dropdown-item-hover"
                   data-testid="set-remote-option"
+                  data-tooltip="Set remote repository URL"
                 >
                   Set Remote...
                 </button>
@@ -801,7 +808,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               size={14} 
               className="settings-cog-log"
               onClick={() => setIdentitiesModalOpen(true)}
-              title="Manage Git Identities"
+              data-tooltip="Manage Git Identities"
               data-testid="log-manage-identities-btn"
               style={{ flexShrink: 0 }}
             />
@@ -845,22 +852,22 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
           {onOpenConflictResolver && (
             <button
               onClick={onOpenConflictResolver}
+              data-tooltip="Open the conflict resolution helper"
               style={{
                 marginLeft: '8px',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
-                padding: '3px 10px',
+                padding: '4px 10px',
+                backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
                 borderRadius: '4px',
-                border: '1px solid rgba(239, 68, 68, 0.5)',
-                background: 'rgba(239, 68, 68, 0.15)',
                 color: '#f87171',
                 fontSize: '11px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'background 0.15s'
+                fontWeight: 600,
+                cursor: 'pointer'
               }}
-              data-testid="open-conflict-resolver-btn"
+              data-testid="open-resolver-btn"
             >
               Resolve Conflicts <ArrowRight size={11} />
             </button>
@@ -914,7 +921,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   />
                 )}
               </div>
-              <div className="commit-message" title={c.message}>{c.message}</div>
+              <div className="commit-message" data-tooltip={c.message}>{c.message}</div>
               <div className="commit-actions" style={{ width: '88px', display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
                 <button
                   className="stash-action-btn"
@@ -937,7 +944,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                     setIsBranchModalOpen(true)
                   }}
                   disabled={isCurrentRepoWorktree}
-                  title={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : `Create branch from ${c.hash.substring(0, 7)}`}
+                  data-tooltip={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : `Create branch from ${c.hash.substring(0, 7)}`}
                   data-testid={`commit-branch-btn-${c.hash}`}
                 >
                   <GitBranch size={13} />
@@ -952,7 +959,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                     setResetError('')
                     setIsResetModalOpen(true)
                   }}
-                  title={`Reset branch to ${c.hash.substring(0, 7)}`}
+                  data-tooltip={`Reset branch to ${c.hash.substring(0, 7)}`}
                   data-testid={`commit-reset-btn-${c.hash}`}
                 >
                   <RotateCcw size={13} />
@@ -974,7 +981,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                     setSquashError('')
                     setIsSquashModalOpen(true)
                   }}
-                  title={`Squash this and newer commits`}
+                  data-tooltip={`Squash this and newer commits`}
                   data-testid={`commit-squash-btn-${c.hash}`}
                 >
                   <Layers size={13} />
@@ -1028,6 +1035,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 onClick={() => setIsRemoteModalOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
                 data-testid="close-remote-modal-btn"
+                data-tooltip="Close modal"
               >
                 <X size={16} />
               </button>
@@ -1218,6 +1226,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 className="btn-secondary"
                 onClick={() => setIsRemoteModalOpen(false)}
                 data-testid="remote-cancel-btn"
+                data-tooltip="Cancel and close modal"
               >
                 Cancel
               </button>
@@ -1230,6 +1239,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   cursor: (!remoteName.trim() || !remoteBranch.trim() || isPushing) ? 'not-allowed' : 'pointer' 
                 }}
                 data-testid="remote-submit-btn"
+                data-tooltip="Set Remote & Push"
               >
                 {isPushing ? 'Pushing...' : 'Set Remote & Push'}
               </button>
@@ -1268,6 +1278,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 onClick={() => setIsUpstreamModalOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
                 data-testid="close-upstream-modal-btn"
+                data-tooltip="Close modal"
               >
                 <X size={16} />
               </button>
@@ -1317,6 +1328,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 className="btn-secondary"
                 onClick={() => setIsUpstreamModalOpen(false)}
                 data-testid="cancel-upstream-btn"
+                data-tooltip="Cancel and close modal"
               >
                 Cancel
               </button>
@@ -1326,6 +1338,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 disabled={!upstreamBranch.trim() || isPushing}
                 style={{ opacity: (!upstreamBranch.trim() || isPushing) ? 0.5 : 1, cursor: (!upstreamBranch.trim() || isPushing) ? 'not-allowed' : 'pointer' }}
                 data-testid="upstream-submit-btn"
+                data-tooltip="Set Upstream & Push"
               >
                 {isPushing ? 'Pushing...' : 'Set Upstream & Push'}
               </button>
@@ -1459,6 +1472,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 onClick={() => setIsResetModalOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
                 data-testid="close-reset-modal-btn"
+                data-tooltip="Close modal"
               >
                 <X size={16} />
               </button>
@@ -1565,6 +1579,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 onClick={() => setIsResetModalOpen(false)}
                 disabled={isResetting}
                 data-testid="cancel-reset-btn"
+                data-tooltip="Cancel and close modal"
               >
                 Cancel
               </button>
@@ -1579,6 +1594,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   cursor: isResetting ? 'not-allowed' : 'pointer' 
                 }}
                 data-testid="confirm-reset-btn"
+                data-tooltip={`Reset branch (${resetMode === 'hard' ? 'Hard' : 'Soft'})`}
               >
                 {isResetting ? 'Resetting...' : `Reset Branch (${resetMode === 'hard' ? 'Hard' : 'Soft'})`}
               </button>
@@ -1616,6 +1632,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 onClick={() => setIsSquashModalOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
                 data-testid="close-squash-modal-btn"
+                data-tooltip="Close modal"
               >
                 <X size={16} />
               </button>
@@ -1727,6 +1744,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 onClick={() => setIsSquashModalOpen(false)}
                 disabled={isSquashing}
                 data-testid="cancel-squash-btn"
+                data-tooltip="Cancel and close modal"
               >
                 Cancel
               </button>
@@ -1739,6 +1757,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   cursor: (isSquashing || (activeRepo?.status?.files && activeRepo.status.files.length > 0)) ? 'not-allowed' : 'pointer' 
                 }}
                 data-testid="confirm-squash-btn"
+                data-tooltip="Confirm Squash"
               >
                 {isSquashing ? 'Squashing...' : 'Confirm Squash'}
               </button>

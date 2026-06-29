@@ -797,7 +797,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               className="stash-action-btn"
               style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
               onClick={(e) => !isWTBranch && openRenameBranchModal(e, name)}
-              title={isWTBranch ? "Cannot rename branch checked out in a worktree" : "Rename branch"}
+              data-tooltip={isWTBranch ? "Cannot rename branch checked out in a worktree" : "Rename branch"}
               disabled={isWTBranch}
               data-testid="sidebar-rename-branch-btn"
             >
@@ -816,7 +816,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 cursor: isCurrentRepoWorktree ? 'not-allowed' : 'pointer',
               }}
               onClick={(e) => !isCurrentRepoWorktree && openCreateBranchModal(e)}
-              title={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : "Create a new branch from latest local commit (HEAD)"}
+              data-tooltip={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : "Create a new branch from latest local commit (HEAD)"}
               disabled={isCurrentRepoWorktree}
               data-testid="sidebar-create-branch-btn"
             >
@@ -826,7 +826,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               className="stash-action-btn delete"
               style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
               disabled={true}
-              title="Cannot delete the currently checked out branch"
+              data-tooltip="Cannot delete the currently checked out branch"
               data-testid="sidebar-delete-branch-btn"
             >
               <Trash2 size={13} color="var(--text-secondary)" />
@@ -896,7 +896,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             className="stash-action-btn"
             style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             onClick={(e) => openMergeModal(e, name)}
-            title={`Merge ${name} into ${branch}`}
+            data-tooltip={`Merge ${name} into ${branch}`}
             data-testid={`merge-branch-btn-${name}`}
           >
             <GitMerge size={12} />
@@ -905,7 +905,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             className="stash-action-btn"
             style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             onClick={(e) => openRebaseModal(e, name)}
-            title={`Rebase ${branch} onto ${name}`}
+            data-tooltip={`Rebase ${branch} onto ${name}`}
             data-testid={`rebase-branch-btn-${name}`}
           >
             <GitCommit size={12} />
@@ -914,7 +914,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             className="stash-action-btn"
             style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             onClick={(e) => !isWTBranch && openRenameBranchModal(e, name)}
-            title={isWTBranch ? "Cannot rename branch checked out in a worktree" : "Rename branch"}
+            data-tooltip={isWTBranch ? "Cannot rename branch checked out in a worktree" : "Rename branch"}
             disabled={isWTBranch}
             data-testid={`rename-branch-btn-${name}`}
           >
@@ -924,7 +924,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             className="stash-action-btn delete"
             style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             onClick={(e) => !isWTBranch && handleDeleteBranch(e, name)}
-            title={isWTBranch ? "Cannot delete branch checked out in a worktree" : "Delete branch"}
+            data-tooltip={isWTBranch ? "Cannot delete branch checked out in a worktree" : "Delete branch"}
             disabled={isWTBranch}
             data-testid={`delete-branch-btn-${name}`}
           >
@@ -1009,7 +1009,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               e.stopPropagation();
               handleCheckoutRemoteBranch(name);
             }}
-            title={`Checkout ${name} to local branch`}
+            data-tooltip={`Checkout ${name} to local branch`}
             data-testid={`checkout-remote-btn-${name}`}
           >
             <Download size={12} />
@@ -1045,7 +1045,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             <button
               onClick={() => setFilterText("")}
               className="branch-filter-clear-btn"
-              title="Clear filter"
+              data-tooltip="Clear filter"
               data-testid="branch-filter-clear-btn"
             >
               <X size={14} />
@@ -1071,7 +1071,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               className="stash-action-btn"
               style={{ padding: 2, height: 20, width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
               onClick={openWorktreeModal}
-              title="Add new worktree"
+              data-tooltip="Add new worktree"
               data-testid="add-worktree-btn"
             >
               <Plus size={14} />
@@ -1091,7 +1091,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 className={`sidebar-item ${isActiveRepo ? 'active' : ''}`}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: isActiveRepo ? 'default' : 'pointer' }}
                 onClick={() => !isActiveRepo && handleSwitchWorktree(wt.path)}
-                title={wt.path}
+                data-tooltip={wt.path}
               >
                 <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   <Folder className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
@@ -1107,7 +1107,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                           e.stopPropagation();
                           openMergeModal(e, wt.branch);
                         }}
-                        title={`Merge ${wt.branch} into ${branch}`}
+                        data-tooltip={`Merge ${wt.branch} into ${branch}`}
                         data-testid={`merge-worktree-btn-${wt.branch}`}
                       >
                         <GitMerge size={12} />
@@ -1119,7 +1119,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                           e.stopPropagation();
                           openRebaseModal(e, wt.branch);
                         }}
-                        title={`Rebase ${branch} onto ${wt.branch}`}
+                        data-tooltip={`Rebase ${branch} onto ${wt.branch}`}
                         data-testid={`rebase-worktree-btn-${wt.branch}`}
                       >
                         <GitCommit size={12} />
@@ -1130,7 +1130,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                     className="stash-action-btn"
                     style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                     onClick={(e) => handleCopyWorktreePath(e, wt.path)}
-                    title="Copy path"
+                    data-tooltip="Copy path"
                   >
                     <Copy size={13} />
                   </button>
@@ -1139,7 +1139,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                       className="stash-action-btn delete"
                       style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                       onClick={(e) => handleDeleteWorktree(e, wt.path)}
-                      title="Remove worktree"
+                      data-tooltip="Remove worktree"
                       data-testid={`delete-worktree-btn-${wt.branch}`}
                     >
                       <Trash2 size={13} />
@@ -1196,7 +1196,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                   style={{ color: isSelected ? 'var(--accent-light)' : 'var(--text-secondary)', flexShrink: 0 }}
                 />
                 <div className="stash-item-info">
-                  <div className="stash-item-message" title={stash.message}>
+                  <div className="stash-item-message" data-tooltip={stash.message}>
                     {stash.message}
                   </div>
                   <div className="stash-item-date">{formatStashDate(stash.date)}</div>
@@ -1207,7 +1207,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                       className="stash-action-btn pop"
                       onClick={(e) => handlePopStash(e, stash.index)}
                       disabled={isPopping || deletingIndex === stash.index}
-                      title="Pop this stash back to working directory"
+                      data-tooltip="Pop this stash back to working directory"
                       data-testid={`stash-pop-btn-${stash.index}`}
                     >
                       {isPopping ? '…' : 'Pop'}
@@ -1216,7 +1216,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                       className="stash-action-btn details"
                       onClick={(e) => handleShowStashDetails(e, stash.index, stash.message)}
                       disabled={isPopping || deletingIndex === stash.index}
-                      title="View stash files and diff details"
+                      data-tooltip="View stash files and diff details"
                       data-testid={`stash-details-btn-${stash.index}`}
                     >
                       <List size={13} />
@@ -1225,7 +1225,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                       className="stash-action-btn delete"
                       onClick={(e) => handleDeleteStash(e, stash.index)}
                       disabled={isPopping || deletingIndex === stash.index}
-                      title="Delete this stash"
+                      data-tooltip="Delete this stash"
                       data-testid={`stash-delete-btn-${stash.index}`}
                     >
                       {deletingIndex === stash.index ? '…' : <Trash2 size={13} />}
@@ -1262,7 +1262,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 className="stash-action-btn"
                 style={{ padding: 2, height: 20, width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                 onClick={handlePushTags}
-                title="Push all local tags to remote (origin)"
+                data-tooltip="Push all local tags to remote (origin)"
                 data-testid="sidebar-push-tags-btn"
               >
                 <Upload size={12} />
@@ -1285,7 +1285,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                     className="stash-action-btn delete"
                     style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                     onClick={(e) => handleDeleteTagClick(e, tag)}
-                    title="Delete tag"
+                    data-tooltip="Delete tag"
                     data-testid={`delete-tag-btn-${tag}`}
                   >
                     <Trash2 size={13} />
@@ -1356,6 +1356,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 onClick={() => setIsBranchModalOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
                 data-testid="close-branch-modal-btn"
+                data-tooltip="Close modal"
               >
                 <X size={16} />
               </button>
@@ -1409,6 +1410,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 className="btn-secondary"
                 onClick={() => setIsBranchModalOpen(false)}
                 data-testid="cancel-branch-btn"
+                data-tooltip="Cancel and close modal"
               >
                 Cancel
               </button>
@@ -1418,6 +1420,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 disabled={!newBranchName.trim() || (branchModalMode === 'rename' && newBranchName.trim() === branchToRename)}
                 style={{ opacity: (!newBranchName.trim() || (branchModalMode === 'rename' && newBranchName.trim() === branchToRename)) ? 0.5 : 1, cursor: (!newBranchName.trim() || (branchModalMode === 'rename' && newBranchName.trim() === branchToRename)) ? 'not-allowed' : 'pointer' }}
                 data-testid="create-branch-submit-btn"
+                data-tooltip={branchModalMode === 'create' ? 'Create branch' : 'Rename branch'}
               >
                 {branchModalMode === 'create' ? 'Create Branch' : 'Rename'}
               </button>
@@ -1434,6 +1437,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               <button
                 onClick={() => setIsWorktreeModalOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px' }}
+                data-tooltip="Close modal"
               >
                 <X size={16} />
               </button>
@@ -1529,7 +1533,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                         console.error('Error selecting directory:', err)
                       }
                     }}
-                    title="Browse for directory"
+                    data-tooltip="Browse for directory"
                   >
                     Browse...
                   </button>
@@ -1555,6 +1559,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 className="btn-secondary"
                 onClick={() => setIsWorktreeModalOpen(false)}
                 data-testid="worktree-cancel-btn"
+                data-tooltip="Cancel and close modal"
               >
                 Cancel
               </button>
@@ -1579,6 +1584,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                   })())) ? 'not-allowed' : 'pointer'
                 }}
                 data-testid="worktree-create-submit-btn"
+                data-tooltip="Create worktree"
               >
                 Create
               </button>

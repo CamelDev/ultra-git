@@ -660,7 +660,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                             flex: 1,
                             color: isFileSelected ? 'var(--text-primary)' : 'var(--text-secondary)'
                           }}
-                          title={file.path}
+                          data-tooltip={file.path}
                         >
                           {file.path}
                         </span>
