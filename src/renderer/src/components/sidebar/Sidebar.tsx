@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, ChevronRight, ChevronDown } from "lucide-react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, ChevronRight, ChevronDown, Search } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
@@ -92,6 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const { getActiveRepo, refreshRepo, switchActiveRepoPath } = useRepoStore()
   const activeRepo = getActiveRepo()
 
+  const [filterText, setFilterText] = useState("")
   const [selectedStashIndex, setSelectedStashIndex] = useState<number | null>(null)
   const [conflictWarning, setConflictWarning] = useState(false)
   const [poppingIndex, setPoppingIndex] = useState<number | null>(null)
@@ -128,6 +129,26 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const stashes = activeRepo?.stashes ?? []
 
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const [isTagsCollapsed, setIsTagsCollapsed] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('sidebar-tags-collapsed')
+      return stored === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleTagsCollapsed = () => {
+    setIsTagsCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('sidebar-tags-collapsed', String(next))
+      } catch (e) {
+        console.error('Failed to save tags collapse state to localStorage', e)
+      }
+      return next
+    })
+  }
 
   React.useEffect(() => {
     if (!branch) return;
@@ -645,16 +666,30 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     });
   const remoteBranches = [...(activeRepo?.branches?.remote ?? [])].sort((a, b) => a.localeCompare(b))
 
+  const filteredLocalBranches = localBranches.filter((b) => {
+    const name = typeof b === 'string' ? b : b.name;
+    return name.toLowerCase().includes(filterText.toLowerCase());
+  });
+
+  const filteredRemoteBranches = remoteBranches.filter((b) => {
+    return b.toLowerCase().includes(filterText.toLowerCase());
+  });
+
+  const worktrees = activeRepo?.worktrees ?? [];
+  const filteredWorktrees = worktrees.filter((wt) =>
+    wt.branch.toLowerCase().includes(filterText.toLowerCase())
+  );
+
   const allLocalBranches = [...(activeRepo?.branches?.local?.map((b) => typeof b === 'string' ? b : b.name) || [])].sort((a, b) => a.localeCompare(b));
   const allRemoteBranches = [...(activeRepo?.branches?.remote || [])].sort((a, b) => a.localeCompare(b));
 
-  const localBranchTree = buildBranchTree(localBranches);
-  const remoteBranchTree = buildBranchTree(remoteBranches, true);
+  const localBranchTree = buildBranchTree(filteredLocalBranches);
+  const remoteBranchTree = buildBranchTree(filteredRemoteBranches, true);
 
   const renderLocalBranchNode = (node: TreeNode, depth: number): React.ReactNode => {
     if (node.type === 'folder') {
       const folderKey = `local-${node.fullName}`;
-      const isExpanded = expandedFolders[folderKey] ?? false;
+      const isExpanded = filterText !== "" ? true : (expandedFolders[folderKey] ?? false);
       const toggleExpand = (e: React.MouseEvent) => {
         e.stopPropagation();
         setExpandedFolders((prev) => ({
@@ -903,7 +938,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const renderRemoteBranchNode = (node: TreeNode, depth: number): React.ReactNode => {
     if (node.type === 'folder') {
       const folderKey = `remote-${node.fullName}`;
-      const isExpanded = expandedFolders[folderKey] ?? false;
+      const isExpanded = filterText !== "" ? true : (expandedFolders[folderKey] ?? false);
       const toggleExpand = (e: React.MouseEvent) => {
         e.stopPropagation();
         setExpandedFolders((prev) => ({
@@ -986,10 +1021,43 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
 
   return (
     <div className="sidebar" data-testid="sidebar">
+      {/* Sticky Filter Input */}
+      <div className="sidebar-filter-container" data-testid="branch-filter-container">
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <Search
+            size={14}
+            style={{
+              position: 'absolute',
+              left: '10px',
+              color: 'var(--text-secondary)',
+              pointerEvents: 'none'
+            }}
+          />
+          <input
+            type="text"
+            placeholder="Filter branches..."
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            className="branch-filter-input"
+            data-testid="branch-filter-input"
+          />
+          {filterText && (
+            <button
+              onClick={() => setFilterText("")}
+              className="branch-filter-clear-btn"
+              title="Clear filter"
+              data-testid="branch-filter-clear-btn"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="sidebar-section">
         <div className="sidebar-header">
           <span>Local</span>
-          <span>{localBranches.length}</span>
+          <span>{filterText ? `${filteredLocalBranches.length}/${localBranches.length}` : localBranches.length}</span>
         </div>
         {localBranchTree.map((node) => renderLocalBranchNode(node, 0))}
       </div>
@@ -998,7 +1066,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>Worktree Branches</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>{activeRepo?.worktrees?.length ?? 0}</span>
+            <span>{filterText ? `${filteredWorktrees.length}/${worktrees.length}` : worktrees.length}</span>
             <button
               className="stash-action-btn"
               style={{ padding: 2, height: 20, width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1010,12 +1078,12 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             </button>
           </div>
         </div>
-        {(!activeRepo?.worktrees || activeRepo.worktrees.length === 0) ? (
+        {(!filteredWorktrees || filteredWorktrees.length === 0) ? (
           <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>No worktrees</div>
         ) : (
-          activeRepo.worktrees.map((wt, index) => {
+          filteredWorktrees.map((wt, index) => {
             const isActiveRepo = normalizePath(wt.path) === normalizePath(activeRepo.path);
-            const isMainWorktree = index === 0;
+            const isMainWorktree = normalizePath(wt.path) === normalizePath(mainWtPath);
             const shortPath = wt.path.split(/[/\\]/).pop();
             return (
               <div
@@ -1087,9 +1155,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       <div className="sidebar-section">
         <div className="sidebar-header">
           <span>Remote</span>
-          <span>{remoteBranches.length}</span>
+          <span>{filterText ? `${filteredRemoteBranches.length}/${remoteBranches.length}` : remoteBranches.length}</span>
         </div>
-        {remoteBranches.length === 0 ? (
+        {filteredRemoteBranches.length === 0 ? (
           <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>No remote branches</div>
         ) : (
           remoteBranchTree.map((node) => renderRemoteBranchNode(node, 0))
@@ -1173,9 +1241,21 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
 
 
       <div className="sidebar-section">
-        <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>Tags</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div
+          className="sidebar-header"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+          onClick={toggleTagsCollapsed}
+          data-testid="sidebar-tags-header"
+        >
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {isTagsCollapsed ? (
+              <ChevronRight size={12} style={{ marginRight: 6 }} />
+            ) : (
+              <ChevronDown size={12} style={{ marginRight: 6 }} />
+            )}
+            <span>Tags</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
             <span>{activeRepo?.tags?.length ?? 0}</span>
             {activeRepo?.tags && activeRepo.tags.length > 0 && (
               <button
@@ -1190,28 +1270,30 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             )}
           </div>
         </div>
-        {(!activeRepo?.tags || activeRepo.tags.length === 0) ? (
-          <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }} data-testid="no-tags-message">No tags</div>
-        ) : (
-          activeRepo.tags.map((tag) => (
-            <div key={tag} className="sidebar-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} data-testid={`sidebar-tag-${tag}`}>
-              <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <Tag className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag}</span>
+        {!isTagsCollapsed && (
+          (!activeRepo?.tags || activeRepo.tags.length === 0) ? (
+            <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }} data-testid="no-tags-message">No tags</div>
+          ) : (
+            activeRepo.tags.map((tag) => (
+              <div key={tag} className="sidebar-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} data-testid={`sidebar-tag-${tag}`}>
+                <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <Tag className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag}</span>
+                </div>
+                <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                  <button
+                    className="stash-action-btn delete"
+                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    onClick={(e) => handleDeleteTagClick(e, tag)}
+                    title="Delete tag"
+                    data-testid={`delete-tag-btn-${tag}`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
-              <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
-                <button
-                  className="stash-action-btn delete"
-                  style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                  onClick={(e) => handleDeleteTagClick(e, tag)}
-                  title="Delete tag"
-                  data-testid={`delete-tag-btn-${tag}`}
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            </div>
-          ))
+            ))
+          )
         )}
       </div>
 

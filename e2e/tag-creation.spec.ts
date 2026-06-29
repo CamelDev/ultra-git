@@ -233,7 +233,75 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await expect(tagItems.nth(2)).toContainText('v1.0.0')
 
       console.log('[Tag Sort Test] Tag sorting E2E verified successfully.')
+    } finally {
+      await app.close()
+    }
+  })
 
+  test('should allow collapsing the tags list and persist the collapsed state', async () => {
+    // 1. Create a tag v1.0.0
+    await sandbox.git.addTag('v1.0.0')
+
+    console.log('[Tag Collapse Test] Launching Electron App...')
+    const { app, page } = await launchElectronApp()
+
+    try {
+      console.log('[Tag Collapse Test] Clearing localStorage...')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      console.log('[Tag Collapse Test] Mocking dialog:openDirectory...')
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      console.log('[Tag Collapse Test] Clicking to add repository...')
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      console.log('[Tag Collapse Test] Switching to sandbox repository tab...')
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      // Verify tag is initially visible (expanded)
+      const tagItem = page.locator('[data-testid="sidebar-tag-v1.0.0"]')
+      await expect(tagItem).toBeVisible()
+
+      // Click header to collapse
+      const header = page.locator('[data-testid="sidebar-tags-header"]')
+      await expect(header).toBeVisible()
+      await header.click()
+      await page.waitForTimeout(500)
+
+      // Verify tag is no longer visible
+      await expect(tagItem).not.toBeVisible()
+
+      // Reload page and check persistence
+      console.log('[Tag Collapse Test] Reloading to verify persistence...')
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      // Tag should still be collapsed/invisible
+      await expect(page.locator('[data-testid="sidebar-tag-v1.0.0"]')).not.toBeVisible()
+
+      // Click header to expand again
+      const headerAfterReload = page.locator('[data-testid="sidebar-tags-header"]')
+      await headerAfterReload.click()
+      await page.waitForTimeout(500)
+
+      // Tag should be visible again
+      await expect(page.locator('[data-testid="sidebar-tag-v1.0.0"]')).toBeVisible()
+
+      console.log('[Tag Collapse Test] Tag collapse and persistence E2E verified successfully.')
     } finally {
       await app.close()
     }
