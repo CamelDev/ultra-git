@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { GitBranch, X, Tag, Copy } from 'lucide-react'
+import { GitBranch, X, Tag, Copy, Network } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { CherryPickModal } from './CherryPickModal'
+import BranchGraphModal from '../graph/BranchGraphModal'
 
 const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
@@ -20,6 +21,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
   const [newTagName, setNewTagName] = useState('')
   const [tagErrorMessage, setTagErrorMessage] = useState('')
   const [isCherryPickModalOpen, setIsCherryPickModalOpen] = useState(false)
+  const [isGraphModalOpen, setIsGraphModalOpen] = useState(false)
 
   const files = activeRepo?.status?.files as any[] || []
   const stagedFiles = files.filter((f) => f.index !== ' ' && f.index !== '?')
@@ -195,6 +197,17 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
           >
             <Tag size={14} />
             Tag
+          </button>
+
+          <button
+            className="btn-stash"
+            onClick={() => setIsGraphModalOpen(true)}
+            data-tooltip="View visual branch graph"
+            data-testid="branch-graph-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Network size={14} />
+            Graph
           </button>
         </div>
       )}
@@ -469,6 +482,18 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {activeRepo && (
+        <BranchGraphModal
+          isOpen={isGraphModalOpen}
+          onClose={() => setIsGraphModalOpen(false)}
+          commits={activeRepo.commits || []}
+          branches={activeRepo.branches}
+          tags={activeRepo.tags}
+          currentBranch={activeRepo.branch}
+          repoName={activeRepo.name}
+        />
       )}
 
       {activeRepo && (

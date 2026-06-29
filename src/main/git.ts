@@ -54,6 +54,9 @@ export const gitService = {
     const aheadSet = new Set<string>();
     const behindSet = new Set<string>();
 
+    // Build refs for the log command (HEAD + optional tracking branch)
+    const logRefs = trackingBranch ? ['HEAD', trackingBranch] : ['HEAD'];
+
     if (trackingBranch) {
       try {
         const [aheadRaw, behindRaw] = await Promise.all([
@@ -85,7 +88,27 @@ export const gitService = {
       logResult = await git.log({ maxCount });
     }
 
-    // Attach status to each commit
+    // Fetch parent hashes separately (simple-git default format omits %P)
+    // Output: "<hash> <parent1> <parent2> ..." one per line
+    const parentMap = new Map<string, string>();
+    try {
+      const parentRaw = await git.raw([
+        'log',
+        '--format=%H %P',
+        `--max-count=${maxCount}`,
+        ...logRefs,
+      ]);
+      parentRaw.trim().split('\n').forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 1 && parts[0]) {
+          parentMap.set(parts[0], parts.slice(1).join(' '));
+        }
+      });
+    } catch (e) {
+      console.warn('Failed to fetch parent hashes for graph', e);
+    }
+
+    // Attach syncStatus + parents to each commit
     const all = logResult.all.map((commit: any) => {
       const hash = commit.hash;
       let syncStatus: 'local-only' | 'remote-only' | 'pushed' = 'pushed';
@@ -96,7 +119,8 @@ export const gitService = {
       }
       return {
         ...commit,
-        syncStatus
+        syncStatus,
+        parents: parentMap.get(hash) || '',
       };
     });
 
