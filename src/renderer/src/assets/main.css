@@ -597,6 +597,9 @@ body {
 .diff-row.type-delete .diff-col.left .diff-line-content {
   color: #f87171;
 }
+.diff-row.type-delete .diff-col.right.empty-side {
+  background-color: rgba(239, 68, 68, 0.04);
+}
 
 .diff-row.type-add {
   background-color: rgba(16, 185, 129, 0.08);
@@ -606,6 +609,41 @@ body {
 }
 .diff-row.type-add .diff-col.right .diff-line-content {
   color: #34d399;
+}
+.diff-row.type-add .diff-col.left.empty-side {
+  background-color: rgba(16, 185, 129, 0.04);
+}
+
+/* Paired change: old on left (red), new on right (green), same row */
+.diff-row.type-change .diff-col.left {
+  background-color: rgba(239, 68, 68, 0.15);
+}
+.diff-row.type-change .diff-col.left .diff-line-content {
+  color: #f87171;
+}
+.diff-row.type-change .diff-col.right {
+  background-color: rgba(16, 185, 129, 0.15);
+}
+.diff-row.type-change .diff-col.right .diff-line-content {
+  color: #34d399;
+}
+
+/* Inline (character-level) diff highlight marks */
+.diff-inline-highlight {
+  background: transparent;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0;
+}
+
+.diff-inline-highlight.type-delete {
+  background-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+
+.diff-inline-highlight.type-add {
+  background-color: rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
 }
 
 /* Animations */

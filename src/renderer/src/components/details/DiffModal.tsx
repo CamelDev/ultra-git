@@ -24,6 +24,218 @@ interface DiffItem {
   afterNum?: number
 }
 
+interface CharSpan {
+  text: string
+  highlight: boolean
+}
+
+/**
+ * Character-level LCS diff between two strings.
+ * Returns arrays of spans with `highlight: true` for changed chars.
+ */
+function computeInlineDiff(
+  oldStr: string,
+  newStr: string
+): { oldSpans: CharSpan[]; newSpans: CharSpan[] } {
+  const a = oldStr.split('')
+  const b = newStr.split('')
+  const m = a.length
+  const n = b.length
+
+  // Build LCS DP table (cap size to avoid huge allocations)
+  const MAX = 2000
+  if (m > MAX || n > MAX) {
+    // Fallback: highlight entire lines
+    return {
+      oldSpans: [{ text: oldStr, highlight: true }],
+      newSpans: [{ text: newStr, highlight: true }]
+    }
+  }
+
+  const dp: number[][] = Array(m + 1)
+    .fill(null)
+    .map(() => Array(n + 1).fill(0))
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1])
+      }
+    }
+  }
+
+  // Back-track to find which chars are in LCS
+  const oldInLcs = new Uint8Array(m)
+  const newInLcs = new Uint8Array(n)
+  let i = m,
+    j = n
+  while (i > 0 && j > 0) {
+    if (a[i - 1] === b[j - 1]) {
+      oldInLcs[i - 1] = 1
+      newInLcs[j - 1] = 1
+      i--
+      j--
+    } else if (dp[i - 1][j] > dp[i][j - 1]) {
+      i--
+    } else {
+      j--
+    }
+  }
+
+  // Build spans by grouping consecutive chars with same highlight status
+  const buildSpans = (chars: string[], inLcs: Uint8Array): CharSpan[] => {
+    const spans: CharSpan[] = []
+    let cur = ''
+    let curHighlight = false
+    for (let k = 0; k < chars.length; k++) {
+      const h = inLcs[k] === 0 // highlight when NOT in LCS
+      if (k === 0) {
+        cur = chars[k]
+        curHighlight = h
+      } else if (h === curHighlight) {
+        cur += chars[k]
+      } else {
+        spans.push({ text: cur, highlight: curHighlight })
+        cur = chars[k]
+        curHighlight = h
+      }
+    }
+    if (cur.length > 0) spans.push({ text: cur, highlight: curHighlight })
+    return spans
+  }
+
+  return {
+    oldSpans: buildSpans(a, oldInLcs),
+    newSpans: buildSpans(b, newInLcs)
+  }
+}
+
+/**
+ * Render a line content with inline char highlights.
+ */
+function InlineContent({
+  spans,
+  type
+}: {
+  spans: CharSpan[]
+  type: 'add' | 'delete'
+}): React.ReactElement {
+  return (
+    <pre className="diff-line-content">
+      {spans.map((span, i) =>
+        span.highlight ? (
+          <mark key={i} className={`diff-inline-highlight type-${type}`}>
+            {span.text}
+          </mark>
+        ) : (
+          <span key={i}>{span.text}</span>
+        )
+      )}
+    </pre>
+  )
+}
+
+/**
+ * A single visual row in the diff view.
+ * Paired delete+add are collapsed into one row (old on left, new on right).
+ */
+interface RenderRow {
+  /** 'normal' = unchanged, 'change' = paired del+add, 'delete' = unpaired del, 'add' = unpaired add */
+  rowType: 'normal' | 'change' | 'delete' | 'add'
+  beforeLine?: string
+  afterLine?: string
+  beforeNum?: number
+  afterNum?: number
+  oldSpans?: CharSpan[]
+  newSpans?: CharSpan[]
+}
+
+/**
+ * Convert raw DiffItems into RenderRows.
+ * Consecutive delete/add blocks are paired N:M, folding each pair into a single side-by-side row.
+ */
+function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
+  const rows: RenderRow[] = []
+  let i = 0
+
+  while (i < diffItems.length) {
+    const item = diffItems[i]
+
+    if (item.type === 'normal') {
+      rows.push({
+        rowType: 'normal',
+        beforeLine: item.beforeLine,
+        afterLine: item.afterLine,
+        beforeNum: item.beforeNum,
+        afterNum: item.afterNum
+      })
+      i++
+      continue
+    }
+
+    if (item.type === 'delete') {
+      // Collect all consecutive deletes
+      const deletes: DiffItem[] = []
+      while (i < diffItems.length && diffItems[i].type === 'delete') {
+        deletes.push(diffItems[i++])
+      }
+      // Collect all consecutive adds that immediately follow
+      const adds: DiffItem[] = []
+      while (i < diffItems.length && diffItems[i].type === 'add') {
+        adds.push(diffItems[i++])
+      }
+
+      const maxLen = Math.max(deletes.length, adds.length)
+      for (let k = 0; k < maxLen; k++) {
+        const del = deletes[k]
+        const add = adds[k]
+        if (del && add) {
+          const { oldSpans, newSpans } = computeInlineDiff(
+            del.beforeLine ?? '',
+            add.afterLine ?? ''
+          )
+          rows.push({
+            rowType: 'change',
+            beforeLine: del.beforeLine,
+            afterLine: add.afterLine,
+            beforeNum: del.beforeNum,
+            afterNum: add.afterNum,
+            oldSpans,
+            newSpans
+          })
+        } else if (del) {
+          rows.push({
+            rowType: 'delete',
+            beforeLine: del.beforeLine,
+            beforeNum: del.beforeNum
+          })
+        } else {
+          rows.push({
+            rowType: 'add',
+            afterLine: add.afterLine,
+            afterNum: add.afterNum
+          })
+        }
+      }
+      continue
+    }
+
+    // Standalone add (shouldn't happen after the delete handler above, but safety net)
+    if (item.type === 'add') {
+      rows.push({
+        rowType: 'add',
+        afterLine: item.afterLine,
+        afterNum: item.afterNum
+      })
+      i++
+    }
+  }
+
+  return rows
+}
+
 function computeDiff(beforeContent: string, afterContent: string): DiffItem[] {
   const beforeLines = beforeContent === '' ? [] : beforeContent.split(/\r?\n/)
   const afterLines = afterContent === '' ? [] : afterContent.split(/\r?\n/)
@@ -273,7 +485,9 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     if (!loading && diffItems.length > 0) {
       const timer = setTimeout(() => {
         if (bodyRef.current) {
-          const firstChange = bodyRef.current.querySelector('.diff-row.type-add, .diff-row.type-delete')
+          const firstChange = bodyRef.current.querySelector(
+              '.diff-row.type-change, .diff-row.type-add, .diff-row.type-delete'
+            )
           if (firstChange) {
             firstChange.scrollIntoView({ block: 'center', behavior: 'auto' })
           }
@@ -284,9 +498,10 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     return undefined
   }, [loading, diffItems])
 
-  const changeIndexes = diffItems
-    .map((item, idx) => ({ type: item.type, idx }))
-    .filter((item) => item.type === 'add' || item.type === 'delete')
+  const renderRows = buildRenderRows(diffItems)
+  const changeIndexes = renderRows
+    .map((row, idx) => ({ rowType: row.rowType, idx }))
+    .filter((r) => r.rowType !== 'normal')
 
   // Overview ruler jump helper
   const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -504,37 +719,50 @@ export const DiffModal: React.FC<DiffModalProps> = ({
             )}
             {!loading && !error && !isBinary && (
               <div className="diff-table">
-                {diffItems.map((item, idx) => (
-                  <div key={idx} className={`diff-row type-${item.type}`}>
-                    <div className="diff-col left">
-                      <span className="diff-line-number">{item.beforeNum || ''}</span>
-                      <pre className="diff-line-content">{item.beforeLine ?? ''}</pre>
+                {renderRows.map((row, idx) => (
+                  <div key={idx} className={`diff-row type-${row.rowType}`}>
+                    <div className={`diff-col left${row.rowType === 'add' ? ' empty-side' : ''}`}>
+                      <span className="diff-line-number">{row.beforeNum || ''}</span>
+                      {row.oldSpans ? (
+                        <InlineContent spans={row.oldSpans} type="delete" />
+                      ) : (
+                        <pre className="diff-line-content">{row.beforeLine ?? ''}</pre>
+                      )}
                     </div>
-                    <div className="diff-col right">
-                      <span className="diff-line-number">{item.afterNum || ''}</span>
-                      <pre className="diff-line-content">{item.afterLine ?? ''}</pre>
+                    <div className={`diff-col right${row.rowType === 'delete' ? ' empty-side' : ''}`}>
+                      <span className="diff-line-number">{row.afterNum || ''}</span>
+                      {row.newSpans ? (
+                        <InlineContent spans={row.newSpans} type="add" />
+                      ) : (
+                        <pre className="diff-line-content">{row.afterLine ?? ''}</pre>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-          {!loading && !error && !isBinary && diffItems.length > 0 && (
+          {!loading && !error && !isBinary && renderRows.length > 0 && (
             <div className="diff-overview-ruler" onClick={handleRulerClick}>
               {changeIndexes.map((change) => {
-                const topPct = (change.idx / diffItems.length) * 100
-                const isDelete = change.type === 'delete'
+                const topPct = (change.idx / renderRows.length) * 100
+                const isDelete = change.rowType === 'delete'
+                const isChange = change.rowType === 'change'
                 return (
                   <div
                     key={change.idx}
-                    className={`diff-ruler-marker type-${change.type}`}
+                    className={`diff-ruler-marker type-${change.rowType}`}
                     style={{
                       position: 'absolute',
                       top: `${topPct}%`,
                       height: '2px',
-                      left: isDelete ? '0' : '50%',
-                      width: '50%',
-                      backgroundColor: isDelete ? '#f87171' : '#34d399',
+                      left: isDelete ? '0' : isChange ? '0' : '50%',
+                      width: isChange ? '100%' : '50%',
+                      background: isChange
+                        ? 'linear-gradient(to right, #f87171 50%, #34d399 50%)'
+                        : isDelete
+                        ? '#f87171'
+                        : '#34d399',
                       opacity: 0.8
                     }}
                   />
