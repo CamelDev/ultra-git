@@ -26,12 +26,21 @@ test.describe('Multi-Repo Tab System', () => {
     const { app, page } = await launchElectronApp();
 
     try {
+      // Enable landing page for this test
+      await page.evaluate(() => {
+        localStorage.setItem('disable-default-tab', 'true');
+      });
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+
       const expectedInitialTabName = path.basename(process.cwd());
 
-      // 4. Verify initial default tab renders correctly
+      // 4. Verify initial state has 0 tabs and landing page is visible
       const initialTabs = page.locator('[data-testid="repo-tab"]');
-      await expect(initialTabs).toHaveCount(1);
-      await expect(initialTabs.first()).toContainText(expectedInitialTabName);
+      await expect(initialTabs).toHaveCount(0);
+      
+      const landingPage = page.locator('[data-testid="landing-page"]');
+      await expect(landingPage).toBeVisible();
 
       // 5. Mock the native dialog in the Electron Main process using Playwright evaluate
       await app.evaluate(async ({ ipcMain }, sandboxPath) => {
@@ -41,31 +50,48 @@ test.describe('Multi-Repo Tab System', () => {
         });
       }, sandbox.dir);
 
-      // 6. Click the Add Repository button
+      // 6. Click the Open Repository button on the landing page
+      const landingOpenBtn = page.locator('[data-testid="landing-open-repo-btn"]');
+      await expect(landingOpenBtn).toBeVisible();
+      await landingOpenBtn.click();
+
+      // 7. Verify the new tab is added successfully (and contains the sandbox directory's base name)
+      const expectedTabName = path.basename(sandbox.dir);
+      await expect(initialTabs).toHaveCount(1);
+      await expect(initialTabs.first()).toContainText(expectedTabName);
+      await expect(landingPage).not.toBeVisible();
+
+      // 8. Now mock dialog to return process.cwd() and add it via TitleBar button
+      await app.evaluate(async ({ ipcMain }, cwdPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: cwdPath };
+        });
+      }, process.cwd());
+
       const addBtn = page.locator('[data-testid="add-repo-btn"]');
       await expect(addBtn).toBeVisible();
       await addBtn.click();
 
-      // 7. Verify the new tab is added successfully (and contains the sandbox directory's base name)
-      const expectedTabName = path.basename(sandbox.dir);
+      // Verify we have 2 tabs now (sandbox and process.cwd())
       await expect(initialTabs).toHaveCount(2);
-      await expect(initialTabs.last()).toContainText(expectedTabName);
+      await expect(initialTabs.last()).toContainText(expectedInitialTabName);
 
-      // 8. Click the new tab to switch context
-      await initialTabs.last().click();
+      // Click the first tab (sandbox) to switch context
+      await initialTabs.first().click();
 
-      // 9. Verify the sidebar updates to show the sandbox branch and status
+      // Verify the sidebar updates to show the sandbox branch and status
       const sidebarActiveBranch = page.locator('[data-testid="sidebar-active-branch"]');
       await expect(sidebarActiveBranch).toBeVisible();
       await expect(sidebarActiveBranch).toContainText('feature/e2e-tabs');
 
-      // 10. Close the newly added tab
+      // Close the second tab (process.cwd())
       const closeBtn = initialTabs.last().locator('[data-testid="close-tab-btn"]');
       await closeBtn.click();
 
-      // 11. Verify we are back to only 1 tab
+      // Verify we are back to only 1 tab (sandbox)
       await expect(initialTabs).toHaveCount(1);
-      await expect(initialTabs.first()).toContainText(expectedInitialTabName);
+      await expect(initialTabs.first()).toContainText(expectedTabName);
 
     } finally {
       // 12. Ensure clean app termination to avoid leaving zombie Electron processes
@@ -78,14 +104,20 @@ test.describe('Multi-Repo Tab System', () => {
     const { app: app1, page: page1 } = await launchElectronApp();
     
     try {
+      // Enable landing page for this test
+      await page1.evaluate(() => {
+        localStorage.setItem('disable-default-tab', 'true');
+      });
+      await page1.reload();
+      await page1.waitForLoadState('domcontentloaded');
+
       const expectedInitialTabName = path.basename(process.cwd());
 
-      // Verify initial default tab renders
+      // Verify 0 tabs initially
       const initialTabs1 = page1.locator('[data-testid="repo-tab"]');
-      await expect(initialTabs1).toHaveCount(1);
-      await expect(initialTabs1.first()).toContainText(expectedInitialTabName);
+      await expect(initialTabs1).toHaveCount(0);
 
-      // Mock the native dialog in the Electron Main process
+      // Mock dialog for sandbox
       await app1.evaluate(async ({ ipcMain }, sandboxPath) => {
         ipcMain.removeHandler('dialog:openDirectory');
         ipcMain.handle('dialog:openDirectory', async () => {
@@ -93,18 +125,32 @@ test.describe('Multi-Repo Tab System', () => {
         });
       }, sandbox.dir);
 
-      // Click the Add Repository button
+      // Click landing page open button to open sandbox
+      const landingOpenBtn = page1.locator('[data-testid="landing-open-repo-btn"]');
+      await expect(landingOpenBtn).toBeVisible();
+      await landingOpenBtn.click();
+
+      // Mock dialog for process.cwd()
+      await app1.evaluate(async ({ ipcMain }, cwdPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: cwdPath };
+        });
+      }, process.cwd());
+
+      // Click the Add Repository button in TitleBar
       const addBtn = page1.locator('[data-testid="add-repo-btn"]');
       await expect(addBtn).toBeVisible();
       await addBtn.click();
 
-      // Verify the new tab is added successfully (count = 2)
+      // Verify both tabs are open
       const expectedTabName = path.basename(sandbox.dir);
       await expect(initialTabs1).toHaveCount(2);
-      await expect(initialTabs1.last()).toContainText(expectedTabName);
+      await expect(initialTabs1.first()).toContainText(expectedTabName);
+      await expect(initialTabs1.last()).toContainText(expectedInitialTabName);
 
-      // Switch to the new tab so we also test active tab persistence
-      await initialTabs1.last().click();
+      // Switch to the sandbox tab
+      await initialTabs1.first().click();
 
       // Close the first app instance
       await app1.close();
@@ -117,10 +163,10 @@ test.describe('Multi-Repo Tab System', () => {
         
         // Both tabs should still be open!
         await expect(initialTabs2).toHaveCount(2);
-        await expect(initialTabs2.first()).toContainText(expectedInitialTabName);
-        await expect(initialTabs2.last()).toContainText(expectedTabName);
+        await expect(initialTabs2.first()).toContainText(expectedTabName);
+        await expect(initialTabs2.last()).toContainText(expectedInitialTabName);
 
-        // The second tab should still be active, meaning its sidebar should show the sandbox branch
+        // The first tab should still be active, meaning its sidebar should show the sandbox branch
         const sidebarActiveBranch = page2.locator('[data-testid="sidebar-active-branch"]');
         await expect(sidebarActiveBranch).toBeVisible();
         await expect(sidebarActiveBranch).toContainText('feature/e2e-tabs');

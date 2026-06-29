@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Folder, Plus, Copy, ChevronRight, ChevronDown } from "lucide-react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, ChevronRight, ChevronDown } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
@@ -366,6 +366,63 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       }
     } catch (err) {
       console.error('Error checking out branch:', err)
+    }
+  }
+
+  const handleCheckoutRemoteBranch = async (remoteBranchName: string) => {
+    if (!activeRepo) return;
+
+    // Extract local name (e.g. "origin/feature/abc" -> "feature/abc")
+    const slashIdx = remoteBranchName.indexOf('/');
+    const localName = slashIdx === -1 ? remoteBranchName : remoteBranchName.substring(slashIdx + 1);
+
+    // Check if local branch already exists
+    const localBranchesList = activeRepo?.branches?.local ?? [];
+    const localExists = localBranchesList.some(b => {
+      const name = typeof b === 'string' ? b : b.name;
+      return name === localName;
+    });
+
+    const confirmRes = await window.api.app.showMessageBox({
+      type: 'question',
+      title: 'Checkout Remote Branch',
+      message: localExists
+        ? `Local branch "${localName}" already exists. Do you want to checkout the existing local branch?`
+        : `Do you want to checkout remote branch "${remoteBranchName}"?\n\nThis will create and checkout a local tracking branch named "${localName}".`,
+      buttons: ['Cancel', 'Checkout'],
+      defaultId: 1,
+      cancelId: 0
+    });
+
+    if (!confirmRes.success || confirmRes.response !== 1) {
+      return;
+    }
+
+    if (localExists) {
+      await handleCheckoutBranch(localName);
+      return;
+    }
+
+    try {
+      const res = await window.api.git.createBranch(activeRepo.path, localName, remoteBranchName);
+      if (res.success) {
+        await refreshRepo(activeRepo.id);
+      } else {
+        await window.api.app.showMessageBox({
+          type: 'error',
+          title: 'Checkout Failed',
+          message: `Failed to checkout remote branch: ${res.error || 'Unknown error'}`,
+          buttons: ['OK']
+        });
+      }
+    } catch (err: any) {
+      console.error('Error checking out remote branch:', err);
+      await window.api.app.showMessageBox({
+        type: 'error',
+        title: 'Checkout Error',
+        message: `An unexpected error occurred: ${err.message || err}`,
+        buttons: ['OK']
+      });
     }
   }
 
@@ -894,12 +951,35 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           alignItems: 'center',
           paddingLeft: `${20 + depth * 12}px`,
         }}
+        data-testid={`sidebar-remote-branch-${name}`}
       >
         <Layers className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           <span style={{ display: 'none' }}>{name}</span>
           {shortName}
         </span>
+        <div
+          className="branch-actions"
+          style={{
+            marginLeft: 'auto',
+            display: 'flex',
+            gap: '4px',
+            flexShrink: 0,
+          }}
+        >
+          <button
+            className="stash-action-btn"
+            style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCheckoutRemoteBranch(name);
+            }}
+            title={`Checkout ${name} to local branch`}
+            data-testid={`checkout-remote-btn-${name}`}
+          >
+            <Download size={12} />
+          </button>
+        </div>
       </div>
     );
   };

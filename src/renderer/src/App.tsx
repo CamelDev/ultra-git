@@ -7,6 +7,7 @@ import DetailsPanel from "./components/details/DetailsPanel"
 import { useRepoStore } from "./store/useRepoStore"
 import { ActiveChanges } from "./components/active-changes/ActiveChanges"
 import { ConflictResolver } from "./components/sidebar/ConflictResolver"
+import LandingPage from "./components/layout/LandingPage"
 
 interface ConflictState {
   active: boolean
@@ -18,6 +19,15 @@ interface ConflictState {
 function App() {
   const { addRepo, getActiveRepo, refreshRepo, initializeRepos } = useRepoStore()
   const activeRepo = getActiveRepo()
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  const handleOpenRepo = async () => {
+    console.log('Renderer: Requesting openDirectory dialog')
+    const result = await window.api.app.openDirectory()
+    if (!result.canceled && result.path) {
+      await addRepo(result.path)
+    }
+  }
   const hasActiveChanges = !!(activeRepo?.status?.files && activeRepo.status.files.length > 0)
 
   const [conflictState, setConflictState] = useState<ConflictState>({
@@ -231,13 +241,21 @@ function App() {
       }
     }
     
+    const isTesting = window.api.app.isTesting
+    const disableDefaultTab = localStorage.getItem('disable-default-tab') === 'true'
+
     if (paths.length === 0) {
-      paths = ['.']
+      if (isTesting && !disableDefaultTab) {
+        paths = ['.']
+      } else {
+        setIsInitialized(true)
+        return
+      }
     }
-    
-    initializeRepos(paths, savedActivePath).catch((err) =>
-      console.error('Failed to initialize repositories', err)
-    )
+
+    initializeRepos(paths, savedActivePath)
+      .catch((err) => console.error('Failed to initialize repositories', err))
+      .finally(() => setIsInitialized(true))
   }, [initializeRepos])
 
   // Auto-refresh when files change in the repository
@@ -283,10 +301,16 @@ function App() {
   }, [])
 
 
-  return (
-    <>
-      <TitleBar />
+  const renderContent = () => {
+    if (!isInitialized) {
+      return null
+    }
 
+    if (!activeRepo) {
+      return <LandingPage onOpenRepo={handleOpenRepo} />
+    }
+
+    return (
       <div 
         className="app-container"
         style={{ 
@@ -368,6 +392,13 @@ function App() {
           )}
         </div>
       </div>
+    )
+  }
+
+  return (
+    <>
+      <TitleBar />
+      {renderContent()}
     </>
   )
 }

@@ -324,18 +324,29 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const activeRepo = newRepos.find(r => normalizePath(r.path) === normalizePath(resolvedActivePath || '')) || newRepos[0];
     const activeId = activeRepo ? activeRepo.id : null;
 
-    set({
-      repositories: newRepos,
-      activeId,
-      selectedCommitHash: null
-    });
-    
-    if (activeId) {
-      saveToLocalStorage(newRepos, activeId);
+    const currentRepos = get().repositories;
+    const mergedRepos = [...currentRepos];
+    for (const nr of newRepos) {
+      if (!mergedRepos.find(r => normalizePath(r.path) === normalizePath(nr.path))) {
+        mergedRepos.push(nr);
+      }
     }
 
-    if (activeRepo) {
-      window.api.git.watchRepo(activeRepo.path).catch(err => 
+    const finalActiveId = get().activeId || activeId;
+
+    set({
+      repositories: mergedRepos,
+      activeId: finalActiveId,
+      selectedCommitHash: get().selectedCommitHash || null
+    });
+    
+    if (finalActiveId) {
+      saveToLocalStorage(mergedRepos, finalActiveId);
+    }
+
+    const finalActiveRepo = mergedRepos.find(r => r.id === finalActiveId);
+    if (finalActiveRepo) {
+      window.api.git.watchRepo(finalActiveRepo.path).catch(err => 
         console.error('Failed to watch active repo on init', err)
       );
     }

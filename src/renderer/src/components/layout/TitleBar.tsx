@@ -47,7 +47,7 @@ const TitleBar: React.FC = () => {
 
   return (
     <div 
-      className="title-bar"
+      className={`title-bar ${isMac ? 'is-mac' : ''}`}
       style={{
         paddingLeft: isMac ? '80px' : '16px',
         paddingRight: isWindows ? '140px' : '16px'

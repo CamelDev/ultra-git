@@ -325,7 +325,7 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:validateToken', async (_, { provider, token, email }) => {
+  ipcMain.handle('git:validateToken', async (_, { provider, token, email: emailInput }) => {
     try {
       let url = ''
       const headers: Record<string, string> = {
@@ -341,8 +341,8 @@ app.whenReady().then(() => {
         headers['Authorization'] = `Bearer ${token}`
       } else if (provider === 'bitbucket') {
         url = 'https://api.bitbucket.org/2.0/user'
-        if (email) {
-          const authString = Buffer.from(`${email}:${token}`).toString('base64')
+        if (emailInput) {
+          const authString = Buffer.from(`${emailInput}:${token}`).toString('base64')
           headers['Authorization'] = `Basic ${authString}`
         } else {
           headers['Authorization'] = `Bearer ${token}`
@@ -482,6 +482,10 @@ app.whenReady().then(() => {
     } catch (error: any) {
       return { success: false, error: error.message }
     }
+  })
+
+  ipcMain.handle('app:isTesting', async () => {
+    return process.env.ULTRA_GIT_TESTING === 'true'
   })
 
   ipcMain.handle('git:watchRepo', async (_, repoPath) => {
@@ -698,12 +702,8 @@ app.whenReady().then(() => {
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// Quit when all windows are closed.
 app.on('window-all-closed', () => {
   stopWatching()
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  app.quit()
 })

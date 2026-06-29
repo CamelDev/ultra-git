@@ -10,10 +10,27 @@ test.describe('Resizable Left Sidebar', () => {
 
     try {
       // Clear localStorage to ensure a clean state for the test run
-      await page.evaluate(() => localStorage.clear());
+      await page.evaluate(() => {
+        localStorage.clear();
+        localStorage.setItem('disable-default-tab', 'true');
+      });
       await page.reload();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1000); // Wait for layout stability
+
+      // Mock openDirectory dialog to load current working directory
+      await app.evaluate(async ({ ipcMain }, cwdPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: cwdPath };
+        });
+      }, process.cwd());
+
+      // Click the Open Repository button on the landing page
+      const landingOpenBtn = page.locator('[data-testid="landing-open-repo-btn"]');
+      await expect(landingOpenBtn).toBeVisible();
+      await landingOpenBtn.click();
+      await page.waitForTimeout(1000); // Wait for repo to load and sidebar to appear
 
       // 1. Check initial default width is 280px
       const sidebar = page.locator('[data-testid="sidebar"]');
@@ -89,10 +106,27 @@ test.describe('Resizable Left Sidebar', () => {
 
     try {
       // Clear localStorage
-      await page.evaluate(() => localStorage.clear());
+      await page.evaluate(() => {
+        localStorage.clear();
+        localStorage.setItem('disable-default-tab', 'true');
+      });
       await page.reload();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1000);
+
+      // Mock openDirectory dialog to load current working directory
+      await app.evaluate(async ({ ipcMain }, cwdPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: cwdPath };
+        });
+      }, process.cwd());
+
+      // Click the Open Repository button on the landing page
+      const landingOpenBtn = page.locator('[data-testid="landing-open-repo-btn"]');
+      await expect(landingOpenBtn).toBeVisible();
+      await landingOpenBtn.click();
+      await page.waitForTimeout(1000); // Wait for repo to load and sidebar to appear
 
       const sidebar = page.locator('[data-testid="sidebar"]');
       const details = page.locator('.details-panel');

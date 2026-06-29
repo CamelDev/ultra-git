@@ -373,4 +373,92 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await app.close()
     }
   })
+
+  test('should checkout a remote branch and create a local tracking branch', async () => {
+    // 1. Create a remote tracking branch
+    console.log('1. Mocking a remote tracking branch in git sandbox...');
+    await sandbox.git.raw(['update-ref', 'refs/remotes/origin/feature-remote', 'HEAD']);
+
+    console.log('2. Launching Electron App...');
+    const { app, page } = await launchElectronApp();
+
+    try {
+      console.log('3. Clearing localStorage...');
+      await page.evaluate(() => localStorage.clear());
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(1000);
+
+      console.log('4. Mocking dialog:openDirectory...');
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath };
+        });
+      }, sandbox.dir);
+
+      console.log('5. Clicking to add repository...');
+      const addBtn = page.locator('[data-testid="add-repo-btn"]');
+      await expect(addBtn).toBeVisible();
+      await addBtn.click();
+
+      console.log('6. Switching to the newly added repository tab...');
+      const tabs = page.locator('[data-testid="repo-tab"]');
+      await expect(tabs).toHaveCount(2);
+      await tabs.last().click();
+      await page.waitForTimeout(1000);
+
+      console.log('7. Verifying remote branch is visible in sidebar...');
+      const remoteBranchItem = page.locator('[data-testid="sidebar-remote-branch-origin/feature-remote"]');
+      await expect(remoteBranchItem).toBeVisible();
+
+      console.log('8. Mocking dialog:showMessageBox to automatically confirm checkout (response: 1)...');
+      await app.evaluate(async ({ ipcMain }) => {
+        ipcMain.removeHandler('dialog:showMessageBox');
+        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
+          console.log('[MAIN] showMessageBox prompt options:', JSON.stringify(options));
+          return { success: true, response: 1 }; // Confirm Checkout (1)
+        });
+      });
+
+      console.log('9. Clicking remote branch checkout hover button...');
+      await remoteBranchItem.hover();
+      const checkoutBtn = page.locator('[data-testid="checkout-remote-btn-origin/feature-remote"]');
+      await expect(checkoutBtn).toBeVisible();
+      await checkoutBtn.click();
+      await page.waitForTimeout(1500);
+
+      console.log('10. Verifying local branch feature-remote is checked out in UI...');
+      const activeBranch = page.locator('[data-testid="sidebar-active-branch"]');
+      await expect(activeBranch).toContainText('feature-remote');
+
+      console.log('11. Verifying branch exists locally in git on disk...');
+      const localBranches = await sandbox.git.branchLocal();
+      expect(localBranches.all).toContain('feature-remote');
+
+      console.log('12. Now testing checkout when local branch already exists...');
+      // Switch back to main using UI
+      const mainBranchItem = page.locator('[data-testid="sidebar-branch-main"]');
+      await mainBranchItem.click();
+      await page.waitForTimeout(1000);
+      await expect(activeBranch).toContainText('main');
+
+      // 12.1. Click the remote branch row itself (not the hover button) and verify it does NOT checkout
+      console.log('12.1. Clicking the remote branch row itself and verifying it does NOT trigger checkout...');
+      await remoteBranchItem.click();
+      await page.waitForTimeout(1000);
+      await expect(activeBranch).toContainText('main'); // should still be main
+
+      // Click remote branch hover button again. Since local 'feature-remote' already exists, it should trigger direct checkout of local branch.
+      console.log('13. Clicking remote branch hover button again to checkout existing local branch...');
+      await remoteBranchItem.hover();
+      await expect(checkoutBtn).toBeVisible();
+      await checkoutBtn.click();
+      await page.waitForTimeout(1500);
+      await expect(activeBranch).toContainText('feature-remote');
+
+    } finally {
+      await app.close();
+    }
+  });
 })
