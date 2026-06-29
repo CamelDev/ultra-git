@@ -3,11 +3,13 @@ import { Plus, X, Settings } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import logoIcon from '../../assets/icon.png'
 import { IdentitiesModal } from '../details/IdentitiesModal'
+import { AboutModal } from './AboutModal'
 
 const TitleBar: React.FC = () => {
   const { repositories, activeId, setActiveId, removeRepo, addRepo } = useRepoStore()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
+  const [aboutModalOpen, setAboutModalOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const handleAddRepo = async () => {
@@ -54,8 +56,22 @@ const TitleBar: React.FC = () => {
       }}
     >
       <div className="title-bar-brand">
-        <img src={logoIcon} alt="UltraGIT" className="brand-logo" />
-        <span className="brand-name">UltraGIT</span>
+        <img 
+          src={logoIcon} 
+          alt="UltraGIT" 
+          className="brand-logo" 
+          onClick={() => setAboutModalOpen(true)}
+          style={{ cursor: 'pointer', WebkitAppRegion: 'no-drag' }}
+          data-testid="brand-logo"
+        />
+        <span 
+          className="brand-name" 
+          onClick={() => setAboutModalOpen(true)}
+          style={{ cursor: 'pointer', WebkitAppRegion: 'no-drag' }}
+          data-testid="brand-name"
+        >
+          UltraGIT
+        </span>
         <div className="settings-container" ref={dropdownRef}>
           <Settings 
             className={`settings-icon ${isSettingsOpen ? 'active' : ''}`}
@@ -92,6 +108,20 @@ const TitleBar: React.FC = () => {
                   Reset Layout
                 </span>
               </div>
+              <div className="settings-dropdown-row">
+                <span className="settings-dropdown-label">About</span>
+                <button 
+                  className="settings-dropdown-btn"
+                  onClick={() => {
+                    setAboutModalOpen(true)
+                    setIsSettingsOpen(false)
+                  }}
+                  data-testid="about-btn"
+                  data-tooltip="View application details"
+                >
+                  About UltraGIT
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -122,6 +152,10 @@ const TitleBar: React.FC = () => {
       <IdentitiesModal 
         isOpen={identitiesModalOpen}
         onClose={() => setIdentitiesModalOpen(false)}
+      />
+      <AboutModal 
+        isOpen={aboutModalOpen}
+        onClose={() => setAboutModalOpen(false)}
       />
     </div>
   )

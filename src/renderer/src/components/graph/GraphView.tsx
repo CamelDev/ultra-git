@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers } from 'lucide-react'
+import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 
@@ -8,6 +8,15 @@ interface GraphViewProps {
 }
 
 const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
+const extractTags = (refs: string | undefined): string[] => {
+  if (!refs) return [];
+  return refs
+    .split(',')
+    .map(ref => ref.trim())
+    .filter(ref => ref.startsWith('tag: '))
+    .map(ref => ref.substring(5));
+};
 
 const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const { getActiveRepo, selectedCommitHash, setSelectedCommitHash, refreshRepo, identities, setRepoIdentity } = useRepoStore()
@@ -890,36 +899,71 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               style={{ cursor: 'pointer' }}
             >
               <div className="commit-graph-area" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                {c.syncStatus === 'remote-only' ? (
-                  <Globe 
-                    className="commit-globe-icon" 
-                    size={14} 
-                    style={{ color: 'var(--text-secondary)' }}
-                    data-testid="commit-globe-icon"
-                  />
-                ) : c.syncStatus === 'local-only' ? (
-                  <div 
-                    data-testid="commit-local-only-circle"
-                    style={{ 
-                      width: '10px', 
-                      height: '10px', 
-                      borderRadius: '50%', 
-                      border: '2px solid var(--text-secondary)', 
-                      backgroundColor: 'transparent',
-                      boxSizing: 'border-box'
-                    }} 
-                  />
-                ) : (
-                  <div 
-                    data-testid="commit-pushed-circle"
-                    style={{ 
-                      width: '10px', 
-                      height: '10px', 
-                      borderRadius: '50%', 
-                      backgroundColor: 'var(--accent)'
-                    }} 
-                  />
-                )}
+                {(() => {
+                  const tags = extractTags(c.refs);
+                  if (tags.length > 0) {
+                    return (
+                      <div
+                        className="commit-tag-badge"
+                        data-testid={`commit-tag-badge-${c.hash}`}
+                        data-tooltip={tags.join(', ')}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '3px 8px',
+                          background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(236, 72, 153, 0.06))',
+                          border: '1px solid rgba(236, 72, 153, 0.4)',
+                          borderRadius: '12px',
+                          color: '#f472b6',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          maxWidth: '64px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <Tag size={10} style={{ flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {tags[0]}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return c.syncStatus === 'remote-only' ? (
+                    <Globe 
+                      className="commit-globe-icon" 
+                      size={14} 
+                      style={{ color: 'var(--text-secondary)' }}
+                      data-testid="commit-globe-icon"
+                    />
+                  ) : c.syncStatus === 'local-only' ? (
+                    <div 
+                      data-testid="commit-local-only-circle"
+                      style={{ 
+                        width: '10px', 
+                        height: '10px', 
+                        borderRadius: '50%', 
+                        border: '2px solid var(--text-secondary)', 
+                        backgroundColor: 'transparent',
+                        boxSizing: 'border-box'
+                      }} 
+                    />
+                  ) : (
+                    <div 
+                      data-testid="commit-pushed-circle"
+                      style={{ 
+                        width: '10px', 
+                        height: '10px', 
+                        borderRadius: '50%', 
+                        backgroundColor: 'var(--accent)'
+                      }} 
+                    />
+                  );
+                })()}
               </div>
               <div className="commit-message" data-tooltip={c.message}>{c.message}</div>
               <div className="commit-actions" style={{ width: '88px', display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>

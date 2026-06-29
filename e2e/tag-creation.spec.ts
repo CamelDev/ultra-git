@@ -95,6 +95,14 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await expect(tagItem).toBeVisible()
       await expect(tagItem).toContainText('v1.0.0')
 
+      console.log('14.1. Verifying tag v1.0.0 is shown as a badge in the commits list...')
+      const tagBadge = page.locator('[data-testid^="commit-tag-badge-"]').filter({ hasText: 'v1.0.0' })
+      await expect(tagBadge).toBeVisible()
+
+      console.log('14.2. Verifying that the dot icon is replaced by the tag badge...')
+      const parentArea = tagBadge.locator('..')
+      await expect(parentArea.locator('[data-testid="commit-pushed-circle"]')).not.toBeVisible()
+
       console.log('15. Verify Tag exists in local Git sandbox repository refs...')
       const tagsList = await sandbox.git.tags()
       expect(tagsList.all).toContain('v1.0.0')
