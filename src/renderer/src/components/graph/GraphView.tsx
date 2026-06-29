@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag } from 'lucide-react'
+import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag, RefreshCw } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 
@@ -1037,6 +1037,26 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               </div>
             </div>
           ))}
+          {commits.length > 0 && commits.length >= (activeRepo?.commitLimit || 50) && (
+            <div 
+              className={`load-more-commits-btn ${activeRepo?.isLoading ? 'loading' : ''}`}
+              onClick={() => {
+                if (activeRepo && !activeRepo.isLoading) {
+                  useRepoStore.getState().loadMoreCommits(activeRepo.id)
+                }
+              }}
+              data-testid="load-more-btn"
+            >
+              {activeRepo?.isLoading ? (
+                <>
+                  <RefreshCw size={14} className="spin-animation" style={{ marginRight: '6px' }} />
+                  <span>Loading Commits...</span>
+                </>
+              ) : (
+                <span>Load More Commits</span>
+              )}
+            </div>
+          )}
           {commits.length === 0 && (
             <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
               No commits found or loading...

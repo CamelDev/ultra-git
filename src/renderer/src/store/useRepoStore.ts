@@ -26,6 +26,7 @@ export interface Repository {
   branch: string;
   status: any;
   commits: any[];
+  commitLimit?: number;
   stashes: StashEntry[];
   isLoading: boolean;
   error: string | null;
@@ -49,6 +50,7 @@ interface RepoState {
   removeRepo: (id: string) => void;
   setActiveId: (id: string) => void;
   refreshRepo: (id: string) => Promise<void>;
+  loadMoreCommits: (id: string) => Promise<void>;
   setSelectedCommitHash: (hash: string | null) => void;
   initializeRepos: (paths: string[], activePath: string | null) => Promise<void>;
   switchActiveRepoPath: (path: string) => Promise<void>;
@@ -370,9 +372,10 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     });
 
     try {
+      const commitLimit = repo.commitLimit || 50;
       const [statusRes, logRes, stashRes, branchesRes, tagsRes, worktreesRes] = await Promise.all([
         window.api.git.status(repo.path),
-        window.api.git.log(repo.path),
+        window.api.git.log(repo.path, commitLimit),
         window.api.git.stashList(repo.path),
         window.api.git.getBranches(repo.path),
         window.api.git.getTags(repo.path),
@@ -422,6 +425,23 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         )
       }));
     }
+  },
+
+  loadMoreCommits: async (id: string) => {
+    const { repositories } = get();
+    const repo = repositories.find(r => r.id === id);
+    if (!repo) return;
+
+    const currentLimit = repo.commitLimit || 50;
+    const newLimit = currentLimit + 50;
+
+    set({
+      repositories: repositories.map(r => 
+        r.id === id ? { ...r, commitLimit: newLimit } : r
+      )
+    });
+
+    await get().refreshRepo(id);
   },
 
   addIdentity: (identityData) => {

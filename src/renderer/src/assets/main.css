@@ -1340,5 +1340,36 @@ body {
   color: var(--text-primary);
 }
 
+/* Load More Commits Button */
+.load-more-commits-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  user-select: none;
+  outline: none;
+}
+
+.load-more-commits-btn:hover {
+  background-color: var(--hover);
+  color: var(--accent);
+}
+
+.load-more-commits-btn:active {
+  background-color: var(--border);
+}
+
+.load-more-commits-btn.loading {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 
 
