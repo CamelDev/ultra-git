@@ -327,6 +327,40 @@ export const gitService = {
     return await git.reset(['--', filePath]);
   },
 
+  discardChanges: async (repoPath: string, filePath: string, isStaged: boolean) => {
+    const git = getGitInstance(repoPath);
+    
+    // Check if the file is tracked
+    let isTracked = false;
+    try {
+      await git.raw(['ls-files', '--error-unmatch', filePath]);
+      isTracked = true;
+    } catch (e) {
+      isTracked = false;
+    }
+
+    if (isTracked) {
+      if (isStaged) {
+        // Discarding staged changes reverts both staged and unstaged edits to match HEAD
+        await git.checkout(['HEAD', '--', filePath]);
+      } else {
+        // Discarding unstaged changes restores file from index
+        await git.checkout(['--', filePath]);
+      }
+    } else {
+      // For untracked files
+      if (isStaged) {
+        // If staged, unstage it first
+        await git.reset(['--', filePath]);
+      }
+      // Delete the file from filesystem
+      const absolutePath = resolve(repoPath, filePath);
+      if (fs.existsSync(absolutePath)) {
+        fs.rmSync(absolutePath, { recursive: true, force: true });
+      }
+    }
+  },
+
   resetToCommit: async (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => {
     const git = getGitInstance(repoPath);
     return await git.reset([`--${mode}`, commitHash]);

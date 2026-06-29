@@ -860,6 +860,12 @@ body {
   border-color: var(--accent);
 }
 
+.action-btn.reset-btn:hover {
+  background-color: rgba(248, 113, 113, 0.15);
+  border-color: #f87171;
+  color: #f87171;
+}
+
 /* Active changes resizer */
 .active-changes-resizer {
   height: 4px;

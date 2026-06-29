@@ -22,6 +22,8 @@ const api = {
       ipcRenderer.invoke('git:getCommitFileDiff', repoPath, commitHash, filePath, oldPath, status),
     add: (repoPath: string, filePath: string) => ipcRenderer.invoke('git:add', repoPath, filePath),
     reset: (repoPath: string, filePath: string) => ipcRenderer.invoke('git:reset', repoPath, filePath),
+    discardChanges: (repoPath: string, filePath: string, isStaged: boolean) => 
+      ipcRenderer.invoke('git:discardChanges', repoPath, filePath, isStaged),
     resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => 
       ipcRenderer.invoke('git:resetToCommit', repoPath, commitHash, mode),
     squashCommits: (repoPath: string, commitHash: string, message: string) =>

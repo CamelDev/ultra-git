@@ -867,7 +867,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 fontWeight: 600,
                 cursor: 'pointer'
               }}
-              data-testid="open-resolver-btn"
+              data-testid="open-conflict-resolver-btn"
             >
               Resolve Conflicts <ArrowRight size={11} />
             </button>

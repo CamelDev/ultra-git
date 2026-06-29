@@ -75,7 +75,7 @@ test.describe('Active Changes Panel', () => {
       await expect(untrackedItem).toBeVisible()
 
       // Hover over the item to reveal 'Stage' button and click it
-      const stageBtn = untrackedItem.locator('.action-btn')
+      const stageBtn = untrackedItem.locator('.stage-btn')
       await stageBtn.click()
       await page.waitForTimeout(500)
 
@@ -103,7 +103,7 @@ test.describe('Active Changes Panel', () => {
 
       // 5. Unstage a single file
       const stagedUntrackedItem = stagedItems.first()
-      const unstageBtn = stagedUntrackedItem.locator('.action-btn')
+      const unstageBtn = stagedUntrackedItem.locator('.unstage-btn')
       await unstageBtn.click()
       await page.waitForTimeout(500)
 
@@ -304,6 +304,122 @@ test.describe('Active Changes Panel', () => {
       // Check git stash list directly in sandbox to verify
       const stashes = await sandbox.git.stashList()
       expect(stashes.total).toBe(1)
+
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('should support resetting (discarding) changes with confirmation', async () => {
+    const { app, page } = await launchElectronApp()
+    page.on('console', msg => console.log('PAGE LOG:', msg.text()))
+    page.on('pageerror', err => console.error('PAGE ERROR:', err.message))
+
+    try {
+      // Clear localStorage
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      // Mock openDirectory dialog to load sandbox repo
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, sandbox.dir)
+
+      // Click to add repository
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      // Create unstaged changes (untracked file + modified file)
+      const untrackedPath = path.join(sandbox.dir, 'untracked-reset.txt')
+      fs.writeFileSync(untrackedPath, 'Untracked reset content\n')
+      fs.appendFileSync(path.join(sandbox.dir, 'README.md'), 'Modified README for reset\n')
+
+      // Switch tabs to trigger status refresh
+      await tabs.first().click()
+      await page.waitForTimeout(500)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      // Verify active changes panel is visible
+      const panel = page.locator('[data-testid="active-changes-panel"]')
+      await expect(panel).toBeVisible()
+
+      const unstagedColumn = panel.locator('.unstaged-column')
+      const unstagedItems = unstagedColumn.locator('.file-item')
+      await expect(unstagedItems).toHaveCount(2)
+
+      // --- 1. Discard cancellation test ---
+      // We will mock showMessageBox to return response: 0 (Cancel)
+      await app.evaluate(async ({ ipcMain }) => {
+        (global as any).showMessageBoxOptions = null
+        ipcMain.removeHandler('dialog:showMessageBox')
+        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
+          (global as any).showMessageBoxOptions = options
+          return { success: true, response: 0 } // Cancel
+        })
+      })
+
+      // Find the untracked file item and hover
+      const untrackedItem = unstagedItems.filter({ hasText: 'untracked-reset.txt' })
+      await expect(untrackedItem).toBeVisible()
+      
+      // Click discard/reset button
+      const discardBtnCancel = untrackedItem.locator('.reset-btn')
+      await discardBtnCancel.click()
+      await page.waitForTimeout(500)
+
+      // Verify showMessageBox was called with Cancel, and file is still there
+      let dialogOptions = await app.evaluate(() => (global as any).showMessageBoxOptions)
+      expect(dialogOptions).not.toBeNull()
+      expect(dialogOptions.title).toBe('Discard Changes')
+      expect(dialogOptions.message).toContain('untracked-reset.txt')
+      await expect(unstagedItems).toHaveCount(2)
+      expect(fs.existsSync(untrackedPath)).toBe(true)
+
+      // --- 2. Discard confirmation test (Untracked file) ---
+      // Mock showMessageBox to return response: 1 (Discard)
+      await app.evaluate(async ({ ipcMain }) => {
+        ipcMain.removeHandler('dialog:showMessageBox')
+        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
+          (global as any).showMessageBoxOptions = options
+          return { success: true, response: 1 } // Discard
+        })
+      })
+
+      // Click discard/reset button again (this time confirming)
+      const discardBtnConfirm = untrackedItem.locator('.reset-btn')
+      await discardBtnConfirm.click()
+      await page.waitForTimeout(1000)
+
+      // Verify file is deleted from filesystem and removed from UI list
+      await expect(unstagedItems).toHaveCount(1)
+      expect(fs.existsSync(untrackedPath)).toBe(false)
+
+      // --- 3. Discard confirmation test (Tracked modified file) ---
+      const readmeItem = unstagedItems.filter({ hasText: 'README.md' })
+      await expect(readmeItem).toBeVisible()
+      
+      const discardReadmeBtn = readmeItem.locator('.reset-btn')
+      await discardReadmeBtn.click()
+      await page.waitForTimeout(1000)
+
+      // Active changes panel should disappear because no files left modified/unstaged/staged
+      await expect(panel).not.toBeVisible()
+      
+      // Verify README file contents reverted
+      const readmeContent = fs.readFileSync(path.join(sandbox.dir, 'README.md'), 'utf8')
+      expect(readmeContent).not.toContain('Modified README for reset')
 
     } finally {
       await app.close()

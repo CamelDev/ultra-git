@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FileText, ArrowRight, ArrowLeft, AlertTriangle } from 'lucide-react'
+import { FileText, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { DiffModal } from '../details/DiffModal'
 
@@ -53,6 +53,32 @@ export const ActiveChanges: React.FC = () => {
       }
     } catch (err) {
       console.error('Error unstaging file:', err)
+    }
+  }
+
+  const handleDiscardChanges = async (filePath: string, isStaged: boolean) => {
+    try {
+      const confirmRes = await window.api.app.showMessageBox({
+        type: 'question',
+        title: 'Discard Changes',
+        message: `Are you sure you want to discard changes in "${filePath}"? This operation cannot be undone.`,
+        buttons: ['Cancel', 'Discard'],
+        defaultId: 1,
+        cancelId: 0
+      })
+
+      if (!confirmRes.success || confirmRes.response !== 1) {
+        return
+      }
+
+      const res = await window.api.git.discardChanges(activeRepo.path, filePath, isStaged)
+      if (res.success) {
+        await refreshRepo(activeRepo.id)
+      } else {
+        console.error('Failed to discard changes:', res.error)
+      }
+    } catch (err) {
+      console.error('Error discarding changes:', err)
     }
   }
 
@@ -137,7 +163,18 @@ export const ActiveChanges: React.FC = () => {
                       {statusChar}
                     </span>
                     <button
-                      className="action-btn"
+                      className="action-btn reset-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDiscardChanges(file.path, false)
+                      }}
+                      data-tooltip="Discard changes"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <RotateCcw size={12} />
+                    </button>
+                    <button
+                      className="action-btn stage-btn"
                       onClick={(e) => {
                         e.stopPropagation()
                         handleStageFile(file.path)
@@ -199,7 +236,18 @@ export const ActiveChanges: React.FC = () => {
                       {file.index}
                     </span>
                     <button
-                      className="action-btn"
+                      className="action-btn reset-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDiscardChanges(file.path, true)
+                      }}
+                      data-tooltip="Discard changes"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <RotateCcw size={12} />
+                    </button>
+                    <button
+                      className="action-btn unstage-btn"
                       onClick={(e) => {
                         e.stopPropagation()
                         handleUnstageFile(file.path)

@@ -22,6 +22,7 @@ declare global {
         getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         add: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
         reset: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>;
+        discardChanges: (repoPath: string, filePath: string, isStaged: boolean) => Promise<{ success: boolean; error?: string }>;
         resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => Promise<{ success: boolean; error?: string }>;
         squashCommits: (repoPath: string, commitHash: string, message: string) => Promise<{ success: boolean; error?: string }>;
         addAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>;

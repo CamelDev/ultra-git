@@ -206,6 +206,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:discardChanges', async (_, repoPath, filePath, isStaged) => {
+    try {
+      await gitService.discardChanges(repoPath, filePath, isStaged)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:resetToCommit', async (_, repoPath, commitHash, mode) => {
     try {
       await gitService.resetToCommit(repoPath, commitHash, mode)

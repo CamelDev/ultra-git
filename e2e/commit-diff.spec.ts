@@ -123,13 +123,10 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       await expect(diffModalOverlay).toBeVisible()
 
       // Verify diff rows
-      const deleteRow = page.locator('.diff-row.type-delete')
-      await expect(deleteRow).toBeVisible()
-      await expect(deleteRow.locator('.diff-col.left .diff-line-content')).toContainText('Line 2')
-
-      const addRow2 = page.locator('.diff-row.type-add').first()
-      await expect(addRow2).toBeVisible()
-      await expect(addRow2.locator('.diff-col.right .diff-line-content')).toContainText('Line 2 Modified')
+      const changeRow = page.locator('.diff-row.type-change')
+      await expect(changeRow).toBeVisible()
+      await expect(changeRow.locator('.diff-col.left .diff-line-content')).toContainText('Line 2')
+      await expect(changeRow.locator('.diff-col.right .diff-line-content')).toContainText('Line 2 Modified')
 
       // Close the modal
       const closeBtn = page.locator('.diff-modal-close')
