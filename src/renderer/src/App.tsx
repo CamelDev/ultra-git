@@ -242,7 +242,7 @@ function App() {
     }
     
     const isTesting = window.api.app.isTesting
-    const disableDefaultTab = localStorage.getItem('disable-default-tab') === 'true'
+    const disableDefaultTab = localStorage.getItem('disable-default-tab') === 'true' || window.api.app.disableDefaultTab
 
     if (paths.length === 0) {
       if (isTesting && !disableDefaultTab) {

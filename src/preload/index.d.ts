@@ -37,6 +37,11 @@ declare global {
       app: {
         openDirectory: () => Promise<{ canceled: boolean, path?: string }>;
         resolvePath: (repoPath: string) => Promise<{ success: boolean, path?: string, error?: string }>;
+        openFile: (options?: any) => Promise<{ canceled: boolean, path?: string }>;
+        copyToClipboard: (text: string) => Promise<{ success: boolean, error?: string }>;
+        showMessageBox: (options: any) => Promise<{ success: boolean, response?: number, checkboxChecked?: boolean, error?: string }>;
+        isTesting: boolean;
+        disableDefaultTab: boolean;
       }
     }
   }

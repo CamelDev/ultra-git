@@ -75,6 +75,8 @@ declare global {
           checkboxLabel?: string;
           checkboxChecked?: boolean;
         }) => Promise<{ success: boolean; response?: number; checkboxChecked?: boolean; error?: string }>;
+        isTesting: boolean;
+        disableDefaultTab: boolean;
       };
     }
   }

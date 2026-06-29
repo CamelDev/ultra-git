@@ -142,6 +142,7 @@ test.describe('Branch Sync Status', () => {
       await addBtn.click()
 
       const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
       await tabs.last().click()
       await page.waitForTimeout(1000)
 
@@ -210,6 +211,7 @@ test.describe('Branch Sync Status', () => {
       await addBtn.click()
 
       const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
       await tabs.last().click()
       await page.waitForTimeout(1000)
 
@@ -325,6 +327,7 @@ test.describe('Branch Sync Status', () => {
       await addBtn.click()
 
       const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
       await tabs.last().click()
       await page.waitForTimeout(1000)
 

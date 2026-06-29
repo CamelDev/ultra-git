@@ -82,7 +82,8 @@ const api = {
     resolvePath: (repoPath: string) => ipcRenderer.invoke('app:resolvePath', repoPath),
     copyToClipboard: (text: string) => ipcRenderer.invoke('app:copyToClipboard', text),
     showMessageBox: (options: any) => ipcRenderer.invoke('dialog:showMessageBox', options),
-    isTesting: process.env.ULTRA_GIT_TESTING === 'true'
+    isTesting: process.env.ULTRA_GIT_TESTING === 'true',
+    disableDefaultTab: process.env.ULTRA_GIT_DISABLE_DEFAULT_TAB === 'true'
   }
 }
 

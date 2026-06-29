@@ -3,19 +3,12 @@ import { launchElectronApp } from './helpers/launcher';
 
 test.describe('Resizable Left Sidebar', () => {
   test('should resize the sidebar and persist the width', async () => {
-    const { app, page } = await launchElectronApp();
+    const { app, page } = await launchElectronApp({ disableDefaultTab: true });
 
     // Set viewport size to accommodate maximum resizing bounds
     await page.setViewportSize({ width: 1600, height: 900 });
 
     try {
-      // Clear localStorage to ensure a clean state for the test run
-      await page.evaluate(() => {
-        localStorage.clear();
-        localStorage.setItem('disable-default-tab', 'true');
-      });
-      await page.reload();
-      await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1000); // Wait for layout stability
 
       // Mock openDirectory dialog to load current working directory

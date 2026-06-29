@@ -169,6 +169,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
 
       // switch to the sandbox repository tab
       const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
       await tabs.last().click()
       await page.waitForTimeout(1000)
 
@@ -250,6 +251,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
 
       // Switch to the sandbox repository tab
       const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
       await tabs.last().click()
       await page.waitForTimeout(1000)
 

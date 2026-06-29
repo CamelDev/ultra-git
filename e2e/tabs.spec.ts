@@ -23,16 +23,9 @@ test.describe('Multi-Repo Tab System', () => {
 
   test('should support the full multi-repo tab life-cycle (add, switch, render, close)', async () => {
     // 3. Launch the native Electron Application
-    const { app, page } = await launchElectronApp();
+    const { app, page } = await launchElectronApp({ disableDefaultTab: true });
 
     try {
-      // Enable landing page for this test
-      await page.evaluate(() => {
-        localStorage.setItem('disable-default-tab', 'true');
-      });
-      await page.reload();
-      await page.waitForLoadState('domcontentloaded');
-
       const expectedInitialTabName = path.basename(process.cwd());
 
       // 4. Verify initial state has 0 tabs and landing page is visible
@@ -101,16 +94,9 @@ test.describe('Multi-Repo Tab System', () => {
 
   test('should persist tabs on app reload/restart', async () => {
     // 1. Launch the native Electron Application
-    const { app: app1, page: page1 } = await launchElectronApp();
+    const { app: app1, page: page1 } = await launchElectronApp({ disableDefaultTab: true });
     
     try {
-      // Enable landing page for this test
-      await page1.evaluate(() => {
-        localStorage.setItem('disable-default-tab', 'true');
-      });
-      await page1.reload();
-      await page1.waitForLoadState('domcontentloaded');
-
       const expectedInitialTabName = path.basename(process.cwd());
 
       // Verify 0 tabs initially

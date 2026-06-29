@@ -33,11 +33,6 @@ test.describe('Cherry Pick Feature', () => {
 
     try {
       console.log('3. Registering sandbox repo in app...')
-      await page.evaluate(() => localStorage.clear())
-      await page.reload()
-      await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(500)
-
       await app.evaluate(async ({ ipcMain }, repoPath) => {
         ipcMain.removeHandler('dialog:openDirectory')
         ipcMain.handle('dialog:openDirectory', async () => {
@@ -117,11 +112,6 @@ test.describe('Cherry Pick Feature', () => {
 
     try {
       console.log('5. Registering sandbox repo in app...')
-      await page.evaluate(() => localStorage.clear())
-      await page.reload()
-      await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(500)
-
       await app.evaluate(async ({ ipcMain }, repoPath) => {
         ipcMain.removeHandler('dialog:openDirectory')
         ipcMain.handle('dialog:openDirectory', async () => {
@@ -133,6 +123,7 @@ test.describe('Cherry Pick Feature', () => {
       await addBtn.click()
 
       const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
       await tabs.last().click()
       await page.waitForTimeout(500)
 
