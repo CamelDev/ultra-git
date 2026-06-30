@@ -9,6 +9,7 @@ import { ActiveChanges } from "./components/active-changes/ActiveChanges"
 import { ConflictResolver } from "./components/sidebar/ConflictResolver"
 import LandingPage from "./components/layout/LandingPage"
 import { useTooltip } from "./hooks/useTooltip"
+import { Toast, useToastManager } from "./components/layout/Toast"
 
 interface ConflictState {
   active: boolean
@@ -18,9 +19,10 @@ interface ConflictState {
 }
 
 function App() {
-  const { addRepo, getActiveRepo, refreshRepo, initializeRepos } = useRepoStore()
+  const { addRepo, getActiveRepo, refreshRepo, initializeRepos, undoLastOperation, redoLastOperation } = useRepoStore()
   const activeRepo = getActiveRepo()
   const [isInitialized, setIsInitialized] = useState(false)
+  const { messages: toastMessages, addToast, dismiss: dismissToast } = useToastManager()
   useTooltip()
 
   const handleOpenRepo = async () => {
@@ -302,6 +304,37 @@ function App() {
     }
   }, [])
 
+  // Keyboard shortcuts: Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z = redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+      const modKey = isMac ? e.metaKey : e.ctrlKey
+      if (!modKey) return
+
+      // Don't intercept when a text input / textarea is focused
+      const target = e.target as HTMLElement
+      const isInputFocused =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      if (isInputFocused) return
+
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undoLastOperation().then((label) => {
+          if (label) addToast(`Undone: ${label}`)
+        })
+      } else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
+        e.preventDefault()
+        redoLastOperation().then((label) => {
+          if (label) addToast(`Redone: ${label}`)
+        })
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [undoLastOperation, redoLastOperation, addToast])
+
 
   const renderContent = () => {
     if (!isInitialized) {
@@ -401,6 +434,7 @@ function App() {
     <>
       <TitleBar />
       {renderContent()}
+      <Toast messages={toastMessages} onDismiss={dismissToast} />
     </>
   )
 }

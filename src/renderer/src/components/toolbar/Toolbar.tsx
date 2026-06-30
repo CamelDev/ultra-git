@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package } from 'lucide-react'
+import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package, Undo2, Redo2 } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { gitHistory } from '../../store/gitOperationHistory'
 import { CherryPickModal } from './CherryPickModal'
 import BranchGraphModal from '../graph/BranchGraphModal'
 
@@ -11,7 +12,18 @@ interface ToolbarProps {
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
-  const { getActiveRepo, refreshRepo, identities } = useRepoStore()
+  const {
+    getActiveRepo,
+    refreshRepo,
+    identities,
+    canUndo,
+    canRedo,
+    undoLabel,
+    redoLabel,
+    undoLastOperation,
+    redoLastOperation,
+    syncUndoState
+  } = useRepoStore()
   const activeRepo = getActiveRepo()
   const [commitMessage, setCommitMessage] = useState('')
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false)
@@ -36,7 +48,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
     try {
       const res = await window.api.git.addAll(activeRepo.path)
       if (res.success) {
+        const repoPath = activeRepo.path
+        gitHistory.push({
+          label: 'Stage all',
+          repoPath,
+          undo: async () => { await window.api.git.resetAll(repoPath) },
+          redo: async () => { await window.api.git.addAll(repoPath) }
+        })
         await refreshRepo(activeRepo.id)
+        syncUndoState()
       } else {
         console.error('Failed to stage all files:', res.error)
       }
@@ -50,7 +70,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
     try {
       const res = await window.api.git.resetAll(activeRepo.path)
       if (res.success) {
+        const repoPath = activeRepo.path
+        gitHistory.push({
+          label: 'Unstage all',
+          repoPath,
+          undo: async () => { await window.api.git.addAll(repoPath) },
+          redo: async () => { await window.api.git.resetAll(repoPath) }
+        })
         await refreshRepo(activeRepo.id)
+        syncUndoState()
       } else {
         console.error('Failed to unstage all files:', res.error)
       }
@@ -87,8 +115,19 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
     try {
       const res = await window.api.git.commit(activeRepo.path, commitMessage)
       if (res.success) {
+        const repoPath = activeRepo.path
+        const savedMessage = commitMessage
+        // Capture the HEAD sha before commit so we can reset to it on undo
+        // After a successful commit, HEAD has moved. Undo = soft reset to parent.
+        gitHistory.push({
+          label: `Commit "${savedMessage.length > 30 ? savedMessage.slice(0, 30) + '…' : savedMessage}"`,
+          repoPath,
+          undo: async () => { await window.api.git.resetToCommit(repoPath, 'HEAD~1', 'soft') },
+          redo: async () => { await window.api.git.commit(repoPath, savedMessage) }
+        })
         setCommitMessage('')
         await refreshRepo(activeRepo.id)
+        syncUndoState()
       } else {
         console.error('Failed to commit:', res.error)
       }
@@ -145,6 +184,34 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
       >
         Branch changes
       </div>
+
+      {/* Undo / Redo buttons — always visible when a repo is open */}
+      {activeRepo && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '8px' }}>
+          <button
+            className="btn-stash btn-icon"
+            onClick={undoLastOperation}
+            disabled={!canUndo}
+            style={{ opacity: canUndo ? 1 : 0.35, cursor: canUndo ? 'pointer' : 'not-allowed' }}
+            data-tooltip={canUndo ? `Undo: ${undoLabel}` : 'Nothing to undo'}
+            data-testid="undo-btn"
+          >
+            <Undo2 size={16} />
+            <span className="sr-only">Undo</span>
+          </button>
+          <button
+            className="btn-stash btn-icon"
+            onClick={redoLastOperation}
+            disabled={!canRedo}
+            style={{ opacity: canRedo ? 1 : 0.35, cursor: canRedo ? 'pointer' : 'not-allowed' }}
+            data-tooltip={canRedo ? `Redo: ${redoLabel}` : 'Nothing to redo'}
+            data-testid="redo-btn"
+          >
+            <Redo2 size={16} />
+            <span className="sr-only">Redo</span>
+          </button>
+        </div>
+      )}
 
       {activeRepo && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

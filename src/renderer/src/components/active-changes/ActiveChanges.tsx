@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import { FileText, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { gitHistory } from '../../store/gitOperationHistory'
 import { DiffModal } from '../details/DiffModal'
 
 export const ActiveChanges: React.FC = () => {
-  const { getActiveRepo, refreshRepo, identities } = useRepoStore()
+  const { getActiveRepo, refreshRepo, identities, syncUndoState } = useRepoStore()
   const activeRepo = getActiveRepo()
 
   const [selectedFileForDiff, setSelectedFileForDiff] = useState<{
@@ -32,9 +33,17 @@ export const ActiveChanges: React.FC = () => {
 
   const handleStageFile = async (filePath: string) => {
     try {
-      const res = await window.api.git.add(activeRepo.path, filePath)
+      const res = await window.api.git.add(activeRepo!.path, filePath)
       if (res.success) {
-        await refreshRepo(activeRepo.id)
+        const repoPath = activeRepo!.path
+        gitHistory.push({
+          label: `Stage ${filePath}`,
+          repoPath,
+          undo: async () => { await window.api.git.reset(repoPath, filePath) },
+          redo: async () => { await window.api.git.add(repoPath, filePath) }
+        })
+        await refreshRepo(activeRepo!.id)
+        syncUndoState()
       } else {
         console.error('Failed to stage file:', res.error)
       }
@@ -45,9 +54,17 @@ export const ActiveChanges: React.FC = () => {
 
   const handleUnstageFile = async (filePath: string) => {
     try {
-      const res = await window.api.git.reset(activeRepo.path, filePath)
+      const res = await window.api.git.reset(activeRepo!.path, filePath)
       if (res.success) {
-        await refreshRepo(activeRepo.id)
+        const repoPath = activeRepo!.path
+        gitHistory.push({
+          label: `Unstage ${filePath}`,
+          repoPath,
+          undo: async () => { await window.api.git.add(repoPath, filePath) },
+          redo: async () => { await window.api.git.reset(repoPath, filePath) }
+        })
+        await refreshRepo(activeRepo!.id)
+        syncUndoState()
       } else {
         console.error('Failed to unstage file:', res.error)
       }

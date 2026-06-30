@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { gitHistory } from './gitOperationHistory'
 
 export interface StashEntry {
   index: number;
@@ -44,6 +45,12 @@ interface RepoState {
   identities: Identity[];
   activeId: string | null;
   selectedCommitHash: string | null;
+
+  // Undo / Redo state (derived from gitHistory, synced after every mutation)
+  canUndo: boolean;
+  canRedo: boolean;
+  undoLabel: string | null;
+  redoLabel: string | null;
   
   // Actions
   addRepo: (path: string) => Promise<void>;
@@ -54,6 +61,12 @@ interface RepoState {
   setSelectedCommitHash: (hash: string | null) => void;
   initializeRepos: (paths: string[], activePath: string | null) => Promise<void>;
   switchActiveRepoPath: (path: string) => Promise<void>;
+
+  // Undo / Redo actions
+  undoLastOperation: () => Promise<string | null>;
+  redoLastOperation: () => Promise<string | null>;
+  /** Sync canUndo/canRedo/labels from gitHistory into the store */
+  syncUndoState: () => void;
   
   // Helper to get active repo
   getActiveRepo: () => Repository | undefined;
@@ -90,6 +103,51 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   identities: typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [],
   activeId: null,
   selectedCommitHash: null,
+
+  // Undo / Redo reactive state – starts empty
+  canUndo: false,
+  canRedo: false,
+  undoLabel: null,
+  redoLabel: null,
+
+  syncUndoState: () => {
+    const { repositories, activeId } = get()
+    const repo = repositories.find((r) => r.id === activeId)
+    if (!repo) {
+      set({ canUndo: false, canRedo: false, undoLabel: null, redoLabel: null })
+      return
+    }
+    set({
+      canUndo: gitHistory.canUndo(repo.path),
+      canRedo: gitHistory.canRedo(repo.path),
+      undoLabel: gitHistory.undoLabel(repo.path),
+      redoLabel: gitHistory.redoLabel(repo.path)
+    })
+  },
+
+  undoLastOperation: async () => {
+    const { repositories, activeId, refreshRepo, syncUndoState } = get()
+    const repo = repositories.find((r) => r.id === activeId)
+    if (!repo) return null
+    const label = await gitHistory.undo(repo.path)
+    if (label !== null) {
+      await refreshRepo(repo.id)
+    }
+    syncUndoState()
+    return label
+  },
+
+  redoLastOperation: async () => {
+    const { repositories, activeId, refreshRepo, syncUndoState } = get()
+    const repo = repositories.find((r) => r.id === activeId)
+    if (!repo) return null
+    const label = await gitHistory.redo(repo.path)
+    if (label !== null) {
+      await refreshRepo(repo.id)
+    }
+    syncUndoState()
+    return label
+  },
 
   getActiveRepo: () => {
     const { repositories, activeId } = get();
