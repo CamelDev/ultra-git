@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag, RefreshCw } from 'lucide-react'
+import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag, RefreshCw, Search } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 
@@ -65,6 +65,25 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const [isSquashing, setIsSquashing] = useState(false)
   const [squashError, setSquashError] = useState('')
 
+  // Commit search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
+
+  // Reset search when repo changes
+  useEffect(() => {
+    setSearchQuery('')
+  }, [activeRepo?.id])
+
+  const filteredCommits = commits.filter((c) => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    const hashMatches = c.hash.toLowerCase().includes(query)
+    const msgMatches = c.message.toLowerCase().includes(query)
+    const authorMatches = c.author_name.toLowerCase().includes(query) || (c.author_email && c.author_email.toLowerCase().includes(query))
+    const refsMatches = c.refs ? c.refs.toLowerCase().includes(query) : false
+    return hashMatches || msgMatches || authorMatches || refsMatches
+  })
+
   const commitsToSquash = squashTargetCommit 
     ? commits.slice(0, commits.findIndex(c => c.hash === squashTargetCommit.hash) + 1)
     : []
@@ -100,10 +119,10 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         return
       }
 
-      if (commits.length === 0) return
+      if (filteredCommits.length === 0) return
 
       // Find current selected index
-      const currentIndex = commits.findIndex((c) => c.hash === selectedCommitHash)
+      const currentIndex = filteredCommits.findIndex((c) => c.hash === selectedCommitHash)
       let nextIndex = currentIndex
 
       if (e.key === 'ArrowUp') {
@@ -116,13 +135,13 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         if (currentIndex === -1) {
           nextIndex = 0
         } else {
-          nextIndex = Math.min(commits.length - 1, currentIndex + 1)
+          nextIndex = Math.min(filteredCommits.length - 1, currentIndex + 1)
         }
       }
 
       if (nextIndex !== -1 && nextIndex !== currentIndex) {
         e.preventDefault()
-        setSelectedCommitHash(commits[nextIndex].hash)
+        setSelectedCommitHash(filteredCommits[nextIndex].hash)
       }
     }
 
@@ -130,7 +149,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [commits, selectedCommitHash, setSelectedCommitHash])
+  }, [filteredCommits, selectedCommitHash, setSelectedCommitHash])
 
   // Scroll active commit into view
   useEffect(() => {
@@ -140,7 +159,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         activeEl.scrollIntoView({ block: 'nearest' })
       }
     }
-  }, [selectedCommitHash, commits])
+  }, [selectedCommitHash, filteredCommits])
 
   const handlePull = async () => {
     if (!activeRepo || isPulling || isPushing) return
@@ -790,8 +809,65 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
             )}
           </div>
 
+          {/* Commit Search Filter */}
+          <div 
+            style={{ 
+              marginLeft: 'auto', 
+              display: 'flex', 
+              alignItems: 'center', 
+              position: 'relative', 
+              marginRight: '12px' 
+            }} 
+            data-testid="commit-search-container"
+          >
+            <Search 
+              size={12} 
+              style={{ 
+                position: 'absolute', 
+                left: '8px', 
+                color: 'var(--text-secondary)' 
+              }} 
+            />
+            <input
+              type="text"
+              placeholder="Search commits..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              style={{
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                border: isSearchFocused ? '1px solid var(--accent)' : '1px solid var(--border)',
+                boxShadow: isSearchFocused ? '0 0 0 2px rgba(99, 102, 241, 0.2)' : 'none',
+                borderRadius: '4px',
+                padding: '4px 24px 4px 26px',
+                fontSize: '11px',
+                width: '180px',
+                height: '24px',
+                outline: 'none',
+                boxSizing: 'border-box',
+                transition: 'all 0.2s ease'
+              }}
+              data-testid="commit-search-input"
+            />
+            {searchQuery && (
+              <X
+                size={12}
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer'
+                }}
+                data-testid="commit-search-clear-btn"
+              />
+            )}
+          </div>
+
           {/* Identity Selector */}
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>Identity:</span>
             <select
               value={activeRepo.identityId || ''}
@@ -891,7 +967,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         style={{ outline: 'none', flex: 1, overflowY: 'auto' }}
       >
         <div className="commit-list">
-          {commits.map((c) => (
+          {filteredCommits.map((c) => (
             <div 
               key={c.hash} 
               className={`commit-item ${selectedCommitHash === c.hash ? 'active' : ''}`}
@@ -1057,9 +1133,12 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               )}
             </div>
           )}
-          {commits.length === 0 && (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              No commits found or loading...
+          {filteredCommits.length === 0 && (
+            <div 
+              style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}
+              data-testid="no-commits-message"
+            >
+              {commits.length === 0 ? 'No commits found or loading...' : 'No commits match search query.'}
             </div>
           )}
         </div>
