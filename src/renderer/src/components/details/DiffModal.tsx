@@ -66,6 +66,18 @@ function computeInlineDiff(
     }
   }
 
+  // Similarity check: if the lines share less than 40% of their longer length,
+  // they are too different for meaningful char-level highlights — fall back to
+  // whole-line highlighting so we don't produce misleading partial marks.
+  const lcsLen = dp[m][n]
+  const similarity = lcsLen / Math.max(m, n, 1)
+  if (similarity < 0.4) {
+    return {
+      oldSpans: [{ text: oldStr, highlight: true }],
+      newSpans: [{ text: newStr, highlight: true }]
+    }
+  }
+
   // Back-track to find which chars are in LCS
   const oldInLcs = new Uint8Array(m)
   const newInLcs = new Uint8Array(n)
