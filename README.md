@@ -8,8 +8,11 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron, R
 * **Tabbed Interface**: Manage and work on multiple Git repositories simultaneously in a clean tabbed layout.
 * **Native Repository Loader**: Open local repositories using a native directory selection dialog.
 * **Workspace Persistence**: Active and open repositories are saved to `localStorage` and automatically restored when the application starts.
+* **Landing Welcome Page**: Displays a clean landing page with quick action shortcuts (e.g., open local repository) when no repository tabs are open.
+* **About Dialog**: A styled dialog accessible from the titlebar showing version details and development specifications.
 
 ### 2. Folder-Grouped Sidebar Navigation
+* **Sidebar Filter**: A sticky search input at the top of the sidebar allows real-time filtering of local branches, remote branches, and worktrees.
 * **Folder-Grouped Tree View**: Local and remote branches are grouped by folder structures (delimited by `/`).
   * Collapsible/expandable folder nodes with custom icons (`Folder` and chevrons).
   * The folder containing the active branch is auto-expanded by default.
@@ -28,10 +31,14 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron, R
   * **Stash Details**: View stash files and diffs.
   * **Stash Operations**: Pop stashes back into the workspace (with merge conflict warning banners) or drop stashes.
 * **Tags**: Alphabetic listing of tags.
+  * **Collapsible Tags Section**: Toggle the visibility of the Tags list to keep the sidebar organized.
   * **Tag Management**: Create tags from HEAD, delete local tags (with an option to sync delete remote tags), and push all tags to the remote.
 
 ### 3. Visual Commit Log & Synchronization
 * **Commit History Graph**: Interactive timeline showing commit messages, authors, dates, and sync status.
+* **Commit Search & Filter**: Search and filter repository commits by message directly from the toolbar input.
+* **Pagination (Progressive Loading)**: A "Load More" button at the bottom of the commits list enables fetching and rendering commits beyond the initial limit (100 commits at a time).
+* **Visual Branch Graph Modal**: Open a dedicated node-based interactive graph diagram to visualize the repository's branch and tag structure.
 * **Sync Status Indicators**:
   * `Globe icon`: Commit exists on remote only (behind remote).
   * `Empty circle`: Commit exists locally only (ahead of remote).
@@ -53,11 +60,13 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron, R
 ### 5. WIP Active Changes (Working Directory)
 * **Staged & Unstaged Columns**: Shows lists of files with status badges (`M`, `A`, `D`, `?`) and rename indicators.
 * **Quick Actions**: Stage or unstage individual files or all changes with one click.
+* **File Discards / Single-File Reset**: Discard/reset changes for individual files in both staged and unstaged lists, with a confirmation modal to prevent accidental data loss.
 * **Identity Alerts**: Displays warning banners when multiple identities are configured but none is selected for the repository.
 * **Height Resizable**: Drag handle allows expanding/collapsing the panel. Layout state is persisted.
 
 ### 6. Code Diff Viewer (DiffModal)
 * **Split Diff View**: Shows line-by-line comparison of additions (green) and deletions (red) with matching line numbers.
+* **Word-Level/Inline Highlights**: Pairs of deleted and added lines are parsed to highlight character-level and word-level edits inline.
 * **Jump-to-First-Change**: Automatically scrolls to the first line containing code changes.
 * **Interactive Overview Ruler**: Shows color-coded vertical stripes of all changes next to the scrollbar; clicking a marker scrolls to that exact line.
 * **Binary File Safety**: Automatically detects binary files and shows a user-friendly message.
@@ -69,6 +78,7 @@ UltraGIT is a modern, high-performance desktop Git client built with Electron, R
 * **Hunk Navigation**: Step through conflict hunks individually with tab selectors.
 * **Accept Strategies**: Pick Ours, Theirs, or Both (joins both sections).
 * **Apply & Stage**: Writes resolved code blocks back to the file and stages it, marking it resolved.
+* **Tooltip Overlay**: Custom context-aware tooltips overlaying action buttons throughout the user interface.
 
 ---
 
