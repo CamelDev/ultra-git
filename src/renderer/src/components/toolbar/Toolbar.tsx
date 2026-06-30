@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { GitBranch, X, Tag, Copy, Network } from 'lucide-react'
+import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { CherryPickModal } from './CherryPickModal'
 import BranchGraphModal from '../graph/BranchGraphModal'
@@ -149,7 +149,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
       {activeRepo && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
-            className="btn-stash"
+            className="btn-stash btn-icon"
             onClick={() => {
               if (isCurrentRepoWorktree) return;
               setNewBranchName('')
@@ -160,32 +160,28 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
             data-tooltip={isCurrentRepoWorktree ? "Cannot create branch from a worktree" : "Create a new branch from latest local commit (HEAD)"}
             data-testid="create-branch-btn"
             style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '6px',
               opacity: isCurrentRepoWorktree ? 0.5 : 1,
               cursor: isCurrentRepoWorktree ? 'not-allowed' : 'pointer'
             }}
           >
-            <GitBranch size={14} />
-            Branch
+            <GitBranch size={16} />
+            <span className="sr-only">Branch</span>
           </button>
 
           <button
-            className="btn-stash"
+            className="btn-stash btn-icon"
             onClick={() => {
               setIsCherryPickModalOpen(true)
             }}
             data-tooltip="Cherry pick from another branch"
             data-testid="cherry-pick-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <Copy size={14} />
-            Cherry pick from ...
+            <Cherry size={16} />
+            <span className="sr-only">Cherry pick from ...</span>
           </button>
 
           <button
-            className="btn-stash"
+            className="btn-stash btn-icon"
             onClick={() => {
               setNewTagName('')
               setTagErrorMessage('')
@@ -193,21 +189,19 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
             }}
             data-tooltip="Create a new tag from latest local commit (HEAD)"
             data-testid="create-tag-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <Tag size={14} />
-            Tag
+            <Tag size={16} />
+            <span className="sr-only">Tag</span>
           </button>
 
           <button
-            className="btn-stash"
+            className="btn-stash btn-icon"
             onClick={() => setIsGraphModalOpen(true)}
             data-tooltip="View visual branch graph"
             data-testid="branch-graph-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <Network size={14} />
-            Graph
+            <Network size={16} />
+            <span className="sr-only">Graph</span>
           </button>
         </div>
       )}
@@ -217,32 +211,35 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
           {files.length > 0 && (
             <>
               <button
-                className="btn-primary"
+                className="btn-primary btn-icon"
                 onClick={handleStageAll}
                 disabled={unstagedFiles.length === 0}
                 style={{ opacity: unstagedFiles.length === 0 ? 0.5 : 1, cursor: unstagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
                 data-tooltip="Stage all unstaged changes"
               >
-                Stage all
+                <Plus size={16} />
+                <span className="sr-only">Stage all</span>
               </button>
               <button
-                className="btn-secondary"
+                className="btn-secondary btn-icon"
                 onClick={handleUnstageAll}
                 disabled={stagedFiles.length === 0}
                 style={{ opacity: stagedFiles.length === 0 ? 0.5 : 1, cursor: stagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
                 data-tooltip="Unstage all staged changes"
               >
-                Unstage all
+                <Minus size={16} />
+                <span className="sr-only">Unstage all</span>
               </button>
               <button
-                className="btn-stash"
+                className="btn-stash btn-icon"
                 onClick={handleStashAll}
                 disabled={files.length === 0}
                 style={{ opacity: files.length === 0 ? 0.5 : 1, cursor: files.length === 0 ? 'not-allowed' : 'pointer' }}
                 data-tooltip="Stash all uncommitted changes (staged and unstaged)"
                 data-testid="stash-all-btn"
               >
-                Stash all
+                <Package size={16} />
+                <span className="sr-only">Stash all</span>
               </button>
 
               <div className="commit-section" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>

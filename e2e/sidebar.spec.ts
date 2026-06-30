@@ -94,18 +94,11 @@ test.describe('Resizable Left Sidebar', () => {
   });
 
   test('should reset sidebar and details panel widths on choosing Reset Layout', async () => {
-    const { app, page } = await launchElectronApp();
+    const { app, page } = await launchElectronApp({ disableDefaultTab: true });
     await page.setViewportSize({ width: 1600, height: 900 });
 
     try {
-      // Clear localStorage
-      await page.evaluate(() => {
-        localStorage.clear();
-        localStorage.setItem('disable-default-tab', 'true');
-      });
-      await page.reload();
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(1000); // Wait for layout stability
 
       // Mock openDirectory dialog to load current working directory
       await app.evaluate(async ({ ipcMain }, cwdPath) => {
