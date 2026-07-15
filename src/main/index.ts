@@ -2,8 +2,12 @@ import { app, shell, BrowserWindow, ipcMain, dialog, clipboard } from 'electron'
 import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { fixPath } from './env'
 import { gitService } from './git'
 import { watchDirectory, stopWatching } from './watcher'
+
+// Fix the PATH on macOS and Linux before spawning child processes
+fixPath()
 
 let mainWindow: BrowserWindow | null = null
 
