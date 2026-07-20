@@ -119,8 +119,11 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await expect(mainBranchItem).toContainText('main')
       await expect(activeBranch).toContainText('feature-cool')
 
-      console.log('17.2. Clicking on main to switch back...')
-      await mainBranchItem.click()
+      console.log('17.2. Clicking checkout button on main to switch back...')
+      await mainBranchItem.hover()
+      const checkoutMainBtn = page.locator('[data-testid="checkout-branch-btn-main"]')
+      await expect(checkoutMainBtn).toBeVisible()
+      await checkoutMainBtn.click()
       await page.waitForTimeout(1000)
 
       console.log('17.3. Verifying active branch is back to main...')
@@ -437,9 +440,12 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       expect(localBranches.all).toContain('feature-remote');
 
       console.log('12. Now testing checkout when local branch already exists...');
-      // Switch back to main using UI
+      // Switch back to main using UI (checkout button)
       const mainBranchItem = page.locator('[data-testid="sidebar-branch-main"]');
-      await mainBranchItem.click();
+      await mainBranchItem.hover();
+      const checkoutMainBtn = page.locator('[data-testid="checkout-branch-btn-main"]');
+      await expect(checkoutMainBtn).toBeVisible();
+      await checkoutMainBtn.click();
       await page.waitForTimeout(1000);
       await expect(activeBranch).toContainText('main');
 

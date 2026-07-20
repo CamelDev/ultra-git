@@ -44,6 +44,10 @@ interface RepoState {
   identities: Identity[];
   activeId: string | null;
   selectedCommitHash: string | null;
+  previewBranch: string | null;
+  previewCommits: any[];
+  previewCommitLimit: number;
+  isLoadingPreview: boolean;
   
   // Actions
   addRepo: (path: string) => Promise<void>;
@@ -54,6 +58,9 @@ interface RepoState {
   setSelectedCommitHash: (hash: string | null) => void;
   initializeRepos: (paths: string[], activePath: string | null) => Promise<void>;
   switchActiveRepoPath: (path: string) => Promise<void>;
+  loadBranchCommits: (branchName: string) => Promise<void>;
+  loadMoreBranchCommits: () => Promise<void>;
+  clearBranchPreview: () => void;
   
   // Helper to get active repo
   getActiveRepo: () => Repository | undefined;
@@ -90,6 +97,10 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   identities: typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [],
   activeId: null,
   selectedCommitHash: null,
+  previewBranch: null,
+  previewCommits: [],
+  previewCommitLimit: 50,
+  isLoadingPreview: false,
 
   getActiveRepo: () => {
     const { repositories, activeId } = get();
@@ -99,7 +110,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   setActiveId: (id: string) => {
     const repo = get().repositories.find(r => r.id === id);
     const latestHash = (repo && repo.commits.length > 0) ? repo.commits[0].hash : null;
-    set({ activeId: id, selectedCommitHash: latestHash });
+    set({ activeId: id, selectedCommitHash: latestHash, previewBranch: null, previewCommits: [] });
     if (repo) {
       window.api.git.watchRepo(repo.path).catch(err => console.error('Failed to watch repo on switch', err));
     }
@@ -128,7 +139,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     if (repositories.find(r => normalizePath(r.path) === normalizePath(resolvedPath))) {
       const existing = repositories.find(r => normalizePath(r.path) === normalizePath(resolvedPath))!;
       const latestHash = existing.commits.length > 0 ? existing.commits[0].hash : null;
-      set({ activeId: existing.id, selectedCommitHash: latestHash });
+      set({ activeId: existing.id, selectedCommitHash: latestHash, previewBranch: null, previewCommits: [] });
       saveToLocalStorage(get().repositories, existing.id);
       return;
     }
@@ -182,7 +193,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     set({ 
       repositories: [...repositories, newRepo],
       activeId: id,
-      selectedCommitHash: null
+      selectedCommitHash: null,
+      previewBranch: null,
+      previewCommits: []
     });
     saveToLocalStorage(get().repositories, id);
 
@@ -207,7 +220,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     set((state) => ({
       repositories: state.repositories.map(r => 
         r.id === activeId ? { ...r, path: resolvedPath, isLoading: true } : r
-      )
+      ),
+      previewBranch: null,
+      previewCommits: []
     }));
 
     window.api.git.watchRepo(resolvedPath).catch(err => 
@@ -230,7 +245,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const nextActiveRepo = newRepos.find(r => r.id === newActiveId);
     const latestHash = (nextActiveRepo && nextActiveRepo.commits.length > 0) ? nextActiveRepo.commits[0].hash : null;
 
-    set({ repositories: newRepos, activeId: newActiveId, selectedCommitHash: latestHash });
+    set({ repositories: newRepos, activeId: newActiveId, selectedCommitHash: latestHash, previewBranch: null, previewCommits: [] });
     saveToLocalStorage(newRepos, newActiveId);
 
     if (nextActiveRepo) {
@@ -339,7 +354,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     set({
       repositories: mergedRepos,
       activeId: finalActiveId,
-      selectedCommitHash: get().selectedCommitHash || null
+      selectedCommitHash: get().selectedCommitHash || null,
+      previewBranch: null,
+      previewCommits: []
     });
     
     if (finalActiveId) {
@@ -442,6 +459,73 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     });
 
     await get().refreshRepo(id);
+  },
+
+  loadBranchCommits: async (branchName: string) => {
+    const activeRepo = get().getActiveRepo();
+    if (!activeRepo) return;
+
+    // If already previewing this branch, do nothing
+    if (get().previewBranch === branchName) return;
+
+    set({ isLoadingPreview: true, previewBranch: branchName, previewCommits: [] });
+
+    try {
+      const limit = get().previewCommitLimit || 50;
+      const res = await window.api.git.getBranchCommits(activeRepo.path, branchName, limit);
+      if (res.success) {
+        const commits = res.data || [];
+        set({ previewCommits: commits, isLoadingPreview: false });
+        // Select the first (latest) commit of the previewed branch
+        if (commits.length > 0) {
+          set({ selectedCommitHash: commits[0].hash });
+        }
+      } else {
+        console.error('Failed to load branch commits:', res.error);
+        set({ isLoadingPreview: false, previewCommits: [] });
+      }
+    } catch (err: any) {
+      console.error('Error loading branch commits:', err);
+      set({ isLoadingPreview: false, previewCommits: [] });
+    }
+  },
+
+  loadMoreBranchCommits: async () => {
+    const { previewBranch, previewCommitLimit } = get();
+    if (!previewBranch) return;
+
+    const newLimit = (previewCommitLimit || 50) + 50;
+    set({ previewCommitLimit: newLimit, isLoadingPreview: true });
+
+    const activeRepo = get().getActiveRepo();
+    if (!activeRepo) {
+      set({ isLoadingPreview: false });
+      return;
+    }
+
+    try {
+      const res = await window.api.git.getBranchCommits(activeRepo.path, previewBranch, newLimit);
+      if (res.success) {
+        set({ previewCommits: res.data || [], isLoadingPreview: false });
+      } else {
+        console.error('Failed to load more branch commits:', res.error);
+        set({ isLoadingPreview: false });
+      }
+    } catch (err: any) {
+      console.error('Error loading more branch commits:', err);
+      set({ isLoadingPreview: false });
+    }
+  },
+
+  clearBranchPreview: () => {
+    const activeRepo = get().getActiveRepo();
+    const latestHash = (activeRepo && activeRepo.commits.length > 0) ? activeRepo.commits[0].hash : null;
+    set({ 
+      previewBranch: null, 
+      previewCommits: [], 
+      previewCommitLimit: 50,
+      selectedCommitHash: latestHash
+    });
   },
 
   addIdentity: (identityData) => {

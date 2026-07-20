@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, ChevronRight, ChevronDown, Search } from "lucide-react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, ChevronRight, ChevronDown, Search, LogIn } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
@@ -89,7 +89,7 @@ const buildBranchTree = (
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
-  const { getActiveRepo, refreshRepo, switchActiveRepoPath } = useRepoStore()
+  const { getActiveRepo, refreshRepo, switchActiveRepoPath, loadBranchCommits, previewBranch } = useRepoStore()
   const activeRepo = getActiveRepo()
 
   const [filterText, setFilterText] = useState("")
@@ -129,6 +129,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const stashes = activeRepo?.stashes ?? []
 
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const autoExpandRef = React.useRef(false);
   const [isTagsCollapsed, setIsTagsCollapsed] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('sidebar-tags-collapsed')
@@ -152,6 +153,20 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
 
   React.useEffect(() => {
     if (!branch) return;
+
+    // Only auto-expand local branch folders when the user explicitly checks out
+    // a branch (autoExpandRef is set in handleCheckoutBranch). This prevents
+    // worktree switches from overriding the user's local tree expand/collapse state.
+    if (!autoExpandRef.current) return;
+    autoExpandRef.current = false;
+
+    const localBranchesList = activeRepo?.branches?.local ?? [];
+    const activeBranchIsLocal = localBranchesList.some((b) => {
+      const name = typeof b === 'string' ? b : b.name;
+      return name === branch;
+    });
+    if (!activeBranchIsLocal) return;
+
     const parts = branch.split('/');
     if (parts.length > 1) {
       setExpandedFolders((prev) => {
@@ -164,7 +179,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         return next;
       });
     }
-  }, [branch]);
+  }, [branch, activeRepo?.branches?.local]);
 
   const handlePopStash = async (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
@@ -378,14 +393,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       return;
     }
 
+    autoExpandRef.current = true;
     try {
       const res = await window.api.git.checkout(activeRepo.path, branchName)
       if (res.success) {
         await refreshRepo(activeRepo.id)
       } else {
+        autoExpandRef.current = false;
         console.error('Failed to checkout branch:', res.error)
       }
     } catch (err) {
+      autoExpandRef.current = false;
       console.error('Error checking out branch:', err)
     }
   }
@@ -735,6 +753,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     const currentAhead = isActive ? (status?.ahead ?? ahead) : ahead;
     const currentBehind = isActive ? (status?.behind ?? behind) : behind;
     const isWTBranch = mainWtPath ? activeRepo?.worktrees?.some(wt => wt.branch === name && normalizePath(wt.path) !== normalizePath(mainWtPath)) : false;
+    const isPreviewed = previewBranch === name;
 
     if (isActive) {
       return (
@@ -838,15 +857,16 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
 
     return (
       <div
-        className="sidebar-item"
+        className={`sidebar-item${isPreviewed ? ' branch-previewed' : ''}`}
         style={{
           display: 'flex',
           alignItems: 'center',
           cursor: 'pointer',
           paddingLeft: `${20 + depth * 12}px`,
+          backgroundColor: isPreviewed ? 'rgba(99, 102, 241, 0.1)' : undefined,
         }}
         key={name}
-        onClick={() => handleCheckoutBranch(name)}
+        onClick={() => loadBranchCommits(name)}
         data-testid={`sidebar-branch-${name}`}
       >
         <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
@@ -892,6 +912,15 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             flexShrink: 0,
           }}
         >
+          <button
+            className="stash-action-btn"
+            style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={(e) => { e.stopPropagation(); handleCheckoutBranch(name); }}
+            data-tooltip={`Checkout ${name}`}
+            data-testid={`checkout-branch-btn-${name}`}
+          >
+            <LogIn size={12} />
+          </button>
           <button
             className="stash-action-btn"
             style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1055,14 +1084,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-header">
-          <span>Local</span>
-          <span>{filterText ? `${filteredLocalBranches.length}/${localBranches.length}` : localBranches.length}</span>
-        </div>
-        {localBranchTree.map((node) => renderLocalBranchNode(node, 0))}
-      </div>
-
-      <div className="sidebar-section">
         <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>Worktree Branches</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1150,6 +1171,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             )
           })
         )}
+      </div>
+
+      <div className="sidebar-section">
+        <div className="sidebar-header">
+          <span>Local</span>
+          <span>{filterText ? `${filteredLocalBranches.length}/${localBranches.length}` : localBranches.length}</span>
+        </div>
+        {localBranchTree.map((node) => renderLocalBranchNode(node, 0))}
       </div>
 
       <div className="sidebar-section">

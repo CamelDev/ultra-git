@@ -19,9 +19,10 @@ const extractTags = (refs: string | undefined): string[] => {
 };
 
 const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
-  const { getActiveRepo, selectedCommitHash, setSelectedCommitHash, refreshRepo, identities, setRepoIdentity } = useRepoStore()
+  const { getActiveRepo, selectedCommitHash, setSelectedCommitHash, refreshRepo, identities, setRepoIdentity, previewBranch, previewCommits, previewCommitLimit, clearBranchPreview, loadMoreBranchCommits, isLoadingPreview } = useRepoStore()
   const activeRepo = getActiveRepo()
-  const commits = activeRepo?.commits || []
+  const isPreviewing = !!previewBranch;
+  const commits = isPreviewing ? previewCommits : (activeRepo?.commits || []);
   const mainWtPath = activeRepo?.worktrees?.[0]?.path;
   const isCurrentRepoWorktree = mainWtPath ? normalizePath(activeRepo.path) !== normalizePath(mainWtPath) : false;
   const containerRef = useRef<HTMLDivElement>(null)
@@ -913,6 +914,51 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         </div>
       )}
 
+      {isPreviewing && (
+        <div
+          className="branch-preview-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 16px',
+            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            borderBottom: '1px solid rgba(99, 102, 241, 0.2)',
+            fontSize: '12px',
+            color: '#a5b4fc',
+            fontWeight: 500,
+            flexShrink: 0
+          }}
+          data-testid="branch-preview-banner"
+        >
+          <GitBranch size={14} style={{ flexShrink: 0 }} />
+          <span>
+            Viewing commits for branch: <strong>{previewBranch}</strong>
+          </span>
+          <button
+            onClick={clearBranchPreview}
+            data-tooltip="Exit branch preview and return to current branch"
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 10px',
+              backgroundColor: 'rgba(99, 102, 241, 0.2)',
+              border: '1px solid rgba(99, 102, 241, 0.3)',
+              borderRadius: '4px',
+              color: '#a5b4fc',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+            data-testid="exit-branch-preview-btn"
+          >
+            Exit Preview <X size={11} />
+          </button>
+        </div>
+      )}
+      
       {activeRepo?.status?.conflicted?.length > 0 && (
         <div
           className="pull-conflict-banner"
@@ -1113,17 +1159,21 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               </div>
             </div>
           ))}
-          {commits.length > 0 && commits.length >= (activeRepo?.commitLimit || 50) && (
+          {commits.length > 0 && (isPreviewing ? isLoadingPreview || commits.length >= (previewCommitLimit || 50) : commits.length >= (activeRepo?.commitLimit || 50)) && (
             <div 
               className={`load-more-commits-btn ${activeRepo?.isLoading ? 'loading' : ''}`}
               onClick={() => {
-                if (activeRepo && !activeRepo.isLoading) {
+                if (isPreviewing) {
+                  if (!isLoadingPreview) {
+                    loadMoreBranchCommits()
+                  }
+                } else if (activeRepo && !activeRepo.isLoading) {
                   useRepoStore.getState().loadMoreCommits(activeRepo.id)
                 }
               }}
               data-testid="load-more-btn"
             >
-              {activeRepo?.isLoading ? (
+              {(isPreviewing ? isLoadingPreview : activeRepo?.isLoading) ? (
                 <>
                   <RefreshCw size={14} className="spin-animation" style={{ marginRight: '6px' }} />
                   <span>Loading Commits...</span>
