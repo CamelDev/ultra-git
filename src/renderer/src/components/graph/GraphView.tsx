@@ -575,12 +575,15 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               cursor: (isPulling || isPushing) ? 'not-allowed' : 'pointer',
               padding: '6px 12px',
               fontSize: '12px',
-              fontWeight: 600
+              fontWeight: 600,
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+              border: '1px solid rgba(59, 130, 246, 0.4)',
+              color: '#60a5fa'
             }}
             data-testid="pull-btn"
             data-tooltip="Pull changes from remote repository"
           >
-            <ArrowDown size={14} className={isPulling ? 'spin-animation' : ''} />
+            <ArrowDown size={14} className={isPulling ? 'spin-animation' : ''} style={{ color: '#60a5fa' }} />
             <span>{isPulling ? 'Pulling...' : 'Pull'}</span>
             {activeRepo.status?.behind > 0 && (
               <span 
@@ -615,12 +618,17 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 fontWeight: 600,
                 borderTopRightRadius: 0,
                 borderBottomRightRadius: 0,
-                borderRight: 'none'
+                borderRight: 'none',
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                borderLeft: '1px solid rgba(16, 185, 129, 0.4)',
+                borderTop: '1px solid rgba(16, 185, 129, 0.4)',
+                borderBottom: '1px solid rgba(16, 185, 129, 0.4)',
+                color: '#34d399'
               }}
               data-testid="push-btn"
               data-tooltip="Push changes to remote repository"
             >
-              <ArrowUp size={14} className={isPushing ? 'spin-animation' : ''} />
+              <ArrowUp size={14} className={isPushing ? 'spin-animation' : ''} style={{ color: '#34d399' }} />
               <span>{isPushing ? 'Pushing...' : 'Push'}</span>
               {activeRepo.status?.ahead > 0 && (
                 <span 
@@ -651,7 +659,12 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 cursor: (isPulling || isPushing) ? 'not-allowed' : 'pointer',
                 borderTopLeftRadius: 0,
                 borderBottomLeftRadius: 0,
-                borderLeft: '1px solid var(--border)'
+                borderLeft: '1px solid rgba(16, 185, 129, 0.4)',
+                borderTop: '1px solid rgba(16, 185, 129, 0.4)',
+                borderBottom: '1px solid rgba(16, 185, 129, 0.4)',
+                borderRight: '1px solid rgba(16, 185, 129, 0.4)',
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                color: '#34d399'
               }}
               data-testid="push-dropdown-btn"
               data-tooltip="Push Options"
