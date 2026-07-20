@@ -89,7 +89,7 @@ const buildBranchTree = (
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
-  const { getActiveRepo, refreshRepo, switchActiveRepoPath, loadBranchCommits, previewBranch } = useRepoStore()
+  const { getActiveRepo, refreshRepo, switchActiveRepoPath, loadBranchCommits, clearBranchPreview, previewBranch } = useRepoStore()
   const activeRepo = getActiveRepo()
 
   const [filterText, setFilterText] = useState("")
@@ -763,8 +763,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             display: 'flex',
             alignItems: 'center',
             paddingLeft: `${20 + depth * 12}px`,
+            cursor: 'pointer',
           }}
           key={name}
+          onClick={() => clearBranchPreview()}
         >
           <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
           <span
