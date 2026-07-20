@@ -1,171 +1,323 @@
 # UltraGIT
 
-UltraGIT is a modern, high-performance desktop Git client built with Electron, React, and TypeScript. It is designed to provide a seamless, visual Git experience with advanced features built-in to handle complex workflows effortlessly. Inspired by industry-leading desktop clients, UltraGIT combines raw Git power with an intuitive, premium dark-mode interface.
+<p align="center">
+  <img src="public/icon.png" alt="UltraGIT Logo" width="100" />
+</p>
 
-## Key Features & Capabilities
+<h1 align="center">UltraGIT</h1>
 
-### 1. Multi-Repository Workspace (Tabs)
-* **Tabbed Interface**: Manage and work on multiple Git repositories simultaneously in a clean tabbed layout.
-* **Native Repository Loader**: Open local repositories using a native directory selection dialog.
-* **Workspace Persistence**: Active and open repositories are saved to `localStorage` and automatically restored when the application starts.
-* **Landing Welcome Page**: Displays a clean landing page with quick action shortcuts (e.g., open local repository) when no repository tabs are open.
-* **About Dialog**: A styled dialog accessible from the titlebar showing version details and development specifications.
-
-### 2. Folder-Grouped Sidebar Navigation
-* **Sidebar Filter**: A sticky search input at the top of the sidebar allows real-time filtering of local branches, remote branches, and worktrees.
-* **Folder-Grouped Tree View**: Local and remote branches are grouped by folder structures (delimited by `/`).
-  * Collapsible/expandable folder nodes with custom icons (`Folder` and chevrons).
-  * The folder containing the active branch is auto-expanded by default.
-  * The top-level remote name (e.g., `origin/`) is automatically stripped under the Remote section to avoid redundant nesting.
-* **Local Branches**: Sorted alphabetically, showing the active branch with dynamic Ahead/Behind counts (`↑` / `↓`) compared to the remote-tracking branch.
-  * **Branch Management**: Create local branches from HEAD, rename branches, and delete branches (includes safe checking and force-delete prompts for unmerged changes).
-  * **Advanced Merging & Rebasing**: Merge branches using strategy presets (Fast-forward if possible, Always create merge commit `--no-ff`, and Squash commits `--squash`), or perform rebases onto selected branches.
-  * **Checkout Integration**: Switch branch context. If the branch is checked out in an active worktree, the app automatically switches repository paths to load that worktree's context.
-* **Git Worktrees Section**:
-  * **Add Worktree Modal**: Create new worktrees from local/remote branches or custom start points, with built-in path validation (prevents creating worktrees inside the repository path). Includes folder browsing.
-  * **Worktree Isolation**: Automatically hides branches checked out in extra worktrees from the local branches list to avoid workspace clutter.
-  * **Safety Constraints**: Branch deletion, renaming, or creation is automatically restricted inside active worktrees to prevent workspace corruption.
-  * **Worktree Actions**: Merge/rebase worktree branches, copy paths, or remove worktrees via `git worktree remove`.
-* **Remote Branches**: Alphabetic listing of all remote branches (organized as a tree view without top-level remote name nodes).
-* **Stashes**: Lists all stash entries with relative timestamps and descriptions.
-  * **Stash Details**: View stash files and diffs.
-  * **Stash Operations**: Pop stashes back into the workspace (with merge conflict warning banners) or drop stashes.
-* **Tags**: Alphabetic listing of tags.
-  * **Collapsible Tags Section**: Toggle the visibility of the Tags list to keep the sidebar organized.
-  * **Tag Management**: Create tags from HEAD, delete local tags (with an option to sync delete remote tags), and push all tags to the remote.
-
-### 3. Visual Commit Log & Synchronization
-* **Commit History Graph**: Interactive timeline showing commit messages, authors, dates, and sync status.
-* **Commit Search & Filter**: Search and filter repository commits by message directly from the toolbar input.
-* **Pagination (Progressive Loading)**: A "Load More" button at the bottom of the commits list enables fetching and rendering commits beyond the initial limit (100 commits at a time).
-* **Visual Branch Graph Modal**: Open a dedicated node-based interactive graph diagram to visualize the repository's branch and tag structure.
-* **Sync Status Indicators**:
-  * `Globe icon`: Commit exists on remote only (behind remote).
-  * `Empty circle`: Commit exists locally only (ahead of remote).
-  * `Filled circle`: Commit is pushed and in-sync.
-* **Keyboard Navigation**: Use `ArrowUp` / `ArrowDown` to navigate commits, which automatically scrolls the active item into view and loads its details.
-* **Cherry-Picking**: Select a commit from the commit history graph/log and cherry-pick it directly into your currently checked out branch (handles clean merges and conflict-trigger flows).
-* **Sync Panel Operations**:
-  * **Pull**: Pull changes from the tracking remote. Automatically displays a banner and opens the Conflict Resolver if conflicts arise.
-  * **Push**: Push commits. Warns if behind remote, providing options to pull first or force push.
-  * **Set Upstream**: Quickly configure the remote tracking branch.
-  * **Set Remote & API Repo Creation**: Set remote URL and name. If the remote repository does not exist on GitHub or GitLab, UltraGIT uses your configured developer profile token to **automatically create the remote repository** (as public or private) and push your branch.
-
-### 4. Developer Identity Profiles & Credentials
-* **Multi-Identity Manager**: Create and select different identity profiles to use across repositories.
-* **SSH Private Keys**: Select private keys with a file browse dialog to configure repository-specific SSH commands (`core.sshCommand`).
-* **API Token Integration**: Paste tokens for **GitHub, GitLab, and Bitbucket**. Connects and validates against provider APIs, downloads user avatars, and auto-fills Git Name, Email, and usernames.
-* **Automatic Git Config Integration**: Modifies local repo configuration (`user.name`, `user.email`, `core.sshCommand`, and custom token-based `credential.helper`) on select, and cleans them up from disk when a profile is removed.
-
-### 5. WIP Active Changes (Working Directory)
-* **Staged & Unstaged Columns**: Shows lists of files with status badges (`M`, `A`, `D`, `?`) and rename indicators.
-* **Quick Actions**: Stage or unstage individual files or all changes with one click.
-* **File Discards / Single-File Reset**: Discard/reset changes for individual files in both staged and unstaged lists, with a confirmation modal to prevent accidental data loss.
-* **Identity Alerts**: Displays warning banners when multiple identities are configured but none is selected for the repository.
-* **Height Resizable**: Drag handle allows expanding/collapsing the panel. Layout state is persisted.
-
-### 6. Code Diff Viewer (DiffModal)
-* **Split Diff View**: Shows line-by-line comparison of additions (green) and deletions (red) with matching line numbers.
-* **Word-Level/Inline Highlights**: Pairs of deleted and added lines are parsed to highlight character-level and word-level edits inline.
-* **Jump-to-First-Change**: Automatically scrolls to the first line containing code changes.
-* **Interactive Overview Ruler**: Shows color-coded vertical stripes of all changes next to the scrollbar; clicking a marker scrolls to that exact line.
-* **Binary File Safety**: Automatically detects binary files and shows a user-friendly message.
-* **Contextual Diffing**: Supports diffing commits, stashes, and staged/unstaged working directory files.
-
-### 7. Assistive Conflict Resolver
-* **Auto-Triggered Flow**: Opens a dedicated resolution modal when merge/rebase conflicts occur.
-* **3-Pane Comparison Layout**: Compare Ours (current branch) and Theirs (incoming changes) side-by-side, with a live result preview pane.
-* **Hunk Navigation**: Step through conflict hunks individually with tab selectors.
-* **Accept Strategies**: Pick Ours, Theirs, or Both (joins both sections).
-* **Apply & Stage**: Writes resolved code blocks back to the file and stages it, marking it resolved.
-* **Tooltip Overlay**: Custom context-aware tooltips overlaying action buttons throughout the user interface.
+<p align="center">
+  <em>A worktree native desktop Git client with multi-repo workspaces, and developer identity management — built with Electron, React, and TypeScript.</em>
+</p>
 
 ---
 
-## Architecture Tech Stack
+## 🎯 Overview
 
-* **Framework**: Electron (main process & preload script interface to renderer process).
-* **Frontend**: React 19 + TypeScript.
-* **State Management**: Zustand (saves open repositories and identity profiles).
-* **Styling**: Vanilla CSS. High-performance, modern layout design utilizing CSS variables for dark-mode coloring, glassmorphism, flexbox panels, and resizable layout dragging.
-* **Git Operations**: `simple-git` package executing commands asynchronously through child process spawning.
-* **Package Manager**: Bun (provides ultra-fast dependency resolution and locking).
-* **Testing**: Playwright for electron-based end-to-end (E2E) testing.
+<p align="center">
+  <img src="public/screenshot.png" width="800" alt="UltraGIT App Screenshot" />
+</p>
 
----
+UltraGIT is a cross-platform desktop Git client designed for developers who want a premium, visual Git experience without sacrificing raw Git power. It combines an intuitive dark-mode interface with advanced features — automatic conflict resolution, multi-repo tabbed workspaces, and integrated identity management — so you can handle complex workflows effortlessly.
 
-## Setup & Development
+### Why UltraGIT?
 
-Before starting, ensure you have initialized GSD (Git-based Software Development) on your system.
-
-1. **GSD Initialization** (if `.agents/` is missing):
-   ```bash
-   npx @opengsd/gsd-core@latest
-   ```
-
-2. **Install Dependencies**:
-   ```bash
-   bun install
-   ```
-
-3. **Run Development Server**:
-   ```bash
-   bun run dev
-   ```
-
-4. **Run End-to-End Tests**:
-   ```bash
-   bun run test:e2e
-   ```
-
-5. **Build and Package Application**:
-   ```bash
-   bun run build:all
-   ```
+| Challenge | UltraGIT Solution |
+|-----------|-------------------|
+| Merge conflicts are painful and time-consuming | **Assistive Conflict Resolver** with 3-pane comparison, hunk-by-hunk resolution, and Ours/Theirs/Both strategies |
+| Switching between multiple repos requires multiple windows | **Tabbed Multi-Repo Workspace** — open and manage multiple repositories side by side |
+| Managing multiple Git identities across projects is messy | **Developer Identity Profiles** — configure per-repo name, email, SSH keys, and API tokens for GitHub/GitLab/Bitbucket |
+| Worktrees are powerful but hard to visualize | **Built-in Worktree Manager** — create, switch, and remove worktrees with safety constraints and visual indicators |
+| Branch folders get cluttered in large repos | **Folder-Grouped Sidebar** — branches auto-grouped by `/` delimiters with collapsible tree nodes |
+| Hard to track what's pushed and what's not | **Visual Commit Graph** with sync status indicators (globe/circle icons) and keyboard navigation |
 
 ---
 
-## Development Tasks / Roadmap
+## ⚡ Quick Start Guide
+
+New to UltraGIT? Here is how to get up and running in 60 seconds.
+
+### 1. Open a Repository
+- On the Welcome screen, click **Open Local Repository** or use the **+** tab button.
+- Select any Git repository folder from your machine using the native directory picker.
+- The repository loads instantly with branches, commit history, and working directory status.
+
+### 2. Explore the Sidebar
+- **Local Branches**: Your branches are grouped by folder (e.g., `feature/login` shows under `feature/`). The active branch is highlighted with ahead/behind counts (`↑` / `↓`).
+- **Remote Branches**: All remote branches listed alphabetically under their remote names.
+- **Stashes**: View, pop, or drop stash entries with timestamps.
+- **Tags**: Browse and manage tags — create from HEAD or push all tags to remote.
+- **Worktrees**: Manage parallel working directories, with automatic branch isolation to prevent conflicts.
+- Use the **filter input** at the top to quickly find any branch, remote, or worktree.
+
+### 3. Make Changes & Commit
+- The **Active Changes** panel shows staged and unstaged files with status badges (`M`, `A`, `D`, `?`).
+- Stage/unstage individual files or all at once with one click.
+- Review diffs in the **split-view diff modal** with word-level inline highlights and an interactive overview ruler.
+- Write your commit message and hit **Commit**.
+
+### 4. Sync with Remote
+- Use the **Sync Panel** to pull, push, or set upstream.
+- **Pull** fetches and merges — if conflicts occur, the Conflict Resolver opens automatically.
+- **Push** warns if you're behind remote and offers to pull first or force push.
+- **Set Remote**: Configure remote URL and name. If the repository doesn't exist on GitHub or GitLab, UltraGIT can **auto-create it** using your API token.
+
+### 5. Configure Your Identity
+- Open **Identity Profiles** from the settings area.
+- Create a profile with your Git name, email, and SSH private key.
+- Paste a GitHub, GitLab, or Bitbucket API token — UltraGIT validates it, downloads your avatar, and auto-fills your details.
+- Select a profile per repository; it automatically configures `user.name`, `user.email`, and `core.sshCommand`.
+
+---
+
+## ✨ Features
+
+### 📂 Multi-Repository Workspace (Tabs)
+- **Tabbed Interface**: Manage multiple Git repositories simultaneously in a clean tabbed layout.
+- **Native Repository Loader**: Open local repositories using a native directory selection dialog.
+- **Workspace Persistence**: Active repositories are saved to `localStorage` and automatically restored on startup.
+- **Landing Welcome Page**: Quick action shortcuts when no repository tabs are open.
+- **About Dialog**: Styled dialog accessible from the titlebar showing version details.
+
+### 🌿 Folder-Grouped Sidebar Navigation
+- **Sidebar Filter**: Sticky search input for real-time filtering of branches, remotes, and worktrees.
+- **Folder-Grouped Tree View**: Local and remote branches grouped by folder structures (delimited by `/`).
+  - Collapsible/expandable folder nodes with custom icons.
+  - Folder containing the active branch is auto-expanded.
+  - Top-level remote name (e.g., `origin/`) is stripped under the Remote section.
+- **Branch Management**: Create, rename, delete branches with safety checks and force-delete prompts.
+- **Advanced Merging & Rebase**: Merge with strategy presets (fast-forward, `--no-ff`, `--squash`) or rebase onto selected branches.
+- **Checkout Integration**: Switching branches in a worktree automatically switches the repository path.
+
+### 📋 Git Worktrees
+- **Add Worktree Modal**: Create worktrees from local/remote branches with path validation and folder browsing.
+- **Worktree Isolation**: Branches checked out in extra worktrees are hidden from the local branches list.
+- **Safety Constraints**: Branch deletion, renaming, and creation are restricted inside active worktrees.
+- **Worktree Actions**: Merge/rebase worktree branches, copy paths, or remove worktrees.
+
+### 📦 Stashes & Tags
+- **Stashes**: List all stash entries with relative timestamps and descriptions.
+  - View stash files and diffs in the diff modal.
+  - Pop stashes (with merge conflict warnings) or drop stashes.
+- **Tags**: Alphabetic listing with collapsible section toggle.
+  - Create tags from HEAD, delete local tags (with remote sync option), push all tags to remote.
+
+### 📊 Visual Commit Log & Sync
+- **Commit History Graph**: Interactive timeline with commit messages, authors, dates, and sync status.
+- **Commit Search & Filter**: Search and filter commits by message.
+- **Pagination**: "Load More" button for progressive loading beyond the initial 100 commits.
+- **Visual Branch Graph Modal**: Dedicated node-based interactive graph diagram.
+- **Sync Status Indicators**: Globe (behind), empty circle (ahead), filled circle (in-sync).
+- **Keyboard Navigation**: `ArrowUp` / `ArrowDown` to navigate commits with auto-scroll and detail loading.
+- **Cherry-Picking**: Cherry-pick any commit directly into your current branch, with conflict handling.
+- **Sync Panel**: Pull, push, set upstream, and auto-create remote repos on GitHub/GitLab.
+
+### 👤 Developer Identity Profiles
+- **Multi-Identity Manager**: Create and select profiles for different repositories.
+- **SSH Private Keys**: Configure per-repo SSH commands with file browse dialog.
+- **API Token Integration**: Connect GitHub, GitLab, or Bitbucket tokens — validates, downloads avatar, auto-fills Git config.
+- **Automatic Git Config**: Modifies local repo config on profile select and cleans up on removal.
+
+### 📝 Active Changes (Working Directory)
+- **Staged & Unstaged Columns**: File lists with status badges (`M`, `A`, `D`, `?`) and rename indicators.
+- **Quick Actions**: Stage/unstage individual files or all changes.
+- **File Discards**: Reset individual files with confirmation modal.
+- **Identity Alerts**: Warning banners when no identity is selected.
+- **Height Resizable**: Drag handle with persisted layout state.
+
+### 🔍 Code Diff Viewer
+- **Split Diff View**: Line-by-line comparison with additions (green) and deletions (red).
+- **Word-Level Highlights**: Character-level and word-level inline edits.
+- **Jump-to-First-Change**: Auto-scroll to the first code change.
+- **Interactive Overview Ruler**: Color-coded vertical stripes; click to jump to changes.
+- **Binary File Safety**: Detects binary files and shows a user-friendly message.
+- **Contextual Diffing**: Supports commits, stashes, and staged/unstaged files.
+
+---
+
+## 🧠 Deep Dive: Conflict Resolver
+
+UltraGIT's standout feature is its **Assistive Conflict Resolver** — designed to turn the most painful part of Git into a guided, visual experience.
+
+### 🔄 Auto-Triggered Flow
+When a merge, rebase, or cherry-pick results in conflicts, the Conflict Resolver opens automatically. You don't need to hunt for conflict markers in your files — the resolver presents each conflict hunk in a structured 3-pane layout.
+
+### 🪟 3-Pane Comparison Layout
+- **Ours** (left): Your current branch's version.
+- **Theirs** (right): The incoming changes.
+- **Result Preview** (bottom/center): Live preview of the resolved output.
+
+### 🎯 Resolution Strategies
+For each conflict hunk, choose from three strategies:
+- **Accept Ours**: Keep your current branch's changes.
+- **Accept Theirs**: Take the incoming changes.
+- **Accept Both**: Join both sections together (ours first, then theirs).
+
+Navigate between hunks with tab selectors. Once resolved, the code is written back to the file and staged automatically.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+| Requirement | Version |
+|-------------|---------|
+| [Node.js](https://nodejs.org/) | v18 or higher |
+| [Bun](https://bun.sh/) | v1.x or higher |
+| [GSD](https://www.npmjs.com/package/@opengsd/gsd-core) | Latest (for agent workflows) |
+
+### Install & Run
+
+```bash
+# Clone the repository
+git clone https://github.com/CamelDev/ultra-git.git
+cd ultra-git
+
+# Initialize GSD (if .agents/ is missing)
+npx @opengsd/gsd-core@latest
+
+# Install dependencies
+bun install
+
+# Run development server
+bun run dev
+```
+
+---
+
+## 🏗 Architecture & Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Framework** | Electron (main process + preload + renderer) |
+| **Frontend** | React 19 + TypeScript |
+| **State Management** | Zustand (repository and identity state) |
+| **Styling** | Vanilla CSS with CSS variables, dark-mode, glassmorphism, flexbox panels, resizable layouts |
+| **Git Operations** | `simple-git` — async child process spawning |
+| **Package Manager** | Bun |
+| **Testing** | Playwright (Electron E2E) |
+| **Icons** | Lucide React |
+
+---
+
+## 📦 Build & Package
+
+Build the application for distribution:
+
+```bash
+# Build the renderer and main process
+bun run build
+
+# Build and package for all platforms
+bun run build:all
+```
+
+### 🍎 macOS
+Generates a DMG installer.
+```bash
+bun run build:all
+```
+- **Output**: `dist/UltraGIT-1.0.5.dmg`
+
+### 🪟 Windows
+Generates an NSIS installer.
+```bash
+bun run build:all
+```
+- **Output**: `dist/UltraGIT-Setup-1.0.5.exe`
+
+### 🐧 Linux
+Creates a portable AppImage.
+```bash
+bun run build:all
+```
+- **Output**: `dist/UltraGIT-1.0.5.AppImage`
+
+---
+
+## 🧪 Testing
+
+We use [Playwright](https://playwright.dev/) for End-to-End (E2E) testing. The tests launch a real Electron instance to verify all critical user flows:
+- **Sidebar**: Branch creation, filtering, folder grouping, and preview.
+- **Commits**: Diff viewing, filtering, load-more pagination, cherry-pick, squash, and reset.
+- **Active Changes**: Staging/unstaging, auto-refresh, and sync status.
+- **Worktrees**: Creation, isolation, and safety constraints.
+- **Conflict Resolver**: Merge conflict detection and resolution flow.
+- **Identity Profiles**: Profile creation, SSH key configuration, and API token integration.
+- **Tabs & Navigation**: Multi-repo tab management and workspace persistence.
+
+> [!IMPORTANT]
+> **Build Prerequisite**: Because E2E tests target the built application, you **must** run `bun run build` before running tests. The `test:e2e` script handles this automatically.
+
+### Run Tests
+
+```bash
+# Run all tests (automatically builds the app)
+bun run test:e2e
+
+# Run a specific test file
+npx playwright test e2e/conflict-resolver.spec.ts
+
+# Open UI mode for debugging
+npx playwright test --ui
+
+# View trace for a failed test
+npx playwright show-trace test-results/<test-directory>/trace.zip
+```
+
+> [!NOTE]
+> Tests are isolated and use temporary directories to ensure consistency across runs.
+
+---
+
+## 🗺 Roadmap
 
 ### Phase 1: Foundation & Project Setup
-- [x] Initialize the Electron + TypeScript + React boilerplate using Bun.
-- [x] Define and configure IPC between the main Electron process and the React renderer.
-- [x] Set up UI shell structure (Titlebar, Sidebar, Graph View, Details Panel).
-- [x] Create the application icon and global styles (colors, typography, CSS layout).
-- [x] Integrate `simple-git` in the main process and expose a Git API (fetch, status, log) via IPC.
+- [x] Initialize Electron + TypeScript + React boilerplate using Bun
+- [x] Define and configure IPC between main process and renderer
+- [x] Set up UI shell (Titlebar, Sidebar, Graph View, Details Panel)
+- [x] Create application icon and global styles
+- [x] Integrate `simple-git` and expose Git API via IPC
 
 ### Phase 2: Multi-Repo & Tab System
-- [x] Implement the Tab System in the UI header to handle multiple open repositories.
-- [x] Build the repository opening flow with native directory picker dialogs.
-- [x] Manage isolated state per tab to switch active repositories quickly without losing UI state.
+- [x] Implement Tab System for multiple open repositories
+- [x] Build repository opening flow with native directory picker
+- [x] Manage isolated per-tab state
 
-### Phase 3: The Left Sidebar & Core Actions
-- [x] Fetch and display list of Local and Remote branches in the sidebar.
-- [x] Implement Stash and Tag fetching to populate collapsible sections.
-- [x] Implement core toolbar actions (Stage, Unstage, Stash, Commit, Create Branch/Tag, Pull, Push).
-- [ ] Implement Undo/Redo Git operations in the toolbar.
+### Phase 3: Sidebar & Core Actions
+- [x] Fetch and display local and remote branches
+- [x] Implement stash and tag sections
+- [x] Implement core toolbar actions (Stage, Unstage, Stash, Commit, Create Branch/Tag, Pull, Push)
+- [ ] Implement Undo/Redo Git operations
 
-### Phase 4: Visual Commit Graph & Navigation
-- [x] Fetch commit history with commit metadata, parents, author info, and timestamps.
-- [x] Build Visual Commit Graph list showing sync status (globe/circles) and branch labels.
-- [x] Implement Arrow Up/Down keyboard navigation to select commits and scroll them into view.
+### Phase 4: Visual Commit Graph
+- [x] Fetch commit history with metadata and parent info
+- [x] Build visual commit graph with sync status indicators
+- [x] Implement keyboard navigation for commits
 
-### Phase 5: File Changes & Tree View
-- [x] Create Selection Details panel to display commit details (Author, Date, SHA, File List).
-- [x] Implement flat list component with status codes (Modified, Added, Deleted, Renamed).
-- [ ] Implement folder hierarchy (Tree) view toggle.
-- [x] Implement split-view code diff modal with scroll rulers and first-change auto-scrolling.
-- [x] Create the WIP view showing uncommitted changes with Stage/Unstage interactions.
+### Phase 5: File Changes & Diff
+- [x] Commit details panel (Author, Date, SHA, File List)
+- [x] File list with status codes (Modified, Added, Deleted, Renamed)
+- [ ] Folder hierarchy (Tree) view toggle
+- [x] Split-view diff modal with scroll rulers and auto-scrolling
+- [x] WIP view with Stage/Unstage interactions
 
 ### Phase 6: Conflict Resolution & Merging
-- [x] Implement Merge, Rebase, and worktree actions.
-- [x] Build conflict detection logic and Conflict Resolution UI.
-- [x] Implement hunk-by-hunk resolution selector (Ours, Theirs, Both) and Result preview.
-- [x] Implement Git Cherry-pick options.
+- [x] Merge, Rebase, and worktree actions
+- [x] Conflict detection and resolution UI
+- [x] Hunk-by-hunk resolution with Ours/Theirs/Both strategies
+- [x] Cherry-pick with conflict handling
 
-### Phase 7: Polish & Extra Integrations
-- [x] Refine dark mode theme, resizable panels, and layout state saving.
-- [x] Implement Git Worktrees support (Unified tabs, isolate checked-out branches, safety limits).
-- [x] Implement Developer Identity Profiles (SSH key command configuration, API connection validation for GitHub/GitLab/Bitbucket, auto remote repo creation).
-- [ ] Add command palette and global keyboard shortcuts configuration.
-- [x] Setup packaging and build workflows for desktop distributions.
+### Phase 7: Polish & Integrations
+- [x] Dark mode theme, resizable panels, layout state persistence
+- [x] Git Worktrees support with safety constraints
+- [x] Developer Identity Profiles with API token integration
+- [ ] Command palette and global keyboard shortcuts
+- [x] Packaging and build workflows for desktop distribution
+
+---
+
+## 📄 License
+
+MIT https://mit-license.org/
