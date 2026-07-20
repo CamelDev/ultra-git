@@ -267,7 +267,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await page.waitForTimeout(1000)
 
       // Expected local branches (alphabetical order): a-local, m-local, main, z-local
-      const localSection = page.locator('.sidebar-section').first()
+      const localSection = page.locator('.sidebar-section:has-text("Local")')
       const branchItems = localSection.locator('.sidebar-item')
       
       console.log('7. Verifying local branches order in the sidebar...')

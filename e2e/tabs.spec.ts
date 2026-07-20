@@ -72,6 +72,7 @@ test.describe('Multi-Repo Tab System', () => {
 
       // Click the first tab (sandbox) to switch context
       await initialTabs.first().click();
+      await page.waitForTimeout(1000);
 
       // Verify the sidebar updates to show the sandbox branch and status
       const sidebarActiveBranch = page.locator('[data-testid="sidebar-active-branch"]');
@@ -151,6 +152,9 @@ test.describe('Multi-Repo Tab System', () => {
         await expect(initialTabs2).toHaveCount(2);
         await expect(initialTabs2.first()).toContainText(expectedTabName);
         await expect(initialTabs2.last()).toContainText(expectedInitialTabName);
+
+        // Wait for repo to finish loading
+        await page2.waitForTimeout(1500);
 
         // The first tab should still be active, meaning its sidebar should show the sandbox branch
         const sidebarActiveBranch = page2.locator('[data-testid="sidebar-active-branch"]');

@@ -89,8 +89,8 @@ const buildBranchTree = (
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
-  const { getActiveRepo, refreshRepo, switchActiveRepoPath, loadBranchCommits, clearBranchPreview, previewBranch } = useRepoStore()
-  const activeRepo = getActiveRepo()
+  const { repositories, activeId, refreshRepo, switchActiveRepoPath, loadBranchCommits, clearBranchPreview, previewBranch } = useRepoStore()
+  const activeRepo = repositories.find(r => r.id === activeId)
 
   const [filterText, setFilterText] = useState("")
   const [selectedStashIndex, setSelectedStashIndex] = useState<number | null>(null)
@@ -130,6 +130,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
 
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const autoExpandRef = React.useRef(false);
+  const prevActiveRepoPathRef = React.useRef<string | undefined>(undefined);
   const [isTagsCollapsed, setIsTagsCollapsed] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('sidebar-tags-collapsed')
@@ -151,13 +152,31 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     })
   }
 
+  const prevBranchRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!branch) return;
 
-    // Only auto-expand local branch folders when the user explicitly checks out
-    // a branch (autoExpandRef is set in handleCheckoutBranch). This prevents
-    // worktree switches from overriding the user's local tree expand/collapse state.
-    if (!autoExpandRef.current) return;
+    // Auto-expand the folder containing the active branch whenever the branch changes
+    // (including when switching tabs to a repo whose active branch lives in a folder).
+    // We use a ref to compare against the previous active branch so that we only expand
+    // when the branch actually changes, not on every re-render or unrelated update.
+    if (prevBranchRef.current === branch) return;
+    const previousBranch = prevBranchRef.current;
+    prevBranchRef.current = branch;
+
+    // If this is a worktree switch (path change for the same branch), respect the user's
+    // current expand/collapse state and don't override it.
+    const activeRepoPath = activeRepo?.path;
+    const prevActiveRepoPath = prevActiveRepoPathRef.current;
+    prevActiveRepoPathRef.current = activeRepoPath;
+    if (activeRepoPath && prevActiveRepoPath && activeRepoPath !== prevActiveRepoPath && previousBranch === branch) {
+      // This looks like a worktree switch (different path, same branch) - skip auto-expand
+      return;
+    }
+
+    // Also respect user's intent when they explicitly checked out a branch - the
+    // autoExpandRef was set in handleCheckoutBranch. We treat that as a normal
+    // auto-expand trigger too, so just clear it and continue.
     autoExpandRef.current = false;
 
     const localBranchesList = activeRepo?.branches?.local ?? [];
@@ -179,7 +198,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         return next;
       });
     }
-  }, [branch, activeRepo?.branches?.local]);
+  }, [branch, activeRepo?.branches?.local, activeRepo?.path]);
 
   const handlePopStash = async (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
@@ -662,7 +681,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   }
 
   const mainWtPath = activeRepo?.worktrees?.[0]?.path;
-  const currentRepoPath = activeRepo?.path;
+  const currentRepoPath = activeRepo?.path ?? '';
   const isCurrentRepoWorktree = mainWtPath ? normalizePath(currentRepoPath) !== normalizePath(mainWtPath) : false;
 
   const localBranches = [...(activeRepo?.branches?.local ?? [branch])]
@@ -670,7 +689,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       const name = typeof b === 'string' ? b : b.name;
       const wt = activeRepo?.worktrees?.find(w => w.branch === name);
       if (wt) {
-        const isMain = normalizePath(wt.path) === normalizePath(mainWtPath);
+        const isMain = normalizePath(wt.path) === normalizePath(mainWtPath ?? '');
         if (!isMain) {
           return false;
         }
@@ -1105,8 +1124,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>No worktrees</div>
         ) : (
           filteredWorktrees.map((wt, index) => {
-            const isActiveRepo = normalizePath(wt.path) === normalizePath(activeRepo.path);
-            const isMainWorktree = normalizePath(wt.path) === normalizePath(mainWtPath);
+            const isActiveRepo = normalizePath(wt.path) === normalizePath(activeRepo?.path ?? '');
+            const isMainWorktree = normalizePath(wt.path) === normalizePath(mainWtPath ?? '');
             const shortPath = wt.path.split(/[/\\]/).pop();
             return (
               <div

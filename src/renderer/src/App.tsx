@@ -19,8 +19,8 @@ interface ConflictState {
 }
 
 function App() {
-  const { addRepo, getActiveRepo, refreshRepo, initializeRepos } = useRepoStore()
-  const activeRepo = getActiveRepo()
+  const { addRepo, repositories, activeId, refreshRepo, initializeRepos } = useRepoStore()
+  const activeRepo = repositories.find(r => r.id === activeId)
   const [isInitialized, setIsInitialized] = useState(false)
   useTooltip()
   useTheme()
@@ -265,22 +265,20 @@ function App() {
   // Auto-refresh when files change in the repository
   useEffect(() => {
     const unsubscribe = window.api.git.onRepoChanged((repoPath) => {
-      const currentActive = getActiveRepo()
-      if (currentActive && currentActive.path === repoPath) {
-        refreshRepo(currentActive.id).catch((err) =>
+      if (activeRepo && activeRepo.path === repoPath) {
+        refreshRepo(activeRepo.id).catch((err) =>
           console.error('Failed to refresh repo on filesystem change', err)
         )
       }
     })
     return unsubscribe
-  }, [activeRepo?.id, activeRepo?.path, getActiveRepo, refreshRepo])
+  }, [activeRepo?.id, activeRepo?.path, refreshRepo])
 
   // Auto-refresh when user returns focus to the application window
   useEffect(() => {
     const handleFocus = () => {
-      const currentActive = getActiveRepo()
-      if (currentActive) {
-        refreshRepo(currentActive.id).catch((err) =>
+      if (activeRepo) {
+        refreshRepo(activeRepo.id).catch((err) =>
           console.error('Failed to refresh repo on window focus', err)
         )
       }
@@ -289,7 +287,7 @@ function App() {
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
-  }, [activeRepo?.id, getActiveRepo, refreshRepo])
+  }, [activeRepo?.id, refreshRepo])
 
   // Listen for layout reset event
   useEffect(() => {
