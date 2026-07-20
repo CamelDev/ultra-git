@@ -1,19 +1,52 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono&display=swap');
 
 :root {
-  --bg-primary: #0f1115;
-  --bg-secondary: #161920;
-  --bg-tertiary: #1c2128;
+  --bg-primary: #12141c;
+  --bg-secondary: #1a1d28;
+  --bg-tertiary: #232737;
   --accent: #6366f1;
   --accent-light: #818cf8;
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
-  --border: #33415544;
-  --hover: #1e293b;
-  --tab-active: #0f1115;
-  --tab-inactive: #161920;
-  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --border: rgba(255, 255, 255, 0.09);
+  --hover: rgba(255, 255, 255, 0.06);
+  --tab-active: var(--bg-primary);
+  --tab-inactive: var(--bg-secondary);
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.2), 0 2px 4px -2px rgb(0 0 0 / 0.2);
   --glass: blur(12px) saturate(180%);
+  --tooltip-bg: #1e2530;
+  --tooltip-text: #f8fafc;
+  --tooltip-border: rgba(255, 255, 255, 0.08);
+  --btn-stash-bg: #3a3f4b;
+  --btn-stash-color: #cbd5e1;
+  --btn-stash-border: #4b5563;
+  --btn-stash-hover-bg: #4b5563;
+  --btn-stash-hover-color: #f1f5f9;
+  --btn-stash-hover-border: #6b7280;
+}
+
+:root.light-theme {
+  --bg-primary: #f8fafc;        /* Slate 50 */
+  --bg-secondary: #f1f5f9;      /* Slate 100 */
+  --bg-tertiary: #e2e8f0;       /* Slate 200 */
+  --accent: #4f46e5;            /* Indigo 600 */
+  --accent-light: #6366f1;      /* Indigo 500 */
+  --text-primary: #0f172a;      /* Slate 900 */
+  --text-secondary: #475569;    /* Slate 600 */
+  --border: rgba(15, 23, 42, 0.08); /* Soft slate border */
+  --hover: rgba(15, 23, 42, 0.05);  /* Soft slate hover overlay */
+  --tab-active: var(--bg-primary);
+  --tab-inactive: var(--bg-secondary);
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --tooltip-bg: #ffffff;
+  --tooltip-text: #0f172a;
+  --tooltip-border: rgba(15, 23, 42, 0.12);
+  --btn-stash-bg: #e2e8f0;
+  --btn-stash-color: #475569;
+  --btn-stash-border: rgba(15, 23, 42, 0.1);
+  --btn-stash-hover-bg: #cbd5e1;
+  --btn-stash-hover-color: #0f172a;
+  --btn-stash-hover-border: rgba(15, 23, 42, 0.2);
 }
 
 /* ===== Custom Tooltip System =====
@@ -31,8 +64,8 @@
 
 .app-tooltip {
   position: fixed;
-  background: #1e2530;
-  color: var(--text-primary);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   font-size: 11px;
   font-weight: 500;
@@ -40,8 +73,8 @@
   white-space: nowrap;
   padding: 5px 9px;
   border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  border: 1px solid var(--tooltip-border);
+  box-shadow: var(--shadow);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.12s ease;
@@ -61,12 +94,12 @@
 
 .app-tooltip.pos-above::after {
   top: 100%;
-  border-top-color: #1e2530;
+  border-top-color: var(--tooltip-bg);
 }
 
 .app-tooltip.pos-below::after {
   bottom: 100%;
-  border-bottom-color: #1e2530;
+  border-bottom-color: var(--tooltip-bg);
 }
 
 body {
@@ -376,7 +409,7 @@ body {
   display: flex;
   align-items: center;
   height: 42px;
-  border-bottom: 1px solid #1a1a1a44;
+  border-bottom: 1px solid var(--border);
   padding: 0 20px;
   font-size: 13.5px;
   transition: background-color 0.1s;
@@ -929,9 +962,9 @@ body {
 
 /* Stash button — muted steel gray */
 .btn-stash {
-  background-color: #3a3f4b;
-  color: #cbd5e1;
-  border: 1px solid #4b5563;
+  background-color: var(--btn-stash-bg);
+  color: var(--btn-stash-color);
+  border: 1px solid var(--btn-stash-border);
   border-radius: 4px;
   padding: 6px 12px;
   font-size: 12px;
@@ -941,9 +974,9 @@ body {
 }
 
 .btn-stash:hover {
-  background-color: #4b5563;
-  color: #f1f5f9;
-  border-color: #6b7280;
+  background-color: var(--btn-stash-hover-bg);
+  color: var(--btn-stash-hover-color);
+  border-color: var(--btn-stash-hover-border);
 }
 
 /* Stash list items in sidebar */
@@ -1119,7 +1152,7 @@ body {
   top: calc(100% + 6px);
   left: 0;
   width: 280px;
-  background-color: #161920; /* Sleek dark mode background */
+  background-color: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), var(--shadow);
@@ -1184,6 +1217,42 @@ body {
 .settings-dropdown-btn:hover {
   background-color: var(--hover);
   border-color: var(--text-secondary);
+}
+
+/* Theme Selector Segmented Control */
+.theme-selector-container {
+  display: flex;
+  width: 100%;
+  background-color: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+
+.theme-selector-btn {
+  flex: 1;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: 4px;
+  padding: 5px 0;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.theme-selector-btn:hover {
+  color: var(--text-primary);
+}
+
+.theme-selector-btn.active {
+  background-color: var(--bg-secondary);
+  color: var(--accent-light);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .settings-cog-log {

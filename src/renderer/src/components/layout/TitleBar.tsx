@@ -4,9 +4,11 @@ import { useRepoStore } from '../../store/useRepoStore'
 import logoIcon from '../../assets/icon.png'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 import { AboutModal } from './AboutModal'
+import { useTheme } from '../../hooks/useTheme'
 
 const TitleBar: React.FC = () => {
   const { repositories, activeId, setActiveId, removeRepo, addRepo } = useRepoStore()
+  const { theme, setTheme } = useTheme()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
   const [aboutModalOpen, setAboutModalOpen] = useState(false)
@@ -97,16 +99,47 @@ const TitleBar: React.FC = () => {
                   Manage Identities
                 </button>
               </div>
-              <div className="settings-dropdown-row">
-                <span className="settings-dropdown-label">Interface</span>
-                <span 
-                  className="settings-dropdown-action"
-                  onClick={handleResetLayout}
-                  data-testid="reset-layout-btn"
-                  data-tooltip="Reset application layout to default"
-                >
-                  Reset Layout
-                </span>
+              <div className="settings-dropdown-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <span className="settings-dropdown-label">Interface</span>
+                  <span 
+                    className="settings-dropdown-action"
+                    onClick={handleResetLayout}
+                    data-testid="reset-layout-btn"
+                    data-tooltip="Reset application layout to default"
+                  >
+                    Reset Layout
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', marginTop: '6px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 500 }}>Color scheme</span>
+                  <div className="theme-selector-container" style={{ marginTop: 0 }}>
+                    <button 
+                      className={`theme-selector-btn ${theme === 'night' ? 'active' : ''}`}
+                      onClick={() => setTheme('night')}
+                      data-testid="theme-btn-night"
+                      data-tooltip="Force dark mode"
+                    >
+                      Night
+                    </button>
+                    <button 
+                      className={`theme-selector-btn ${theme === 'day' ? 'active' : ''}`}
+                      onClick={() => setTheme('day')}
+                      data-testid="theme-btn-day"
+                      data-tooltip="Force light mode"
+                    >
+                      Day
+                    </button>
+                    <button 
+                      className={`theme-selector-btn ${theme === 'auto' ? 'active' : ''}`}
+                      onClick={() => setTheme('auto')}
+                      data-testid="theme-btn-auto"
+                      data-tooltip="Match system color scheme"
+                    >
+                      Auto
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="settings-dropdown-row">
                 <span className="settings-dropdown-label">About</span>

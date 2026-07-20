@@ -292,7 +292,7 @@ const RowSvg: React.FC<RowSvgProps> = ({ state, svgW, isSelected, isHead }) => {
       <circle
         cx={cx} cy={cy}
         r={isSelected ? DOT_R + 1 : DOT_R}
-        fill={isHead ? colour : (isSelected ? colour : '#161920')}
+        fill={isHead ? colour : (isSelected ? colour : 'var(--bg-secondary)')}
         stroke={colour}
         strokeWidth={2}
       />
