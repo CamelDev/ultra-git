@@ -3,6 +3,7 @@ import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitM
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
+import { AppDialog } from "../dialogs/AppDialog"
 
 const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
@@ -116,6 +117,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const [newWorktreeBranch, setNewWorktreeBranch] = useState("")
   const [newWorktreePath, setNewWorktreePath] = useState("")
   const [baseBranch, setBaseBranch] = useState("")
+
+  // In-app dialog state for tag push flow. Replaces the native OS
+  // `showMessageBox` confirmations and success/error popups that previously
+  // broke the visual consistency of the application.
+  const [isPushTagsConfirmOpen, setIsPushTagsConfirmOpen] = useState(false)
+  const [pushTagsAlert, setPushTagsAlert] = useState<{
+    open: boolean
+    variant: 'success' | 'error' | 'info'
+    title: string
+    message: string
+  }>({ open: false, variant: 'info', title: '', message: '' })
 
   const openWorktreeModal = () => {
     setBaseBranch(activeRepo?.branch || 'main')
@@ -521,47 +533,44 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     await refreshRepo(activeRepo.id)
   }
 
-  const handlePushTags = async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const performPushTags = async () => {
     if (!activeRepo) return
-
-    const confirmRes = await window.api.app.showMessageBox({
-      type: 'question',
-      title: 'Push Tags',
-      message: 'Are you sure you want to push all local tags to the remote (origin)?',
-      buttons: ['Cancel', 'Push Tags'],
-      defaultId: 1,
-      cancelId: 0
-    })
-
-    if (!confirmRes.success || confirmRes.response !== 1) {
-      return
-    }
-
     try {
       const res = await window.api.git.pushTags(activeRepo.path)
       if (res.success) {
-        await window.api.app.showMessageBox({
-          type: 'info',
-          title: 'Success',
+        setPushTagsAlert({
+          open: true,
+          variant: 'success',
+          title: 'Tags Pushed',
           message: 'All local tags have been successfully pushed to the remote repository.'
         })
       } else {
         console.error('Failed to push tags:', res.error)
-        await window.api.app.showMessageBox({
-          type: 'error',
-          title: 'Error',
+        setPushTagsAlert({
+          open: true,
+          variant: 'error',
+          title: 'Push Failed',
           message: `Failed to push tags: ${res.error}`
         })
       }
     } catch (err: any) {
       console.error('Error pushing tags:', err)
-      await window.api.app.showMessageBox({
-        type: 'error',
-        title: 'Error',
+      setPushTagsAlert({
+        open: true,
+        variant: 'error',
+        title: 'Push Failed',
         message: `Error pushing tags: ${err.message || err}`
       })
     }
+  }
+
+  const handlePushTags = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!activeRepo) return
+    // Open the in-app confirmation dialog. The actual push is performed once
+    // the user confirms (see `performPushTags`). This replaces the previous
+    // native OS `showMessageBox` confirmation popup.
+    setIsPushTagsConfirmOpen(true)
   }
 
   const handleDeleteTagClick = async (e: React.MouseEvent, tagName: string) => {
@@ -1642,6 +1651,49 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           </div>
         </div>
       )}
+
+      {/* Tag push confirmation dialog (in-app, replaces native confirm) */}
+      <AppDialog
+        isOpen={isPushTagsConfirmOpen}
+        title="Push Tags"
+        message="Are you sure you want to push all local tags to the remote (origin)?"
+        variant="info"
+        icon={<Upload size={16} />}
+        testId="push-tags-confirm-dialog"
+        actions={[
+          {
+            label: 'Cancel',
+            value: 'cancel',
+            variant: 'secondary'
+          },
+          {
+            label: 'Push Tags',
+            value: 'confirm',
+            variant: 'primary',
+            icon: <Upload size={13} />,
+            setsBusy: true
+          }
+        ]}
+        onResolve={(value) => {
+          if (value === 'confirm') {
+            setIsPushTagsConfirmOpen(false)
+            performPushTags()
+          } else {
+            setIsPushTagsConfirmOpen(false)
+          }
+        }}
+        onCancel={() => setIsPushTagsConfirmOpen(false)}
+      />
+
+      {/* Tag push result dialog (in-app, replaces native alert) */}
+      <AppDialog
+        isOpen={pushTagsAlert.open}
+        title={pushTagsAlert.title}
+        message={pushTagsAlert.message}
+        variant={pushTagsAlert.variant}
+        testId="push-tags-alert-dialog"
+        onCancel={() => setPushTagsAlert((prev) => ({ ...prev, open: false }))}
+      />
     </div>
   )
 }

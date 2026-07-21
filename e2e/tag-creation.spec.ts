@@ -124,7 +124,7 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await page.waitForTimeout(300)
       await expect(modal).not.toBeVisible()
 
-      console.log('19. Mocking git:pushTags and dialog:showMessageBox to confirm push...')
+      console.log('19. Mocking git:pushTags (the in-app confirm dialog no longer goes through dialog:showMessageBox)...')
       await app.evaluate(async ({ ipcMain }) => {
         ipcMain.removeHandler('git:pushTags')
         ipcMain.handle('git:pushTags', async () => {
@@ -132,20 +132,42 @@ test.describe('Tag Creation from Latest Local Commit', () => {
         })
       })
 
-      await app.evaluate(async ({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async () => {
-          return { success: true, response: 1 } // Clicks the 'Push Tags' button (index 1)
-        })
-      })
-
       console.log('20. Verifying push tags button in sidebar header and clicking it...')
       const pushTagsBtn = page.locator('[data-testid="sidebar-push-tags-btn"]')
       await expect(pushTagsBtn).toBeVisible()
       await pushTagsBtn.click()
+      await page.waitForTimeout(300)
+
+      console.log('20.1. Verifying in-app "Push Tags" confirmation dialog is visible (replaces native confirm)...')
+      const pushTagsConfirmDialog = page.locator('[data-testid="push-tags-confirm-dialog"]')
+      await expect(pushTagsConfirmDialog).toBeVisible()
+      await expect(pushTagsConfirmDialog).toContainText('Are you sure you want to push all local tags')
+      await expect(pushTagsConfirmDialog).toContainText('Push Tags')
+
+      console.log('20.2. Clicking the in-app "Push Tags" confirm action...')
+      const pushTagsConfirmBtn = page.locator('[data-testid="push-tags-confirm-dialog-action-confirm"]')
+      await expect(pushTagsConfirmBtn).toBeVisible()
+      await pushTagsConfirmBtn.click()
       await page.waitForTimeout(500)
 
-      console.log('21. Mocking dialog:showMessageBox for deleting tag...')
+      console.log('20.3. Verifying in-app success dialog is visible (replaces native alert)...')
+      const pushTagsAlertDialog = page.locator('[data-testid="push-tags-alert-dialog"]')
+      await expect(pushTagsAlertDialog).toBeVisible()
+      await expect(pushTagsAlertDialog).toContainText('All local tags have been successfully pushed')
+      await expect(pushTagsAlertDialog).toContainText('Tags Pushed')
+
+      // Confirm the dialog uses the new in-app style class (not the OS message box)
+      const dialogVariant = await pushTagsAlertDialog.getAttribute('data-variant')
+      expect(dialogVariant).toBe('success')
+
+      console.log('20.4. Closing the in-app success dialog via OK button...')
+      const pushTagsAlertOk = page.locator('[data-testid="push-tags-alert-dialog-ok"]')
+      await expect(pushTagsAlertOk).toBeVisible()
+      await pushTagsAlertOk.click()
+      await page.waitForTimeout(300)
+      await expect(pushTagsAlertDialog).not.toBeVisible()
+
+      console.log('21. Mocking dialog:showMessageBox for deleting tag (still uses native dialog)...')
       await app.evaluate(async ({ ipcMain }) => {
         ipcMain.removeHandler('dialog:showMessageBox')
         ipcMain.handle('dialog:showMessageBox', async () => {
