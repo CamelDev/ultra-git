@@ -173,4 +173,82 @@ test.describe('Multi-Repo Tab System', () => {
       }
     }
   });
+
+  test('should support drag and drop reordering of tabs and preserve the custom order on restart', async () => {
+    // 1. Launch the native Electron Application
+    const { app: app1, page: page1 } = await launchElectronApp({ disableDefaultTab: true });
+    
+    try {
+      const expectedInitialTabName = path.basename(process.cwd());
+
+      // Verify 0 tabs initially
+      const initialTabs1 = page1.locator('[data-testid="repo-tab"]');
+      await expect(initialTabs1).toHaveCount(0);
+
+      // Mock dialog for sandbox
+      await app1.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath };
+        });
+      }, sandbox.dir);
+
+      // Click landing page open button to open sandbox
+      const landingOpenBtn = page1.locator('[data-testid="landing-open-repo-btn"]');
+      await expect(landingOpenBtn).toBeVisible();
+      await landingOpenBtn.click();
+
+      // Mock dialog for process.cwd()
+      await app1.evaluate(async ({ ipcMain }, cwdPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: cwdPath };
+        });
+      }, process.cwd());
+
+      // Click the Add Repository button in TitleBar
+      const addBtn = page1.locator('[data-testid="add-repo-btn"]');
+      await expect(addBtn).toBeVisible();
+      await addBtn.click();
+
+      // Verify both tabs are open in initial order: [sandbox, process.cwd()]
+      const expectedTabName = path.basename(sandbox.dir);
+      await expect(initialTabs1).toHaveCount(2);
+      await expect(initialTabs1.first()).toContainText(expectedTabName);
+      await expect(initialTabs1.last()).toContainText(expectedInitialTabName);
+
+      // Perform drag-and-drop from first tab to last tab
+      await initialTabs1.first().dragTo(initialTabs1.last());
+      await page1.waitForTimeout(500);
+
+      // Verify they are reordered in the UI: [process.cwd(), sandbox]
+      await expect(initialTabs1.first()).toContainText(expectedInitialTabName);
+      await expect(initialTabs1.last()).toContainText(expectedTabName);
+
+      // Close the first app instance
+      await app1.close();
+
+      // 2. Launch the Electron Application again (restart without clearing localStorage)
+      const { app: app2, page: page2 } = await launchElectronApp({ cleanState: false });
+
+      try {
+        const initialTabs2 = page2.locator('[data-testid="repo-tab"]');
+        
+        // Both tabs should still be open in the reordered state!
+        await expect(initialTabs2).toHaveCount(2);
+        await expect(initialTabs2.first()).toContainText(expectedInitialTabName);
+        await expect(initialTabs2.last()).toContainText(expectedTabName);
+
+      } finally {
+        await app2.close();
+      }
+
+    } finally {
+      try {
+        await app1.close();
+      } catch (e) {
+        // Ignore if already closed
+      }
+    }
+  });
 });

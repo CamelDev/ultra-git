@@ -7,6 +7,11 @@ const mockApi = {
     status: vi.fn().mockResolvedValue({ success: true, data: { current: 'main' } }),
     log: vi.fn().mockResolvedValue({ success: true, data: { all: [] } }),
     watchRepo: vi.fn().mockResolvedValue({ success: true }),
+    getWorktrees: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    stashList: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    getBranches: vi.fn().mockResolvedValue({ success: true, data: { local: [], remote: [] } }),
+    getTags: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    setRepositoryIdentity: vi.fn().mockResolvedValue({ success: true }),
   },
   app: {
     openDirectory: vi.fn(),
@@ -146,5 +151,32 @@ describe('useRepoStore', () => {
     removeRepo(id1);
     expect(JSON.parse(localStore['open-repo-paths'])).toEqual([]);
     expect(localStore['active-repo-path']).toBeUndefined();
+  });
+
+  it('should reorder repositories and save to localStorage', async () => {
+    // Clear localStore before testing
+    for (const key in localStore) delete localStore[key];
+
+    const { addRepo, reorderRepos } = useRepoStore.getState();
+    await addRepo('/repo1');
+    await addRepo('/repo2');
+    await addRepo('/repo3');
+
+    const originalRepos = useRepoStore.getState().repositories;
+    expect(originalRepos.length).toBe(3);
+    expect(originalRepos[0].path).toBe('/repo1');
+    expect(originalRepos[1].path).toBe('/repo2');
+    expect(originalRepos[2].path).toBe('/repo3');
+
+    // Reorder: Move first item (/repo1) to the end
+    reorderRepos(0, 2);
+
+    const reorderedRepos = useRepoStore.getState().repositories;
+    expect(reorderedRepos[0].path).toBe('/repo2');
+    expect(reorderedRepos[1].path).toBe('/repo3');
+    expect(reorderedRepos[2].path).toBe('/repo1');
+
+    // Verify localStorage has the new order saved
+    expect(JSON.parse(localStore['open-repo-paths'])).toEqual(['/repo2', '/repo3', '/repo1']);
   });
 });

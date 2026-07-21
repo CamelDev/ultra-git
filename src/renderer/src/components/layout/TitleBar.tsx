@@ -7,12 +7,30 @@ import { AboutModal } from './AboutModal'
 import { useTheme } from '../../hooks/useTheme'
 
 const TitleBar: React.FC = () => {
-  const { repositories, activeId, setActiveId, removeRepo, addRepo } = useRepoStore()
+  const { repositories, activeId, setActiveId, removeRepo, addRepo, reorderRepos } = useRepoStore()
   const { theme, setTheme } = useTheme()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
   const [aboutModalOpen, setAboutModalOpen] = useState(false)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    if (draggedIndex === null || draggedIndex === index) return
+
+    reorderRepos(draggedIndex, index)
+    setDraggedIndex(index)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+  }
 
   const handleAddRepo = async () => {
     console.log('Renderer: Requesting openDirectory dialog');
@@ -160,12 +178,17 @@ const TitleBar: React.FC = () => {
         </div>
       </div>
       <div className="tabs-container">
-        {repositories.map((tab) => (
+        {repositories.map((tab, index) => (
           <div 
             key={tab.id} 
-            className={`tab ${activeId === tab.id ? 'active' : ''}`}
+            className={`tab ${activeId === tab.id ? 'active' : ''} ${draggedIndex === index ? 'dragging' : ''}`}
             onClick={() => setActiveId(tab.id)}
             data-testid="repo-tab"
+            draggable
+            onDragStart={(e) => handleDragStart(e, index)}
+            onDragOver={(e) => handleDragOver(e, index)}
+            onDragEnd={handleDragEnd}
+            onDrop={(e) => e.preventDefault()}
           >
             <span>{tab.name}</span>
             <X 
@@ -174,6 +197,7 @@ const TitleBar: React.FC = () => {
               onClick={(e) => handleCloseTab(e, tab.id)}
               data-testid="close-tab-btn"
               data-tooltip="Close Tab"
+              onDragStart={(e) => e.stopPropagation()}
             />
           </div>
         ))}

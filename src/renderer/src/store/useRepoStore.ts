@@ -57,6 +57,7 @@ interface RepoState {
   loadMoreCommits: (id: string) => Promise<void>;
   setSelectedCommitHash: (hash: string | null) => void;
   initializeRepos: (paths: string[], activePath: string | null) => Promise<void>;
+  reorderRepos: (startIndex: number, endIndex: number) => void;
   switchActiveRepoPath: (path: string) => Promise<void>;
   loadBranchCommits: (branchName: string) => Promise<void>;
   loadMoreBranchCommits: () => Promise<void>;
@@ -120,6 +121,18 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
   setSelectedCommitHash: (hash: string | null) => {
     set({ selectedCommitHash: hash });
+  },
+
+  reorderRepos: (startIndex: number, endIndex: number) => {
+    const { repositories, activeId } = get();
+    if (startIndex < 0 || startIndex >= repositories.length || endIndex < 0 || endIndex >= repositories.length) {
+      return;
+    }
+    const nextRepos = [...repositories];
+    const [removed] = nextRepos.splice(startIndex, 1);
+    nextRepos.splice(endIndex, 0, removed);
+    set({ repositories: nextRepos });
+    saveToLocalStorage(nextRepos, activeId);
   },
 
   addRepo: async (path: string) => {
