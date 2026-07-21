@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag, RefreshCw, Search } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
@@ -69,6 +69,95 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   // Commit search state
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchFocused, setIsSearchFocused] = useState(false)
+
+  // Commit list column widths (author and date columns; message takes remaining flex space)
+  const [statusWidth, setStatusWidth] = useState(() => {
+    const saved = localStorage.getItem('commit-col-status-width')
+    return saved ? parseInt(saved, 10) : 70
+  })
+  const [authorWidth, setAuthorWidth] = useState(() => {
+    const saved = localStorage.getItem('commit-col-author-width')
+    return saved ? parseInt(saved, 10) : 160
+  })
+  const [dateWidth, setDateWidth] = useState(() => {
+    const saved = localStorage.getItem('commit-col-date-width')
+    return saved ? parseInt(saved, 10) : 150
+  })
+  const statusWidthRef = useRef(statusWidth)
+  const authorWidthRef = useRef(authorWidth)
+  const dateWidthRef = useRef(dateWidth)
+  useEffect(() => { statusWidthRef.current = statusWidth }, [statusWidth])
+  useEffect(() => { authorWidthRef.current = authorWidth }, [authorWidth])
+  useEffect(() => { dateWidthRef.current = dateWidth }, [dateWidth])
+  useEffect(() => { localStorage.setItem('commit-col-status-width', statusWidth.toString()) }, [statusWidth])
+  useEffect(() => { localStorage.setItem('commit-col-author-width', authorWidth.toString()) }, [authorWidth])
+  useEffect(() => { localStorage.setItem('commit-col-date-width', dateWidth.toString()) }, [dateWidth])
+
+  const startStatusResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = statusWidthRef.current
+    const doResize = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientX - startX // dragging right = wider status
+      const newWidth = Math.max(50, Math.min(160, startWidth + delta))
+      setStatusWidth(newWidth)
+    }
+    const stopResize = () => {
+      document.removeEventListener('pointermove', doResize)
+      document.removeEventListener('pointerup', stopResize)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('pointermove', doResize)
+    document.addEventListener('pointerup', stopResize)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
+
+  const startAuthorResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = authorWidthRef.current
+    const doResize = (moveEvent: PointerEvent) => {
+      const delta = startX - moveEvent.clientX // dragging left = wider author
+      const newWidth = Math.max(80, Math.min(320, startWidth + delta))
+      setAuthorWidth(newWidth)
+    }
+    const stopResize = () => {
+      document.removeEventListener('pointermove', doResize)
+      document.removeEventListener('pointerup', stopResize)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('pointermove', doResize)
+    document.addEventListener('pointerup', stopResize)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
+
+  const startDateResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = dateWidthRef.current
+    const doResize = (moveEvent: PointerEvent) => {
+      const delta = startX - moveEvent.clientX // dragging left = wider date
+      const newWidth = Math.max(80, Math.min(280, startWidth + delta))
+      setDateWidth(newWidth)
+    }
+    const stopResize = () => {
+      document.removeEventListener('pointermove', doResize)
+      document.removeEventListener('pointerup', stopResize)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('pointermove', doResize)
+    document.addEventListener('pointerup', stopResize)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
 
   // Reset search when repo changes
   useEffect(() => {
@@ -994,6 +1083,100 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         </div>
       )}
 
+      {/* Sticky column headers */}
+      <div
+        className="commit-list-header"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          height: '28px',
+          backgroundColor: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+          userSelect: 'none',
+          paddingLeft: '20px',
+          paddingRight: '20px',
+          position: 'relative',
+          zIndex: 1
+        }}
+      >
+        {/* Status icon column */}
+        <div style={{ width: `${statusWidth}px`, flexShrink: 0, fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Status
+        </div>
+        {/* Resizer: status | message */}
+        <div
+          className="commit-col-resizer"
+          onPointerDown={startStatusResize}
+          data-tooltip="Drag to resize Status column"
+          style={{
+            width: '8px',
+            cursor: 'col-resize',
+            flexShrink: 0,
+            alignSelf: 'stretch',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            marginLeft: '-4px',
+          }}
+        >
+          <div className="commit-col-resizer-line" />
+        </div>
+        {/* Message column — flex, takes remaining space */}
+        <div style={{ flex: 1, fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: '15px', minWidth: 0 }}>
+          Commit Message
+        </div>
+        {/* Actions column — fixed, no resize */}
+        <div style={{ width: '88px', flexShrink: 0 }} />
+        {/* Resizer: message | author */}
+        <div
+          className="commit-col-resizer"
+          onPointerDown={startAuthorResize}
+          data-tooltip="Drag to resize Author column"
+          style={{
+            width: '8px',
+            cursor: 'col-resize',
+            flexShrink: 0,
+            alignSelf: 'stretch',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            marginRight: '-4px',
+          }}
+        >
+          <div className="commit-col-resizer-line" />
+        </div>
+        {/* Author column */}
+        <div style={{ width: `${authorWidth}px`, flexShrink: 0, fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', overflow: 'hidden', paddingLeft: '12px' }}>
+          Author
+        </div>
+        {/* Resizer: author | date */}
+        <div
+          className="commit-col-resizer"
+          onPointerDown={startDateResize}
+          data-tooltip="Drag to resize Date column"
+          style={{
+            width: '8px',
+            cursor: 'col-resize',
+            flexShrink: 0,
+            alignSelf: 'stretch',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            marginRight: '-4px',
+          }}
+        >
+          <div className="commit-col-resizer-line" />
+        </div>
+        {/* Date column */}
+        <div style={{ width: `${dateWidth}px`, flexShrink: 0, fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right', overflow: 'hidden' }}>
+          Date
+        </div>
+      </div>
+
       <div 
         ref={containerRef} 
         className="graph-container" 
@@ -1008,7 +1191,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               onClick={() => setSelectedCommitHash(c.hash)}
               style={{ cursor: 'pointer' }}
             >
-              <div className="commit-graph-area" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <div className="commit-graph-area" style={{ width: `${statusWidth}px`, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                 {(() => {
                   const tags = extractTags(c.refs);
                   if (tags.length > 0) {
@@ -1141,8 +1324,8 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   <Layers size={13} />
                 </button>
               </div>
-              <div className="commit-author">{c.author_name}</div>
-              <div className="commit-date">
+              <div className="commit-author" style={{ width: `${authorWidth}px`, paddingLeft: '12px' }}>{c.author_name}</div>
+              <div className="commit-date" style={{ width: `${dateWidth}px` }}>
                 {new Date(c.date).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
               </div>
             </div>

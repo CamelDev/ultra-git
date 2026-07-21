@@ -437,6 +437,8 @@ body {
   height: 42px;
   border-bottom: 1px solid var(--border);
   padding: 0 20px;
+  padding-left: 17px; /* 20px - 3px reserved for selection border */
+  border-left: 3px solid transparent;
   font-size: 13.5px;
   transition: background-color 0.1s;
 }
@@ -459,16 +461,22 @@ body {
 }
 
 .commit-author {
-  width: 160px;
+  flex-shrink: 0;
   color: var(--text-secondary);
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .commit-date {
-  width: 150px;
+  flex-shrink: 0;
   color: var(--text-secondary);
   text-align: right;
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Details Panel */
@@ -561,7 +569,7 @@ body {
 .commit-item.active {
   background-color: #6366f11c;
   color: var(--text-primary);
-  border-left: 3px solid var(--accent);
+  border-left-color: var(--accent);
 }
 
 /* Diff Modal Styles */
@@ -1598,3 +1606,16 @@ body {
 
 
 
+
+/* Commit list column resizer */
+.commit-col-resizer-line {
+  width: 2px;
+  height: 14px;
+  border-radius: 1px;
+  background-color: var(--border);
+  transition: background-color 0.15s ease;
+}
+
+.commit-col-resizer:hover .commit-col-resizer-line {
+  background-color: var(--accent-light);
+}
