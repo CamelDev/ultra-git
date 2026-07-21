@@ -943,7 +943,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           }}
         >
           <button
-            className="stash-action-btn"
+            className="stash-action-btn checkout"
             style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             onClick={(e) => { e.stopPropagation(); handleCheckoutBranch(name); }}
             data-tooltip={`Checkout ${name}`}
