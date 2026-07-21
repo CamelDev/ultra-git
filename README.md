@@ -236,6 +236,57 @@ bun run build:all
 
 ---
 
+## 🚢 Release Process
+
+Creating a new release is fully automated via GitHub Actions. The workflow is triggered whenever a tag matching the `v*` pattern (e.g. `v1.0.6`) is pushed. It syncs the version into `package.json`, builds the application for all three platforms (macOS, Windows, Linux), and uploads the artifacts as a **draft** GitHub Release that you can review and publish manually.
+
+### Step-by-Step
+
+1. **Create a new git tag** matching the `v*` pattern, using [Semantic Versioning](https://semver.org/):
+
+   ```bash
+   # Annotated tag (recommended — includes message and tagger info)
+   git tag -a v1.0.6 -m "Release v1.0.6"
+   ```
+
+2. **Push the tag to the remote repository**:
+
+   ```bash
+   git push origin v1.0.6
+   # or push all local tags at once
+   git push origin --tags
+   ```
+
+3. **GitHub Action takes over automatically**:
+   - The `Release Build` workflow (`.github/workflows/release.yml`) is triggered by the tag push.
+   - It syncs the `version` field in `package.json` to match the tag (e.g. `v1.0.6` → `1.0.6`).
+   - It builds the app for **macOS**, **Windows**, and **Linux** in parallel.
+   - It uploads the platform-specific installers as a **draft release** on GitHub.
+
+4. **Review and publish the draft**:
+   - Navigate to the repository on GitHub.
+   - Click **Releases** in the right sidebar.
+   - Open the **Drafts** section at the top of the releases page.
+   - Review the draft, edit the release notes if needed, and click **Publish release** when you're ready.
+
+> [!TIP]
+> **Pre-flight checklist before tagging a release**
+> - All intended changes are merged into the `main` branch.
+> - The E2E test suite is green (`bun run test:e2e`).
+> - `package.json` dependencies and metadata are up to date.
+> - Local build works (`bun run build:all`).
+>
+> If you need to fix something after pushing the tag, simply delete the remote tag, push a fix, and re-tag:
+> ```bash
+> git push origin :refs/tags/v1.0.6   # delete remote tag
+> git tag -d v1.0.6                   # delete local tag
+> # fix the issue, commit, then re-tag and push
+> git tag -a v1.0.6 -m "Release v1.0.6"
+> git push origin v1.0.6
+> ```
+
+---
+
 ## 🧪 Testing
 
 We use [Playwright](https://playwright.dev/) for End-to-End (E2E) testing. The tests launch a real Electron instance to verify all critical user flows:
