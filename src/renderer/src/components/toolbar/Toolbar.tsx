@@ -3,6 +3,7 @@ import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package } from 'lucide
 import { useRepoStore } from '../../store/useRepoStore'
 import { CherryPickModal } from './CherryPickModal'
 import BranchGraphModal from '../graph/BranchGraphModal'
+import { AppDialog } from '../dialogs/AppDialog'
 
 const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
@@ -22,6 +23,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
   const [tagErrorMessage, setTagErrorMessage] = useState('')
   const [isCherryPickModalOpen, setIsCherryPickModalOpen] = useState(false)
   const [isGraphModalOpen, setIsGraphModalOpen] = useState(false)
+  const [isNoChangesStagedOpen, setIsNoChangesStagedOpen] = useState(false)
 
   const files = activeRepo?.status?.files as any[] || []
   const stagedFiles = files.filter((f) => f.index !== ' ' && f.index !== '?')
@@ -77,11 +79,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
     if (!activeRepo) return
     if (commitMessage.trim().length <= 2) return
     if (stagedFiles.length === 0) {
-      await window.api.app.showMessageBox({
-        type: 'warning',
-        title: 'No changes staged',
-        message: 'There are no changes staged to be committed. Please stage some changes first.'
-      })
+      setIsNoChangesStagedOpen(true)
       return
     }
     try {
@@ -510,6 +508,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
           }}
         />
       )}
+
+      <AppDialog
+        isOpen={isNoChangesStagedOpen}
+        title="No changes staged"
+        message="There are no changes staged to be committed. Please stage some changes first."
+        variant="warning"
+        onCancel={() => setIsNoChangesStagedOpen(false)}
+        testId="no-changes-staged-dialog"
+      />
     </div>
   )
 }

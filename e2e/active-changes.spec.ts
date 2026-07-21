@@ -204,16 +204,6 @@ test.describe('Active Changes Panel', () => {
       const panel = page.locator('[data-testid="active-changes-panel"]')
       await expect(panel).toBeVisible()
 
-      // Track showMessageBox calls
-      await app.evaluate(async ({ ipcMain }) => {
-        (global as any).showMessageBoxOptions = null
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
-          (global as any).showMessageBoxOptions = options
-          return { success: true, response: 0 }
-        })
-      })
-
       const commitInput = page.locator('.toolbar [data-testid="commit-message-input"]')
       const commitBtn = page.locator('.toolbar [data-testid="commit-btn"]')
 
@@ -221,22 +211,22 @@ test.describe('Active Changes Panel', () => {
       await commitInput.fill('Valid message but empty staging')
       await expect(commitBtn).toBeEnabled()
 
-      // Click commit
+      // Click commit - this should show the in-app warning dialog
       await commitBtn.click()
-      await page.waitForTimeout(1000)
 
-      // Retrieve the message box options from the main process
-      const options = await app.evaluate(() => {
-        return (global as any).showMessageBoxOptions
-      })
-
-      expect(options).not.toBeNull()
-      expect(options.type).toBe('warning')
-      expect(options.title).toBe('No changes staged')
-      expect(options.message).toContain('no changes staged to be committed')
+      // Verify the in-app AppDialog is shown with the correct content
+      const noChangesDialog = page.locator('[data-testid="no-changes-staged-dialog"]')
+      await expect(noChangesDialog).toBeVisible()
+      await expect(noChangesDialog).toContainText('No changes staged')
+      await expect(noChangesDialog).toContainText('no changes staged to be committed')
+      await expect(noChangesDialog).toHaveAttribute('data-variant', 'warning')
 
       // Verify active changes panel is still visible (commit did not execute)
       await expect(panel).toBeVisible()
+
+      // Close the dialog by clicking OK
+      await noChangesDialog.locator('[data-testid="no-changes-staged-dialog-ok"]').click()
+      await expect(noChangesDialog).not.toBeVisible()
 
     } finally {
       await app.close()
