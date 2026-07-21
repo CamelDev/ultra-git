@@ -12,3 +12,6 @@ win:
   target: nsis
 linux:
   target: AppImage
+publish:
+  provider: github
+  releaseType: release
