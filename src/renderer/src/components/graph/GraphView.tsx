@@ -1195,6 +1195,8 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 {(() => {
                   const tags = extractTags(c.refs);
                   if (tags.length > 0) {
+                    const firstTag = tags[0];
+                    const isUnpushed = c.syncStatus === 'local-only' || !!activeRepo?.unpushedTags?.includes(firstTag);
                     return (
                       <div
                         className="commit-tag-badge"
@@ -1205,23 +1207,29 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                           alignItems: 'center',
                           gap: '4px',
                           padding: '3px 8px',
-                          background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(236, 72, 153, 0.06))',
-                          border: '1px solid rgba(236, 72, 153, 0.4)',
+                          background: isUnpushed 
+                            ? 'transparent' 
+                            : 'linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(236, 72, 153, 0.06))',
+                          border: isUnpushed 
+                            ? '1px solid var(--text-secondary)' 
+                            : '1px solid rgba(236, 72, 153, 0.4)',
                           borderRadius: '12px',
-                          color: '#f472b6',
+                          color: isUnpushed 
+                            ? 'var(--text-secondary)' 
+                            : '#f472b6',
                           fontSize: '11px',
                           fontWeight: 600,
                           maxWidth: '64px',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          boxShadow: isUnpushed ? 'none' : '0 2px 4px rgba(0,0,0,0.1)',
                           transition: 'all 0.2s ease'
                         }}
                       >
                         <Tag size={10} style={{ flexShrink: 0 }} />
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {tags[0]}
+                          {firstTag}
                         </span>
                       </div>
                     );

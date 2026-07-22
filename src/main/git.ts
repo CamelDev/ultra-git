@@ -917,6 +917,47 @@ export const gitService = {
     }
   },
 
+  getUnpushedTags: async (repoPath: string): Promise<string[]> => {
+    const git = getGitInstance(repoPath);
+    try {
+      const remotes = await git.getRemotes(true);
+      if (remotes.length === 0) {
+        const tags = await git.tags();
+        return tags.all;
+      }
+
+      const remoteName = remotes[0].name || 'origin';
+      const lsRemotePromise = git.raw(['ls-remote', '--tags', remoteName]);
+      const lsRemoteResult = await Promise.race([
+        lsRemotePromise,
+        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500))
+      ]);
+
+      const remoteTags = new Set<string>();
+      if (lsRemoteResult) {
+        lsRemoteResult.split('\n').forEach(line => {
+          const parts = line.split('\t');
+          if (parts.length === 2) {
+            const ref = parts[1].trim();
+            if (ref.startsWith('refs/tags/')) {
+              let tagName = ref.substring('refs/tags/'.length);
+              if (tagName.endsWith('^{}')) {
+                tagName = tagName.substring(0, tagName.length - 3);
+              }
+              remoteTags.add(tagName);
+            }
+          }
+        });
+      }
+
+      const localTags = await git.tags();
+      return localTags.all.filter(tag => !remoteTags.has(tag));
+    } catch (e) {
+      console.warn('getUnpushedTags failed or timed out:', e);
+      return [];
+    }
+  },
+
   createTag: async (repoPath: string, tagName: string): Promise<void> => {
     const git = getGitInstance(repoPath);
     await git.addTag(tagName);

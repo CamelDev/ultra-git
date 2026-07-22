@@ -98,6 +98,7 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       console.log('14.1. Verifying tag v1.0.0 is shown as a badge in the commits list...')
       const tagBadge = page.locator('[data-testid^="commit-tag-badge-"]').filter({ hasText: 'v1.0.0' })
       await expect(tagBadge).toBeVisible()
+      await expect(tagBadge).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
       console.log('14.2. Verifying that the dot icon is replaced by the tag badge...')
       const parentArea = tagBadge.locator('..')
