@@ -1318,7 +1318,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
             <span>{activeRepo?.tags?.length ?? 0}</span>
             {(() => {
-              const hasTagsToPush = !!(activeRepo?.unpushedTags && activeRepo.unpushedTags.length > 0);
+              const hasTagsToPush = !!activeRepo?.tags?.some(tag => {
+                const tagCommit = activeRepo.commits?.find(c => {
+                  const refs = c.refs || '';
+                  return refs.split(',').some(r => r.trim() === `tag: ${tag}`);
+                });
+                return (tagCommit && tagCommit.syncStatus === 'local-only') || !!activeRepo?.unpushedTags?.includes(tag);
+              });
               return activeRepo?.tags && activeRepo.tags.length > 0 && (
                 <button
                   className="stash-action-btn"
@@ -1350,7 +1356,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }} data-testid="no-tags-message">No tags</div>
           ) : (
             activeRepo.tags.map((tag) => {
-              const isTagUnpushed = !!activeRepo?.unpushedTags?.includes(tag);
+              const tagCommit = activeRepo.commits?.find(c => {
+                const refs = c.refs || '';
+                return refs.split(',').some(r => r.trim() === `tag: ${tag}`);
+              });
+              const isTagUnpushed = (tagCommit && tagCommit.syncStatus === 'local-only') || !!activeRepo?.unpushedTags?.includes(tag);
               const colorStyle = isTagUnpushed ? 'var(--text-secondary)' : '#ec4899';
               return (
                 <div key={tag} className="sidebar-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} data-testid={`sidebar-tag-${tag}`}>
