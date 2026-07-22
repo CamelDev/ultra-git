@@ -608,6 +608,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:getUnpushedTags', async (_, repoPath) => {
+    try {
+      const data = await gitService.getUnpushedTags(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:createTag', async (_, repoPath, tagName) => {
     try {
       await gitService.createTag(repoPath, tagName)

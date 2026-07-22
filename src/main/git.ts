@@ -399,20 +399,100 @@ export const gitService = {
       throw new Error('Cannot squash with uncommitted changes. Please stash or commit them first.');
     }
 
+    // Find all commits from commitHash up to HEAD to see if any tags point to them
+    const commitsInSquash: string[] = [];
+    try {
+      const revListRaw = await git.raw(['rev-list', `${commitHash}~1..HEAD`]);
+      revListRaw.split('\n').forEach(h => {
+        const trimmed = h.trim();
+        if (trimmed) commitsInSquash.push(trimmed);
+      });
+    } catch (e) {
+      // Fallback for initial/parentless commit
+      try {
+        const revListRaw = await git.raw(['rev-list', 'HEAD']);
+        revListRaw.split('\n').forEach(h => {
+          const trimmed = h.trim();
+          if (trimmed) commitsInSquash.push(trimmed);
+        });
+      } catch (err2) {
+        console.warn('Failed to get rev-list during squash tag collection:', err2);
+      }
+    }
+
+    // Find tags pointing to any of the commits in commitsInSquash
+    const tagsToMove: string[] = [];
+    if (commitsInSquash.length > 0) {
+      try {
+        const showRefRaw = await git.raw(['show-ref', '--tags', '-d']);
+        const tagToCommitMap = new Map<string, string>();
+        
+        showRefRaw.trim().split('\n').forEach(line => {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length === 2) {
+            const hash = parts[0];
+            let ref = parts[1];
+            if (ref.startsWith('refs/tags/')) {
+              let tagName = ref.substring('refs/tags/'.length);
+              const isDereferenced = tagName.endsWith('^{}');
+              if (isDereferenced) {
+                tagName = tagName.substring(0, tagName.length - 3);
+                tagToCommitMap.set(tagName, hash);
+              } else {
+                if (!tagToCommitMap.has(tagName)) {
+                  tagToCommitMap.set(tagName, hash);
+                }
+              }
+            }
+          }
+        });
+
+        const squashSet = new Set(commitsInSquash);
+        for (const [tagName, targetHash] of tagToCommitMap.entries()) {
+          if (squashSet.has(targetHash)) {
+            tagsToMove.push(tagName);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to find tags to move during squash:', e);
+      }
+    }
+
     // Find the parent of commitHash
     let parentHash = '';
+    let isInitialCommit = false;
     try {
       const parentRaw = await git.raw(['rev-parse', `${commitHash}^`]);
       parentHash = parentRaw.trim();
     } catch (err) {
-      throw new Error('Target commit has no parent (it may be the initial commit) and cannot be squashed.');
+      isInitialCommit = true;
     }
 
-    // Soft reset to the parent of the target commit
-    await git.reset(['--soft', parentHash]);
+    if (isInitialCommit) {
+      // Soft reset to the initial commit
+      await git.reset(['--soft', commitHash]);
+      // Amend the initial commit with the new squash message and all staged changes
+      await git.raw(['commit', '--amend', '-m', message]);
+    } else {
+      // Soft reset to the parent of the target commit
+      await git.reset(['--soft', parentHash]);
+      // Commit with the new squash message
+      await git.commit(message);
+    }
 
-    // Commit with the new squash message
-    await git.commit(message);
+    // Move tags if any were found
+    if (tagsToMove.length > 0) {
+      try {
+        const newHeadRaw = await git.raw(['rev-parse', 'HEAD']);
+        const newHeadHash = newHeadRaw.trim();
+        for (const tagName of tagsToMove) {
+          await git.tag(['-f', tagName, newHeadHash]);
+          console.log(`Moved tag ${tagName} to new squashed commit ${newHeadHash}`);
+        }
+      } catch (e) {
+        console.warn('Failed to move tags to new squashed commit:', e);
+      }
+    }
   },
 
   addAll: async (repoPath: string) => {
@@ -914,6 +994,47 @@ export const gitService = {
       console.error('getTags failed, falling back to basic tags listing:', e);
       const tags = await git.tags();
       return tags.all;
+    }
+  },
+
+  getUnpushedTags: async (repoPath: string): Promise<string[]> => {
+    const git = getGitInstance(repoPath);
+    try {
+      const remotes = await git.getRemotes(true);
+      if (remotes.length === 0) {
+        const tags = await git.tags();
+        return tags.all;
+      }
+
+      const remoteName = remotes[0].name || 'origin';
+      const lsRemotePromise = git.raw(['ls-remote', '--tags', remoteName]);
+      const lsRemoteResult = await Promise.race([
+        lsRemotePromise,
+        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500))
+      ]);
+
+      const remoteTags = new Set<string>();
+      if (lsRemoteResult) {
+        lsRemoteResult.split('\n').forEach(line => {
+          const parts = line.split('\t');
+          if (parts.length === 2) {
+            const ref = parts[1].trim();
+            if (ref.startsWith('refs/tags/')) {
+              let tagName = ref.substring('refs/tags/'.length);
+              if (tagName.endsWith('^{}')) {
+                tagName = tagName.substring(0, tagName.length - 3);
+              }
+              remoteTags.add(tagName);
+            }
+          }
+        });
+      }
+
+      const localTags = await git.tags();
+      return localTags.all.filter(tag => !remoteTags.has(tag));
+    } catch (e) {
+      console.warn('getUnpushedTags failed or timed out:', e);
+      return [];
     }
   },
 

@@ -544,6 +544,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           title: 'Tags Pushed',
           message: 'All local tags have been successfully pushed to the remote repository.'
         })
+        await refreshRepo(activeRepo.id)
       } else {
         console.error('Failed to push tags:', res.error)
         setPushTagsAlert({
@@ -1316,42 +1317,76 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
             <span>{activeRepo?.tags?.length ?? 0}</span>
-            {activeRepo?.tags && activeRepo.tags.length > 0 && (
-              <button
-                className="stash-action-btn"
-                style={{ padding: 2, height: 20, width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                onClick={handlePushTags}
-                data-tooltip="Push all local tags to remote (origin)"
-                data-testid="sidebar-push-tags-btn"
-              >
-                <Upload size={12} />
-              </button>
-            )}
+            {(() => {
+              const hasTagsToPush = !!(activeRepo?.unpushedTags && activeRepo.unpushedTags.length > 0);
+              return activeRepo?.tags && activeRepo.tags.length > 0 && (
+                <button
+                  className="stash-action-btn"
+                  style={{ 
+                    padding: 2, 
+                    height: 20, 
+                    width: 20, 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    ...(hasTagsToPush ? {
+                      color: '#ec4899',
+                      borderColor: 'rgba(236, 72, 153, 0.4)',
+                      background: 'rgba(236, 72, 153, 0.08)'
+                    } : {})
+                  }}
+                  onClick={handlePushTags}
+                  data-tooltip="Push all local tags to remote (origin)"
+                  data-testid="sidebar-push-tags-btn"
+                >
+                  <Upload size={12} />
+                </button>
+              );
+            })()}
           </div>
         </div>
         {!isTagsCollapsed && (
           (!activeRepo?.tags || activeRepo.tags.length === 0) ? (
             <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }} data-testid="no-tags-message">No tags</div>
           ) : (
-            activeRepo.tags.map((tag) => (
-              <div key={tag} className="sidebar-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} data-testid={`sidebar-tag-${tag}`}>
-                <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <Tag className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag}</span>
+            activeRepo.tags.map((tag) => {
+              const isTagUnpushed = !!activeRepo?.unpushedTags?.includes(tag);
+              const colorStyle = isTagUnpushed ? 'var(--text-secondary)' : '#ec4899';
+              return (
+                <div key={tag} className="sidebar-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} data-testid={`sidebar-tag-${tag}`}>
+                  <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <Tag 
+                      className="sidebar-item-icon" 
+                      size={14} 
+                      style={{ 
+                        flexShrink: 0, 
+                        color: colorStyle,
+                        marginRight: 6
+                      }} 
+                    />
+                    <span style={{ 
+                      overflow: 'hidden', 
+                      textOverflow: 'ellipsis', 
+                      whiteSpace: 'nowrap',
+                      color: colorStyle
+                    }}>
+                      {tag}
+                    </span>
+                  </div>
+                  <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    <button
+                      className="stash-action-btn delete"
+                      style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                      onClick={(e) => handleDeleteTagClick(e, tag)}
+                      data-tooltip="Delete tag"
+                      data-testid={`delete-tag-btn-${tag}`}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
-                <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
-                  <button
-                    className="stash-action-btn delete"
-                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                    onClick={(e) => handleDeleteTagClick(e, tag)}
-                    data-tooltip="Delete tag"
-                    data-testid={`delete-tag-btn-${tag}`}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )
         )}
       </div>

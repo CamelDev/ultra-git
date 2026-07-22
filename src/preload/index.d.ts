@@ -36,6 +36,11 @@ declare global {
         getWorktrees: (repoPath: string) => Promise<IpcResponse<Array<{ path: string; branch: string; hash: string }>>>;
         addWorktree: (repoPath: string, newPath: string, branch: string, baseBranch?: string) => Promise<IpcResponse<void>>;
         removeWorktree: (repoPath: string, targetPath: string) => Promise<IpcResponse<void>>;
+        getTags: (repoPath: string) => Promise<IpcResponse<string[]>>;
+        getUnpushedTags: (repoPath: string) => Promise<IpcResponse<string[]>>;
+        createTag: (repoPath: string, tagName: string) => Promise<IpcResponse<void>>;
+        pushTags: (repoPath: string, remote?: string) => Promise<IpcResponse<void>>;
+        deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) => Promise<IpcResponse<void>>;
       },
       app: {
         openDirectory: () => Promise<{ canceled: boolean, path?: string }>;

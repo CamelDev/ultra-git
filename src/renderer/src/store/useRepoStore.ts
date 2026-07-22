@@ -36,6 +36,7 @@ export interface Repository {
     remote: string[];
   };
   tags?: string[];
+  unpushedTags?: string[];
   worktrees?: Array<{ path: string; branch: string; hash: string }>;
 }
 
@@ -403,12 +404,13 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     try {
       const commitLimit = repo.commitLimit || 50;
-      const [statusRes, logRes, stashRes, branchesRes, tagsRes, worktreesRes] = await Promise.all([
+      const [statusRes, logRes, stashRes, branchesRes, tagsRes, unpushedTagsRes, worktreesRes] = await Promise.all([
         window.api.git.status(repo.path),
         window.api.git.log(repo.path, commitLimit),
         window.api.git.stashList(repo.path),
         window.api.git.getBranches(repo.path),
         window.api.git.getTags(repo.path),
+        window.api.git.getUnpushedTags(repo.path),
         window.api.git.getWorktrees(repo.path)
       ]);
 
@@ -429,6 +431,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
               stashes,
               branches: branchesRes.success ? branchesRes.data : (r.branches || { local: [], remote: [] }),
               tags: tagsRes.success ? tagsRes.data : (r.tags || []),
+              unpushedTags: unpushedTagsRes.success ? unpushedTagsRes.data : (r.unpushedTags || []),
               worktrees: wts,
               name: mainName,
               error: statusRes.success ? null : (statusRes.error ?? 'Unknown error'),
