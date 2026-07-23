@@ -389,9 +389,12 @@ test.describe('Git Worktrees Integration', () => {
       console.log('[Worktree Delete Test] 3. Adding sandbox repository...');
       const addBtn = page.locator('[data-testid="add-repo-btn"]');
       await expect(addBtn).toBeVisible();
-      await addBtn.click();
 
       const tabs = page.locator('[data-testid="repo-tab"]');
+      await expect(tabs).toHaveCount(1); // Wait for initial default repo tab to load
+
+      await addBtn.click();
+
       await expect(tabs).toHaveCount(2);
       await tabs.last().click();
       await page.waitForTimeout(500);
@@ -403,21 +406,23 @@ test.describe('Git Worktrees Integration', () => {
       const extraWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-test' });
       await expect(extraWtItem).toBeVisible();
 
-      console.log('[Worktree Delete Test] 4. Mocking dialog:showMessageBox to Confirm Remove...');
-      await app.evaluate(async ({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox');
-        ipcMain.handle('dialog:showMessageBox', async () => {
-          return { success: true, response: 1 }; // Confirm Remove (1)
-        });
-      });
-
-      console.log('[Worktree Delete Test] 5. Clicking delete worktree button...');
+      console.log('[Worktree Delete Test] 4. Clicking delete worktree button...');
       await extraWtItem.hover();
       const deleteWtBtn = page.locator('[data-testid="delete-worktree-btn-feature/wt-test"]');
       await expect(deleteWtBtn).toBeVisible();
       await deleteWtBtn.click();
-      
+
+      console.log('[Worktree Delete Test] 5. Verifying custom AppDialog is shown and confirming...');
+      const confirmDialog = page.locator('[data-testid="remove-worktree-confirm-dialog"]');
+      await expect(confirmDialog).toBeVisible();
+
+      const confirmBtn = page.locator('[data-testid="remove-worktree-confirm-dialog-action-confirm"]');
+      await expect(confirmBtn).toBeVisible();
+      await confirmBtn.click();
+
       console.log('[Worktree Delete Test] 6. Verifying worktree is removed from sidebar UI...');
+      const blockingOverlay = page.locator('[data-testid="sidebar-blocking-overlay"]');
+      await expect(blockingOverlay).toBeHidden();
       await expect(extraWtItem).not.toBeVisible();
 
       console.log('[Worktree Delete Test] 7. Verifying worktree directory is removed from disk...');

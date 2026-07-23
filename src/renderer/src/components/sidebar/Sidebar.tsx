@@ -133,6 +133,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [branchToDelete, setBranchToDelete] = useState<string | undefined>(undefined)
 
+  const [deletingWorktreePath, setDeletingWorktreePath] = useState<string | null>(null)
+  const [amusingMessageIndex, setAmusingMessageIndex] = useState(0)
+  const [worktreePathToDelete, setWorktreeToDeletePath] = useState<string | null>(null)
+
   const openWorktreeModal = () => {
     setBaseBranch(activeRepo?.branch || 'main')
     setNewWorktreeBranch('')
@@ -299,6 +303,31 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       });
     }
   }, [branch, activeRepo?.branches?.local, activeRepo?.path]);
+
+  const AMUSING_MESSAGES = [
+    "Chopping down the worktree...",
+    "Timberrrrr! 🌲🪓",
+    "Uprooting the branches...",
+    "Sweeping up stray leaves...",
+    "Calling Paul Bunyan...",
+    "Raking leftover files...",
+    "Pruning the git forest...",
+    "Sharpening the chainsaw...",
+    "Securing falling branches...",
+    "Converting trunk to sawdust..."
+  ];
+
+  React.useEffect(() => {
+    if (!deletingWorktreePath) return;
+
+    setAmusingMessageIndex(Math.floor(Math.random() * AMUSING_MESSAGES.length));
+
+    const interval = setInterval(() => {
+      setAmusingMessageIndex((prev) => (prev + 1) % AMUSING_MESSAGES.length);
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [deletingWorktreePath]);
 
   const handlePopStash = async (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
@@ -696,37 +725,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     }
   }
 
-  const handleDeleteWorktree = async (e: React.MouseEvent, path: string) => {
+  const handleDeleteWorktree = (e: React.MouseEvent, path: string) => {
     e.stopPropagation()
     if (!activeRepo) return
-
-    const confirmRes = await window.api.app.showMessageBox({
-      type: 'warning',
-      title: 'Remove Worktree',
-      message: `Are you sure you want to remove the worktree at ${path}? Uncommitted changes might be lost.`,
-      buttons: ['Cancel', 'Remove'],
-      defaultId: 1,
-      cancelId: 0
-    })
-
-    if (!confirmRes.success || confirmRes.response !== 1) {
-      return
-    }
-
-    try {
-      const res = await window.api.git.removeWorktree(activeRepo.path, path)
-      if (res.success) {
-        await refreshRepo(activeRepo.id)
-      } else {
-        await window.api.app.showMessageBox({
-          type: 'error',
-          title: 'Error',
-          message: `Failed to remove worktree: ${res.error}`
-        })
-      }
-    } catch (err: any) {
-      console.error('Error removing worktree:', err)
-    }
+    setWorktreeToDeletePath(path)
   }
 
   const handleAddWorktreeSubmit = async () => {
@@ -1151,6 +1153,26 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
 
   return (
     <div className="sidebar" data-testid="sidebar">
+      {deletingWorktreePath && (
+        <div className="sidebar-blocking-overlay" data-testid="sidebar-blocking-overlay">
+          <div className="amusing-loader-container">
+            <div className="forest-animation">
+              <span className="tree-emoji">🌲</span>
+              <span className="axe-emoji">🪓</span>
+              <span className="wood-chip chip-left">🪵</span>
+              <span className="wood-chip chip-right">🪵</span>
+            </div>
+            <div className="loader-text-container">
+              <p className="amusing-loader-text" data-testid="amusing-loader-text">
+                {AMUSING_MESSAGES[amusingMessageIndex]}
+              </p>
+              <div className="loader-subtext">
+                Removing {deletingWorktreePath.split(/[/\\]/).pop()}...
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Sticky Filter Input */}
       <div className="sidebar-filter-container" data-testid="branch-filter-container">
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -1879,6 +1901,57 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         variant={pushTagsAlert.variant}
         testId="push-tags-alert-dialog"
         onCancel={() => setPushTagsAlert((prev) => ({ ...prev, open: false }))}
+      />
+
+      {/* Worktree deletion confirmation dialog (in-app, replaces native confirm) */}
+      <AppDialog
+        isOpen={worktreePathToDelete !== null}
+        title="Remove Worktree"
+        message={`Are you sure you want to remove the worktree at ${worktreePathToDelete}? Uncommitted changes might be lost.`}
+        variant="warning"
+        icon={<Trash2 size={16} />}
+        testId="remove-worktree-confirm-dialog"
+        actions={[
+          {
+            label: 'Cancel',
+            value: 'cancel',
+            variant: 'secondary'
+          },
+          {
+            label: 'Remove',
+            value: 'confirm',
+            variant: 'danger',
+            icon: <Trash2 size={13} />,
+            setsBusy: true
+          }
+        ]}
+        onResolve={async (value) => {
+          if (value === 'confirm' && worktreePathToDelete) {
+            const path = worktreePathToDelete
+            setWorktreeToDeletePath(null)
+            
+            setDeletingWorktreePath(path)
+            try {
+              const res = await window.api.git.removeWorktree(activeRepo!.path, path)
+              if (res.success) {
+                await refreshRepo(activeRepo!.id)
+              } else {
+                await window.api.app.showMessageBox({
+                  type: 'error',
+                  title: 'Error',
+                  message: `Failed to remove worktree: ${res.error}`
+                })
+              }
+            } catch (err: any) {
+              console.error('Error removing worktree:', err)
+            } finally {
+              setDeletingWorktreePath(null)
+            }
+          } else {
+            setWorktreeToDeletePath(null)
+          }
+        }}
+        onCancel={() => setWorktreeToDeletePath(null)}
       />
     </div>
   )
