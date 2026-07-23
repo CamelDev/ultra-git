@@ -258,5 +258,96 @@ test.describe('Git Stashes Improvements', () => {
       await app.close()
     }
   })
+
+  test('should support collapsing/expanding and persistence in localStorage for the stashes section', async () => {
+    console.log('[Stash Collapse Test] 1. Initializing stash content in sandbox...');
+    fs.writeFileSync(path.join(sandbox.dir, 'README.md'), '# Initial README\n')
+    await sandbox.git.add('README.md')
+    await sandbox.git.commit('Initial commit')
+
+    fs.writeFileSync(path.join(sandbox.dir, 'README.md'), '# Initial README\nModified line in stash\n')
+    await sandbox.git.stash(['push', '-m', 'Stash to collapse/expand'])
+
+    console.log('[Stash Collapse Test] 2. Launching Electron App...');
+    const { app, page } = await launchElectronApp()
+
+    try {
+      console.log('[Stash Collapse Test] 3. Clearing localStorage...');
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      console.log('[Stash Collapse Test] 4. Mocking dialog:openDirectory...');
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      console.log('[Stash Collapse Test] 5. Adding sandbox repository...');
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      console.log('[Stash Collapse Test] 6. Switching to repository tab...');
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      console.log('[Stash Collapse Test] 7. Verifying stash entry is visible initially...');
+      const stashItem = page.locator('[data-testid="stash-item-0"]')
+      await expect(stashItem).toBeVisible()
+
+      console.log('[Stash Collapse Test] 8. Collapsing stashes section...');
+      const stashesHeader = page.locator('[data-testid="sidebar-stashes-header"]')
+      await expect(stashesHeader).toBeVisible()
+      await stashesHeader.click()
+      await page.waitForTimeout(500)
+
+      console.log('[Stash Collapse Test] 9. Verifying stash entry is NOT visible...');
+      await expect(stashItem).not.toBeVisible()
+
+      console.log('[Stash Collapse Test] 10. Verifying localStorage has saved collapsed state as true...');
+      const collapsedStorageValue = await page.evaluate(() => localStorage.getItem('sidebar-stashes-collapsed'))
+      expect(collapsedStorageValue).toBe('true')
+
+      console.log('[Stash Collapse Test] 11. Expanding stashes section...');
+      await stashesHeader.click()
+      await page.waitForTimeout(500)
+
+      console.log('[Stash Collapse Test] 12. Verifying stash entry is visible again...');
+      await expect(stashItem).toBeVisible()
+
+      console.log('[Stash Collapse Test] 13. Verifying localStorage has saved collapsed state as false...');
+      const expandedStorageValue = await page.evaluate(() => localStorage.getItem('sidebar-stashes-collapsed'))
+      expect(expandedStorageValue).toBe('false')
+
+      console.log('[Stash Collapse Test] 14. Testing persistence across reload...');
+      // Explicitly collapse section, reload and check
+      await stashesHeader.click()
+      await page.waitForTimeout(500)
+      await expect(stashItem).not.toBeVisible()
+
+      console.log('[Stash Collapse Test] 15. Reloading page...');
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      console.log('[Stash Collapse Test] 16. Verifying section starts collapsed...');
+      await expect(stashItem).not.toBeVisible()
+
+      console.log('[Stash Collapse Test] 17. Expanding section after reload...');
+      await stashesHeader.click()
+      await page.waitForTimeout(500)
+      await expect(stashItem).toBeVisible()
+
+    } finally {
+      console.log('Closing app...');
+      await app.close()
+    }
+  })
 })
 

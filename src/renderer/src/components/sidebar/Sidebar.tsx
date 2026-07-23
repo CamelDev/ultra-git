@@ -164,6 +164,90 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     })
   }
 
+  const [isStashesCollapsed, setIsStashesCollapsed] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('sidebar-stashes-collapsed')
+      return stored === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleStashesCollapsed = () => {
+    setIsStashesCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('sidebar-stashes-collapsed', String(next))
+      } catch (e) {
+        console.error('Failed to save stashes collapse state to localStorage', e)
+      }
+      return next
+    })
+  }
+
+  const [isWorktreesCollapsed, setIsWorktreesCollapsed] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('sidebar-worktrees-collapsed')
+      return stored === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleWorktreesCollapsed = () => {
+    setIsWorktreesCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('sidebar-worktrees-collapsed', String(next))
+      } catch (e) {
+        console.error('Failed to save worktrees collapse state to localStorage', e)
+      }
+      return next
+    })
+  }
+
+  const [isLocalBranchesCollapsed, setIsLocalBranchesCollapsed] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('sidebar-local-branches-collapsed')
+      return stored === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleLocalBranchesCollapsed = () => {
+    setIsLocalBranchesCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('sidebar-local-branches-collapsed', String(next))
+      } catch (e) {
+        console.error('Failed to save local branches collapse state to localStorage', e)
+      }
+      return next
+    })
+  }
+
+  const [isRemoteBranchesCollapsed, setIsRemoteBranchesCollapsed] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('sidebar-remote-branches-collapsed')
+      return stored === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleRemoteBranchesCollapsed = () => {
+    setIsRemoteBranchesCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('sidebar-remote-branches-collapsed', String(next))
+      } catch (e) {
+        console.error('Failed to save remote branches collapse state to localStorage', e)
+      }
+      return next
+    })
+  }
+
   const prevBranchRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!branch) return;
@@ -1115,9 +1199,21 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>Worktree Branches</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div
+          className="sidebar-header"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+          onClick={toggleWorktreesCollapsed}
+          data-testid="sidebar-worktrees-header"
+        >
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {isWorktreesCollapsed ? (
+              <ChevronRight size={12} style={{ marginRight: 6 }} />
+            ) : (
+              <ChevronDown size={12} style={{ marginRight: 6 }} />
+            )}
+            <span>Worktree Branches</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
             <span>{filterText ? `${filteredWorktrees.length}/${worktrees.length}` : worktrees.length}</span>
             <button
               className="stash-action-btn"
@@ -1130,171 +1226,217 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             </button>
           </div>
         </div>
-        {(!filteredWorktrees || filteredWorktrees.length === 0) ? (
-          <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>No worktrees</div>
-        ) : (
-          filteredWorktrees.map((wt, index) => {
-            const isActiveRepo = normalizePath(wt.path) === normalizePath(activeRepo?.path ?? '');
-            const isMainWorktree = normalizePath(wt.path) === normalizePath(mainWtPath ?? '');
-            const shortPath = wt.path.split(/[/\\]/).pop();
-            return (
-              <div
-                key={wt.path}
-                className={`sidebar-item ${isActiveRepo ? 'active' : ''}`}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: isActiveRepo ? 'default' : 'pointer' }}
-                onClick={() => !isActiveRepo && handleSwitchWorktree(wt.path)}
-                data-tooltip={wt.path}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <Folder className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath} <span style={{ color: 'var(--text-secondary)' }}>({wt.branch})</span></span>
-                </div>
-                <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
-                  {!isActiveRepo && (
-                    <>
-                      <button
-                        className="stash-action-btn"
-                        style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openMergeModal(e, wt.branch);
-                        }}
-                        data-tooltip={`Merge ${wt.branch} into ${branch}`}
-                        data-testid={`merge-worktree-btn-${wt.branch}`}
-                      >
-                        <GitMerge size={12} />
-                      </button>
-                      <button
-                        className="stash-action-btn"
-                        style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openRebaseModal(e, wt.branch);
-                        }}
-                        data-tooltip={`Rebase ${branch} onto ${wt.branch}`}
-                        data-testid={`rebase-worktree-btn-${wt.branch}`}
-                      >
-                        <GitCommit size={12} />
-                      </button>
-                    </>
-                  )}
-                  <button
-                    className="stash-action-btn"
-                    style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                    onClick={(e) => handleCopyWorktreePath(e, wt.path)}
-                    data-tooltip="Copy path"
-                  >
-                    <Copy size={13} />
-                  </button>
-                  {!isMainWorktree && !isActiveRepo && (
+        {!isWorktreesCollapsed && (
+          (!filteredWorktrees || filteredWorktrees.length === 0) ? (
+            <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>No worktrees</div>
+          ) : (
+            filteredWorktrees.map((wt, index) => {
+              const isActiveRepo = normalizePath(wt.path) === normalizePath(activeRepo?.path ?? '');
+              const isMainWorktree = normalizePath(wt.path) === normalizePath(mainWtPath ?? '');
+              const shortPath = wt.path.split(/[/\\]/).pop();
+              return (
+                <div
+                  key={wt.path}
+                  className={`sidebar-item ${isActiveRepo ? 'active' : ''}`}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: isActiveRepo ? 'default' : 'pointer' }}
+                  onClick={() => !isActiveRepo && handleSwitchWorktree(wt.path)}
+                  data-tooltip={wt.path}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <Folder className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath} <span style={{ color: 'var(--text-secondary)' }}>({wt.branch})</span></span>
+                  </div>
+                  <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    {!isActiveRepo && (
+                      <>
+                        <button
+                          className="stash-action-btn"
+                          style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openMergeModal(e, wt.branch);
+                          }}
+                          data-tooltip={`Merge ${wt.branch} into ${branch}`}
+                          data-testid={`merge-worktree-btn-${wt.branch}`}
+                        >
+                          <GitMerge size={12} />
+                        </button>
+                        <button
+                          className="stash-action-btn"
+                          style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openRebaseModal(e, wt.branch);
+                          }}
+                          data-tooltip={`Rebase ${branch} onto ${wt.branch}`}
+                          data-testid={`rebase-worktree-btn-${wt.branch}`}
+                        >
+                          <GitCommit size={12} />
+                        </button>
+                      </>
+                    )}
                     <button
-                      className="stash-action-btn delete"
+                      className="stash-action-btn"
                       style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                      onClick={(e) => handleDeleteWorktree(e, wt.path)}
-                      data-tooltip="Remove worktree"
-                      data-testid={`delete-worktree-btn-${wt.branch}`}
+                      onClick={(e) => handleCopyWorktreePath(e, wt.path)}
+                      data-tooltip="Copy path"
                     >
-                      <Trash2 size={13} />
+                      <Copy size={13} />
                     </button>
-                  )}
+                    {!isMainWorktree && !isActiveRepo && (
+                      <button
+                        className="stash-action-btn delete"
+                        style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                        onClick={(e) => handleDeleteWorktree(e, wt.path)}
+                        data-tooltip="Remove worktree"
+                        data-testid={`delete-worktree-btn-${wt.branch}`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })
+              )
+            })
+          )
         )}
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-header">
-          <span>Local</span>
+        <div
+          className="sidebar-header"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+          onClick={toggleLocalBranchesCollapsed}
+          data-testid="sidebar-local-branches-header"
+        >
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {isLocalBranchesCollapsed ? (
+              <ChevronRight size={12} style={{ marginRight: 6 }} />
+            ) : (
+              <ChevronDown size={12} style={{ marginRight: 6 }} />
+            )}
+            <span>Local</span>
+          </div>
           <span>{filterText ? `${filteredLocalBranches.length}/${localBranches.length}` : localBranches.length}</span>
         </div>
-        {localBranchTree.map((node) => renderLocalBranchNode(node, 0))}
-      </div>
-
-      <div className="sidebar-section">
-        <div className="sidebar-header">
-          <span>Remote</span>
-          <span>{filterText ? `${filteredRemoteBranches.length}/${remoteBranches.length}` : remoteBranches.length}</span>
-        </div>
-        {filteredRemoteBranches.length === 0 ? (
-          <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>No remote branches</div>
-        ) : (
-          remoteBranchTree.map((node) => renderRemoteBranchNode(node, 0))
+        {!isLocalBranchesCollapsed && (
+          localBranchTree.map((node) => renderLocalBranchNode(node, 0))
         )}
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-header">
-          <span>Stashes</span>
+        <div
+          className="sidebar-header"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+          onClick={toggleRemoteBranchesCollapsed}
+          data-testid="sidebar-remote-branches-header"
+        >
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {isRemoteBranchesCollapsed ? (
+              <ChevronRight size={12} style={{ marginRight: 6 }} />
+            ) : (
+              <ChevronDown size={12} style={{ marginRight: 6 }} />
+            )}
+            <span>Remote</span>
+          </div>
+          <span>{filterText ? `${filteredRemoteBranches.length}/${remoteBranches.length}` : remoteBranches.length}</span>
+        </div>
+        {!isRemoteBranchesCollapsed && (
+          filteredRemoteBranches.length === 0 ? (
+            <div style={{ padding: '8px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>No remote branches</div>
+          ) : (
+            remoteBranchTree.map((node) => renderRemoteBranchNode(node, 0))
+          )
+        )}
+      </div>
+
+      <div className="sidebar-section">
+        <div
+          className="sidebar-header"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+          onClick={toggleStashesCollapsed}
+          data-testid="sidebar-stashes-header"
+        >
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {isStashesCollapsed ? (
+              <ChevronRight size={12} style={{ marginRight: 6 }} />
+            ) : (
+              <ChevronDown size={12} style={{ marginRight: 6 }} />
+            )}
+            <span>Stashes</span>
+          </div>
           <span>{stashes.length}</span>
         </div>
 
-        {conflictWarning && (
-          <div className="stash-conflict-banner" data-testid="stash-conflict-banner">
-            <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>Conflicts detected — resolve the conflict markers (&lt;&lt;&lt;&lt;&lt;&lt;&lt;) in your files manually, then mark as resolved.</span>
-          </div>
-        )}
-
-        {stashes.length === 0 ? (
-          <div className="stash-empty">No stashes</div>
-        ) : (
-          stashes.map((stash) => {
-            const isSelected = selectedStashIndex === stash.index
-            const isPopping = poppingIndex === stash.index
-            return (
-              <div
-                key={stash.ref}
-                className={`sidebar-item stash-item${isSelected ? ' stash-selected' : ''}`}
-                onClick={() => setSelectedStashIndex(isSelected ? null : stash.index)}
-                data-testid={`stash-item-${stash.index}`}
-              >
-                <Package
-                  className="sidebar-item-icon"
-                  size={14}
-                  style={{ color: isSelected ? 'var(--accent-light)' : 'var(--text-secondary)', flexShrink: 0 }}
-                />
-                <div className="stash-item-info">
-                  <div className="stash-item-message" data-tooltip={stash.message}>
-                    {stash.message}
-                  </div>
-                  <div className="stash-item-date">{formatStashDate(stash.date)}</div>
-                </div>
-                {isSelected && (
-                  <div className="stash-actions">
-                    <button
-                      className="stash-action-btn pop"
-                      onClick={(e) => handlePopStash(e, stash.index)}
-                      disabled={isPopping || deletingIndex === stash.index}
-                      data-tooltip="Pop this stash back to working directory"
-                      data-testid={`stash-pop-btn-${stash.index}`}
-                    >
-                      {isPopping ? '…' : 'Pop'}
-                    </button>
-                    <button
-                      className="stash-action-btn details"
-                      onClick={(e) => handleShowStashDetails(e, stash.index, stash.message)}
-                      disabled={isPopping || deletingIndex === stash.index}
-                      data-tooltip="View stash files and diff details"
-                      data-testid={`stash-details-btn-${stash.index}`}
-                    >
-                      <List size={13} />
-                    </button>
-                    <button
-                      className="stash-action-btn delete"
-                      onClick={(e) => handleDeleteStash(e, stash.index)}
-                      disabled={isPopping || deletingIndex === stash.index}
-                      data-tooltip="Delete this stash"
-                      data-testid={`stash-delete-btn-${stash.index}`}
-                    >
-                      {deletingIndex === stash.index ? '…' : <Trash2 size={13} />}
-                    </button>
-                  </div>
-                )}
+        {!isStashesCollapsed && (
+          <>
+            {conflictWarning && (
+              <div className="stash-conflict-banner" data-testid="stash-conflict-banner">
+                <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>Conflicts detected — resolve the conflict markers (&lt;&lt;&lt;&lt;&lt;&lt;&lt;) in your files manually, then mark as resolved.</span>
               </div>
-            )
-          })
+            )}
+
+            {stashes.length === 0 ? (
+              <div className="stash-empty">No stashes</div>
+            ) : (
+              stashes.map((stash) => {
+                const isSelected = selectedStashIndex === stash.index
+                const isPopping = poppingIndex === stash.index
+                return (
+                  <div
+                    key={stash.ref}
+                    className={`sidebar-item stash-item${isSelected ? ' stash-selected' : ''}`}
+                    onClick={() => setSelectedStashIndex(isSelected ? null : stash.index)}
+                    data-testid={`stash-item-${stash.index}`}
+                  >
+                    <Package
+                      className="sidebar-item-icon"
+                      size={14}
+                      style={{ color: isSelected ? 'var(--accent-light)' : 'var(--text-secondary)', flexShrink: 0 }}
+                    />
+                    <div className="stash-item-info">
+                      <div className="stash-item-message" data-tooltip={stash.message}>
+                        {stash.message}
+                      </div>
+                      <div className="stash-item-date">{formatStashDate(stash.date)}</div>
+                    </div>
+                    {isSelected && (
+                      <div className="stash-actions">
+                        <button
+                          className="stash-action-btn pop"
+                          onClick={(e) => handlePopStash(e, stash.index)}
+                          disabled={isPopping || deletingIndex === stash.index}
+                          data-tooltip="Pop this stash back to working directory"
+                          data-testid={`stash-pop-btn-${stash.index}`}
+                        >
+                          {isPopping ? '…' : 'Pop'}
+                        </button>
+                        <button
+                          className="stash-action-btn details"
+                          onClick={(e) => handleShowStashDetails(e, stash.index, stash.message)}
+                          disabled={isPopping || deletingIndex === stash.index}
+                          data-tooltip="View stash files and diff details"
+                          data-testid={`stash-details-btn-${stash.index}`}
+                        >
+                          <List size={13} />
+                        </button>
+                        <button
+                          className="stash-action-btn delete"
+                          onClick={(e) => handleDeleteStash(e, stash.index)}
+                          disabled={isPopping || deletingIndex === stash.index}
+                          data-tooltip="Delete this stash"
+                          data-testid={`stash-delete-btn-${stash.index}`}
+                        >
+                          {deletingIndex === stash.index ? '…' : <Trash2 size={13} />}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </>
         )}
       </div>
 
