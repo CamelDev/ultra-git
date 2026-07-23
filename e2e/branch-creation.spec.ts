@@ -211,18 +211,19 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await expect(activeDeleteBtn).toBeDisabled()
 
       console.log('29. Delete inactive branch main-renamed...')
-      console.log('Mocking dialog:showMessageBox to Confirm (1)...')
-      await app.evaluate(async ({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async () => {
-          return { success: true, response: 1 }
-        })
-      })
-      
       await renamedMainBranchItem.hover()
       const deleteInactiveBtn = page.locator('[data-testid="delete-branch-btn-main-renamed"]')
       await expect(deleteInactiveBtn).toBeVisible()
       await deleteInactiveBtn.click()
+
+      // Interact with the custom robust delete branches modal
+      const deleteModal = page.locator('[data-testid="delete-branches-modal"]')
+      await expect(deleteModal).toBeVisible()
+
+      const confirmDeleteBtn = page.locator('[data-testid="confirm-delete-branches-btn"]')
+      await expect(confirmDeleteBtn).toBeVisible()
+      await confirmDeleteBtn.click()
+      
       await page.waitForTimeout(1000)
 
       await expect(renamedMainBranchItem).not.toBeVisible()
@@ -352,23 +353,24 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       const unmergedBranchItem = page.locator('[data-testid="sidebar-branch-unmerged-branch"]')
       await expect(unmergedBranchItem).toBeVisible()
 
-      // Track dialog prompts
-      console.log('9. Mocking dialog:showMessageBox to always confirm (Delete and Force Delete)...')
-      await app.evaluate(async ({ ipcMain }) => {
-        let callCount = 0
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
-          callCount++
-          console.log(`[MAIN] showMessageBox prompt #${callCount} options:`, JSON.stringify(options))
-          return { success: true, response: 1 } // Confirm Delete (1) / Confirm Force Delete (1)
-        })
-      })
-
       console.log('10. Triggering delete on unmerged-branch...');
       await unmergedBranchItem.hover()
       const deleteBtn = page.locator('[data-testid="delete-branch-btn-unmerged-branch"]')
       await expect(deleteBtn).toBeVisible()
       await deleteBtn.click()
+
+      // Interact with the custom robust delete branches modal and check force delete
+      const deleteModal = page.locator('[data-testid="delete-branches-modal"]')
+      await expect(deleteModal).toBeVisible()
+
+      const forceDeleteCheckbox = page.locator('[data-testid="force-delete-branches-checkbox"]')
+      await expect(forceDeleteCheckbox).toBeVisible()
+      await forceDeleteCheckbox.check()
+
+      const confirmDeleteBtn = page.locator('[data-testid="confirm-delete-branches-btn"]')
+      await expect(confirmDeleteBtn).toBeVisible()
+      await confirmDeleteBtn.click()
+
       await page.waitForTimeout(1500)
 
       console.log('11. Verifying branch is deleted from UI...');

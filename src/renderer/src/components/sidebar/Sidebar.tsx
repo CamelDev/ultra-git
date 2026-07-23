@@ -3,6 +3,7 @@ import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitM
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
+import { DeleteBranchesModal } from "./DeleteBranchesModal"
 import { AppDialog } from "../dialogs/AppDialog"
 
 const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
@@ -128,6 +129,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     title: string
     message: string
   }>({ open: false, variant: 'info', title: '', message: '' })
+
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [branchToDelete, setBranchToDelete] = useState<string | undefined>(undefined)
 
   const openWorktreeModal = () => {
     setBaseBranch(activeRepo?.branch || 'main')
@@ -435,68 +439,44 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     }
   }
 
-  const handleDeleteBranch = async (e: React.MouseEvent, branchName: string) => {
+  const handleDeleteBranch = (e: React.MouseEvent, branchName: string) => {
     e.stopPropagation()
     if (!activeRepo) return
+    setBranchToDelete(branchName)
+    setIsDeleteModalOpen(true)
+  }
 
-    const confirmRes = await window.api.app.showMessageBox({
-      type: 'warning',
-      title: 'Delete Branch',
-      message: `Are you sure you want to delete the branch '${branchName}'?`,
-      buttons: ['Cancel', 'Delete'],
-      defaultId: 1,
-      cancelId: 0
-    })
+  const handleDeleteBranchesConfirm = async (
+    branches: string[],
+    force: boolean
+  ): Promise<{ success: boolean; errors?: string[] }> => {
+    if (!activeRepo) return { success: false, errors: ["No active repository."] }
 
-    if (!confirmRes.success || confirmRes.response !== 1) {
-      return
-    }
+    const errors: string[] = []
+    let successCount = 0
 
-    try {
-      const res = await window.api.git.deleteBranch(activeRepo.path, branchName, false)
-      if (res.success) {
-        await refreshRepo(activeRepo.id)
-      } else {
-        const errorMsg = res.error || ''
-        if (errorMsg.includes('not fully merged') || errorMsg.includes('force')) {
-          const forceConfirm = await window.api.app.showMessageBox({
-            type: 'question',
-            title: 'Force Delete Branch',
-            message: `The branch '${branchName}' is not fully merged. Do you want to force delete it?`,
-            buttons: ['Cancel', 'Force Delete'],
-            defaultId: 1,
-            cancelId: 0
-          })
-          if (forceConfirm.success && forceConfirm.response === 1) {
-            const forceRes = await window.api.git.deleteBranch(activeRepo.path, branchName, true)
-            if (forceRes.success) {
-              await refreshRepo(activeRepo.id)
-            } else {
-              console.error('Failed to force delete branch:', forceRes.error)
-              await window.api.app.showMessageBox({
-                type: 'error',
-                title: 'Error',
-                message: `Failed to delete branch: ${forceRes.error}`
-              })
-            }
-          }
+    for (const branchName of branches) {
+      try {
+        const res = await window.api.git.deleteBranch(activeRepo.path, branchName, force)
+        if (res.success) {
+          successCount++
         } else {
-          console.error('Failed to delete branch:', res.error)
-          await window.api.app.showMessageBox({
-            type: 'error',
-            title: 'Error',
-            message: `Failed to delete branch: ${res.error}`
-          })
+          errors.push(`Branch '${branchName}': ${res.error || 'Unknown error'}`)
         }
+      } catch (err: any) {
+        errors.push(`Branch '${branchName}': ${err.message || err}`)
       }
-    } catch (err: any) {
-      console.error('Error deleting branch:', err)
-      await window.api.app.showMessageBox({
-        type: 'error',
-        title: 'Error',
-        message: `Error deleting branch: ${err.message || err}`
-      })
     }
+
+    if (successCount > 0) {
+      await refreshRepo(activeRepo.id)
+    }
+
+    if (errors.length > 0) {
+      return { success: false, errors }
+    }
+
+    return { success: true }
   }
 
   const handleCheckoutBranch = async (branchName: string) => {
@@ -1564,6 +1544,19 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           isStash={true}
           stashIndex={detailsStashIndex}
           stashMessage={detailsStashMessage}
+        />
+      )}
+
+      {isDeleteModalOpen && activeRepo && (
+        <DeleteBranchesModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => {
+            setIsDeleteModalOpen(false)
+            setBranchToDelete(undefined)
+          }}
+          activeRepo={activeRepo}
+          initialBranchName={branchToDelete}
+          onConfirm={handleDeleteBranchesConfirm}
         />
       )}
 
