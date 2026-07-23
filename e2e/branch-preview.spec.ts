@@ -112,4 +112,78 @@ test.describe('Branch Preview - Click loads commits without checkout', () => {
       await app.close()
     }
   })
+
+  test('should automatically clear branch preview if the previewed branch is deleted', async () => {
+    console.log('1. Launching Electron App for delete test...')
+    const { app, page } = await launchElectronApp()
+    page.on('console', msg => console.log('BROWSER_CONSOLE:', msg.text()))
+
+    try {
+      console.log('2. Clearing localStorage...')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      console.log('3. Mocking dialog:openDirectory...')
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      console.log('4. Clicking to add repository...')
+      const addBtn = page.locator('[data-testid="add-repo-btn"]')
+      await expect(addBtn).toBeVisible()
+      await addBtn.click()
+
+      console.log('5. Switching to the newly added repository tab...')
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      console.log('6. Clicking on feature-branch to load its commits (preview)...')
+      const featureBranchItem = page.locator('[data-testid="sidebar-branch-feature-branch"]')
+      await expect(featureBranchItem).toBeVisible()
+      await featureBranchItem.click()
+      await page.waitForTimeout(1000)
+
+      console.log('7. Verifying branch preview banner is visible...')
+      const previewBanner = page.locator('[data-testid="branch-preview-banner"]')
+      await expect(previewBanner).toBeVisible()
+      await expect(previewBanner).toContainText('feature-branch')
+
+      console.log('8. Hovering on feature-branch and clicking delete branch button...')
+      await featureBranchItem.hover()
+      const deleteBtn = page.locator('[data-testid="delete-branch-btn-feature-branch"]')
+      await expect(deleteBtn).toBeVisible()
+      await deleteBtn.click()
+
+      console.log('9. Verifying delete branches modal is visible...')
+      const deleteModal = page.locator('[data-testid="delete-branches-modal"]')
+      await expect(deleteModal).toBeVisible()
+
+      console.log('10. Checking force delete checkbox and clicking confirm delete button...')
+      const forceDeleteCheckbox = page.locator('[data-testid="force-delete-branches-checkbox"]')
+      await expect(forceDeleteCheckbox).toBeVisible()
+      await forceDeleteCheckbox.check()
+
+      const confirmDeleteBtn = page.locator('[data-testid="confirm-delete-branches-btn"]')
+      await expect(confirmDeleteBtn).toBeVisible()
+      await confirmDeleteBtn.click()
+      await page.waitForTimeout(1500)
+
+      console.log('11. Verifying preview banner is automatically dismissed...')
+      await expect(previewBanner).not.toBeVisible()
+
+      console.log('12. Verifying feature-branch is no longer visible in sidebar...')
+      await expect(featureBranchItem).not.toBeVisible()
+
+      console.log('Branch preview deletion E2E test completed successfully.')
+    } finally {
+      await app.close()
+    }
+  })
 })

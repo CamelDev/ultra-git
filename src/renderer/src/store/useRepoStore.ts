@@ -429,11 +429,25 @@ export const useRepoStore = create<RepoState>((set, get) => ({
             const mainName = mainPath.split(/[\\/]/).pop() || r.name;
             const newBranch = statusRes.success ? statusRes.data.current : r.branch;
 
-            if (state.activeId === id && state.previewBranch === newBranch) {
-              previewBranch = null;
-              previewCommits = [];
-              previewCommitLimit = 50;
-              newSelectedHash = (commits.length > 0) ? commits[0].hash : null;
+            if (state.activeId === id && state.previewBranch) {
+              if (state.previewBranch === newBranch) {
+                previewBranch = null;
+                previewCommits = [];
+                previewCommitLimit = 50;
+                newSelectedHash = (commits.length > 0) ? commits[0].hash : null;
+              } else if (branchesRes.success && branchesRes.data) {
+                const localExists = branchesRes.data.local.some((b: any) => {
+                  const name = typeof b === 'string' ? b : b.name;
+                  return name === state.previewBranch;
+                });
+                const remoteExists = branchesRes.data.remote.includes(state.previewBranch);
+                if (!localExists && !remoteExists) {
+                  previewBranch = null;
+                  previewCommits = [];
+                  previewCommitLimit = 50;
+                  newSelectedHash = (commits.length > 0) ? commits[0].hash : null;
+                }
+              }
             }
 
             return {

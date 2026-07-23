@@ -207,4 +207,37 @@ describe('useRepoStore', () => {
     expect(state.previewBranch).toBeNull();
     expect(state.previewCommits).toEqual([]);
   });
+
+  it('should automatically clear branch preview on refresh if previewed branch no longer exists', async () => {
+    const { addRepo } = useRepoStore.getState();
+    await addRepo('/test-repo');
+    const id = useRepoStore.getState().activeId!;
+
+    // Set preview state
+    useRepoStore.setState({ 
+      previewBranch: 'deleted-branch',
+      previewCommits: [{ hash: '123' } as any]
+    });
+
+    // Mock status to return 'main' (not matching deleted-branch)
+    mockApi.git.status.mockResolvedValueOnce({
+      success: true,
+      data: { current: 'main' }
+    });
+
+    // Mock getBranches to NOT contain 'deleted-branch'
+    mockApi.git.getBranches.mockResolvedValueOnce({
+      success: true,
+      data: { local: [{ name: 'main', ahead: 0, behind: 0 }], remote: [] }
+    });
+
+    // Refresh repo
+    const { refreshRepo } = useRepoStore.getState();
+    await refreshRepo(id);
+
+    // Verify preview branch is cleared
+    const state = useRepoStore.getState();
+    expect(state.previewBranch).toBeNull();
+    expect(state.previewCommits).toEqual([]);
+  });
 });
