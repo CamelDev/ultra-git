@@ -236,6 +236,51 @@ bun run build:all
 
 ---
 
+## 🛡️ Running Unsigned Applications
+
+Since UltraGIT is not yet code-signed with Apple or Microsoft developer certificates, your OS may block it by default. Here is how to run it anyway:
+
+### 🍎 macOS ("Open Anyway")
+
+Since UltraGIT is not currently code-signed with an Apple Developer certificate, macOS will block it by default with a "Malicious Software" warning. Follow these steps to grant an exception:
+
+1. **Initial Warning**: When you first try to open **UltraGIT.app** from your Applications folder, you will see a dialog stating it cannot be opened because the developer cannot be verified. Click **Done**.
+
+   <p align="center">
+     <img src="public/screenshots/ultra-not-opened-mac.png" alt="Apple cannot check it for malicious software" width="300">
+   </p>
+
+2. **Open Privacy Settings**: Go to **System Settings > Privacy & Security**.
+
+   <p align="center">
+     <img src="public/screenshots/privacy-security-mac.png" alt="System Settings Privacy & Security" width="600" />
+   </p>
+
+3. **Click Open Anyway**: Scroll down to the "Security" section. You will see a message about UltraGIT being blocked. Click the **Open Anyway** button.
+
+   <p align="center">
+     <img src="public/screenshots/privacy-open-anyway.png" alt="Click Open Anyway" width="400" />
+   </p>
+
+4. **Confirm Open**: A final confirmation dialog will appear. Click **Open Anyway** to launch the application and confirm with your password. You will only need to do this once for each new version installed.
+
+   <p align="center">
+     <img src="public/screenshots/open-ultra-anyway.png" alt="Confirm Open Anyway" width="300" />
+   </p>
+
+### 🪟 Windows ("Run Anyway")
+
+When you run the installer, Windows SmartScreen may show a "Windows protected your PC" blue window.
+
+1. Click the **More info** link under the main text.
+2. A new button **Run anyway** will appear. Click it to proceed with the installation.
+
+   <p align="center">
+     <img src="public/screenshots/windows-protection.png" alt="More info - Run Anyway" width="300" />
+   </p>
+
+---
+
 ## 🚢 Release Process
 
 Creating a new release is fully automated via GitHub Actions. The workflow is triggered whenever a tag matching the `v*` pattern (e.g. `v1.0.6`) is pushed. It syncs the version into `package.json`, builds the application for all three platforms (macOS, Windows, Linux), and uploads the artifacts as a **draft** GitHub Release that you can review and publish manually.
