@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, dialog, clipboard } from 'electron'
 import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import iconWin from '../../resources/icon-win.png?asset'
 import { fixPath } from './env'
 import { gitService } from './git'
 import { watchDirectory, stopWatching } from './watcher'
@@ -18,7 +19,7 @@ function createWindow(): void {
     height: 800,
     show: false,
     autoHideMenuBar: true,
-    icon,
+    icon: process.platform === 'win32' ? iconWin : icon,
     titleBarStyle: 'hidden',
     ...(process.platform === 'win32' ? {
       titleBarOverlay: {

@@ -10,6 +10,7 @@ mac:
   target: dmg
 win:
   target: nsis
+  icon: resources/icon-win.png
 linux:
   target: AppImage
 publish:
