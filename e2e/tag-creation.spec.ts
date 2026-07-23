@@ -73,6 +73,14 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await page.waitForTimeout(300)
       await expect(modal).not.toBeVisible()
 
+      console.log('10.1. Testing modal dismissal using Escape key...')
+      await createTagBtn.click()
+      await page.waitForTimeout(300)
+      await expect(modal).toBeVisible()
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(300)
+      await expect(modal).not.toBeVisible()
+
       console.log('11. Re-opening modal...')
       await createTagBtn.click()
       await page.waitForTimeout(300)

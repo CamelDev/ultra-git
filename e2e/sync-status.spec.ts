@@ -268,26 +268,27 @@ test.describe('Branch Sync Status', () => {
       await addBtn.click()
 
       const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
       await tabs.last().click()
       await page.waitForTimeout(1000)
-
-      // Mock showMessageBox response beforehand. Let's return index 2 (Force Push) when prompted.
-      // Message box buttons are: ['Cancel', 'Pull', 'Force Push']
-      await app.evaluate(({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
-          if (options.message && options.message.includes('behind its remote counterpart')) {
-            return { success: true, response: 2 }
-          }
-          return { success: true, response: 0 }
-        })
-      })
 
       const pushBtn = page.locator('[data-testid="push-btn"]')
       await expect(pushBtn).toBeVisible()
 
       // Click Push
       await pushBtn.click()
+      await page.waitForTimeout(500)
+
+      // Verifying custom push-force dialog is visible
+      const customDialog = page.locator('[data-testid="push-force-custom-dialog"]')
+      await expect(customDialog).toBeVisible()
+      await expect(customDialog).toContainText('Remote Changes Detected')
+
+      // Click the Force Push button inside the custom dialog
+      const forcePushBtn = page.locator('[data-testid="push-force-custom-dialog-action-force"]')
+      await expect(forcePushBtn).toBeVisible()
+      await forcePushBtn.click()
+
       await expect(pushBtn).toBeEnabled({ timeout: 15000 })
 
       // Verify that local is no longer behind/ahead (push succeeded via force push)

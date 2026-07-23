@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag, RefreshCw, Search } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
+import { AppDialog, AppDialogAction } from '../dialogs/AppDialog'
 
 interface GraphViewProps {
   onOpenConflictResolver?: () => void
@@ -65,6 +66,43 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const [squashMessage, setSquashMessage] = useState('')
   const [isSquashing, setIsSquashing] = useState(false)
   const [squashError, setSquashError] = useState('')
+
+  // Push Force Dialog State
+  const [pushForceDialog, setPushForceDialog] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    variant: 'info' | 'success' | 'warning' | 'error'
+    actions: AppDialogAction[]
+    resolve?: (value: string) => void
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'warning',
+    actions: []
+  })
+
+  const showCustomPushDialog = (
+    title: string,
+    message: string,
+    variant: 'info' | 'success' | 'warning' | 'error',
+    actions: AppDialogAction[]
+  ): Promise<string> => {
+    return new Promise((resolve) => {
+      setPushForceDialog({
+        isOpen: true,
+        title,
+        message,
+        variant,
+        actions,
+        resolve: (val) => {
+          setPushForceDialog((prev) => ({ ...prev, isOpen: false }))
+          resolve(val)
+        }
+      })
+    })
+  }
 
   // Commit search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -541,22 +579,22 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
 
     // 1. Beforehand check
     if (!force && activeRepo.status?.behind > 0) {
-      const dialogRes = await window.api.app.showMessageBox({
-        type: 'warning',
-        title: 'Remote Changes Detected',
-        message: `Your local branch is behind its remote counterpart by ${activeRepo.status.behind} commit(s). A standard push will be rejected.\n\nWould you like to Pull first or Force Push (overwriting remote changes)?`,
-        buttons: ['Cancel', 'Pull', 'Force Push']
-      })
-      if (dialogRes.success) {
-        if (dialogRes.response === 1) {
-          // Pull selected
-          await handlePull()
-          return
-        } else if (dialogRes.response === 2) {
-          // Force Push selected
-          await handlePush(true)
-          return
-        }
+      const response = await showCustomPushDialog(
+        'Remote Changes Detected',
+        `Your local branch is behind its remote counterpart by ${activeRepo.status.behind} commit(s). A standard push will be rejected.\n\nWould you like to Pull first or Force Push (overwriting remote changes)?`,
+        'warning',
+        [
+          { label: 'Cancel', value: 'cancel', variant: 'secondary' },
+          { label: 'Pull', value: 'pull', variant: 'primary' },
+          { label: 'Force Push', value: 'force', variant: 'danger' }
+        ]
+      )
+      if (response === 'pull') {
+        await handlePull()
+        return
+      } else if (response === 'force') {
+        await handlePush(true)
+        return
       }
       return // Cancel or unknown response
     }
@@ -572,13 +610,16 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         const isRejected = errorMsg.includes('[rejected]') || errorMsg.includes('non-fast-forward') || errorMsg.includes('behind its remote counterpart')
         
         if (isRejected && !force) {
-          const dialogRes = await window.api.app.showMessageBox({
-            type: 'warning',
-            title: 'Push Rejected',
-            message: 'The push was rejected because the remote branch contains changes that you do not have locally.\n\nWould you like to Force Push (overwriting remote changes)?',
-            buttons: ['Cancel', 'Force Push']
-          })
-          if (dialogRes.success && dialogRes.response === 1) {
+          const response = await showCustomPushDialog(
+            'Push Rejected',
+            'The push was rejected because the remote branch contains changes that you do not have locally.\n\nWould you like to Force Push (overwriting remote changes)?',
+            'warning',
+            [
+              { label: 'Cancel', value: 'cancel', variant: 'secondary' },
+              { label: 'Force Push', value: 'force', variant: 'danger' }
+            ]
+          )
+          if (response === 'force') {
             setIsPushing(false)
             await handlePush(true)
             return
@@ -2162,6 +2203,21 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
           </div>
         </div>
       )}
+
+      <AppDialog
+        isOpen={pushForceDialog.isOpen}
+        title={pushForceDialog.title}
+        message={pushForceDialog.message}
+        variant={pushForceDialog.variant}
+        actions={pushForceDialog.actions}
+        onResolve={(value) => {
+          if (pushForceDialog.resolve) pushForceDialog.resolve(value)
+        }}
+        onCancel={() => {
+          if (pushForceDialog.resolve) pushForceDialog.resolve('cancel')
+        }}
+        testId="push-force-custom-dialog"
+      />
     </div>
   )
 }

@@ -79,6 +79,14 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await page.waitForTimeout(300)
       await expect(modal).not.toBeVisible()
 
+      console.log('10.1. Testing modal dismissal using Escape key...')
+      await createBranchBtn.click()
+      await page.waitForTimeout(300)
+      await expect(modal).toBeVisible()
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(300)
+      await expect(modal).not.toBeVisible()
+
       console.log('11. Re-opening modal...')
       await createBranchBtn.click()
       await page.waitForTimeout(300)

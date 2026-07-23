@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { CherryPickModal } from './CherryPickModal'
@@ -130,6 +130,36 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
       setTagErrorMessage(err.message || 'An error occurred.')
     }
   }
+
+  // Close tag modal on Escape key press
+  useEffect(() => {
+    if (!isTagModalOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsTagModalOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isTagModalOpen])
+
+  // Close branch modal on Escape key press
+  useEffect(() => {
+    if (!isBranchModalOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsBranchModalOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isBranchModalOpen])
 
   return (
     <div className="toolbar">
