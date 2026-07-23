@@ -512,6 +512,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     try {
       const res = await window.api.git.checkout(activeRepo.path, branchName)
       if (res.success) {
+        if (previewBranch === branchName) {
+          clearBranchPreview()
+        }
         await refreshRepo(activeRepo.id)
       } else {
         autoExpandRef.current = false;
@@ -560,6 +563,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     try {
       const res = await window.api.git.createBranch(activeRepo.path, localName, remoteBranchName);
       if (res.success) {
+        if (previewBranch === remoteBranchName || previewBranch === localName) {
+          clearBranchPreview()
+        }
         await refreshRepo(activeRepo.id);
       } else {
         await window.api.app.showMessageBox({

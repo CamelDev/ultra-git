@@ -11,6 +11,7 @@ const mockApi = {
     stashList: vi.fn().mockResolvedValue({ success: true, data: [] }),
     getBranches: vi.fn().mockResolvedValue({ success: true, data: { local: [], remote: [] } }),
     getTags: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    getUnpushedTags: vi.fn().mockResolvedValue({ success: true, data: [] }),
     setRepositoryIdentity: vi.fn().mockResolvedValue({ success: true }),
   },
   app: {
@@ -178,5 +179,32 @@ describe('useRepoStore', () => {
 
     // Verify localStorage has the new order saved
     expect(JSON.parse(localStore['open-repo-paths'])).toEqual(['/repo2', '/repo3', '/repo1']);
+  });
+
+  it('should automatically clear branch preview on refresh if branch matches previewed branch', async () => {
+    const { addRepo } = useRepoStore.getState();
+    await addRepo('/test-repo');
+    const id = useRepoStore.getState().activeId!;
+
+    // Set preview state
+    useRepoStore.setState({ 
+      previewBranch: 'feature-branch',
+      previewCommits: [{ hash: '123' } as any]
+    });
+
+    // Mock status to return 'feature-branch' (matching preview branch)
+    mockApi.git.status.mockResolvedValueOnce({
+      success: true,
+      data: { current: 'feature-branch' }
+    });
+
+    // Refresh repo
+    const { refreshRepo } = useRepoStore.getState();
+    await refreshRepo(id);
+
+    // Verify preview branch is cleared
+    const state = useRepoStore.getState();
+    expect(state.previewBranch).toBeNull();
+    expect(state.previewCommits).toEqual([]);
   });
 });

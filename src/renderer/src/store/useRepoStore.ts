@@ -417,16 +417,29 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       set((state) => {
         const commits = logRes.success ? logRes.data.all : [];
         const stashes = stashRes.success ? (stashRes.data ?? []) : [];
+        let previewBranch = state.previewBranch;
+        let previewCommits = state.previewCommits;
+        let previewCommitLimit = state.previewCommitLimit;
+        let newSelectedHash = state.selectedCommitHash;
+
         const updatedRepos = state.repositories.map(r => {
           if (r.id === id) {
             const wts = worktreesRes.success ? worktreesRes.data : (r.worktrees || []);
             const mainPath = wts[0]?.path || r.path;
             const mainName = mainPath.split(/[\\/]/).pop() || r.name;
+            const newBranch = statusRes.success ? statusRes.data.current : r.branch;
+
+            if (state.activeId === id && state.previewBranch === newBranch) {
+              previewBranch = null;
+              previewCommits = [];
+              previewCommitLimit = 50;
+              newSelectedHash = (commits.length > 0) ? commits[0].hash : null;
+            }
 
             return {
               ...r,
               status: statusRes.success ? statusRes.data : null,
-              branch: statusRes.success ? statusRes.data.current : r.branch,
+              branch: newBranch,
               commits,
               stashes,
               branches: branchesRes.success ? branchesRes.data : (r.branches || { local: [], remote: [] }),
@@ -441,14 +454,16 @@ export const useRepoStore = create<RepoState>((set, get) => ({
           return r;
         });
 
-        let newSelectedHash = state.selectedCommitHash;
-        if (state.activeId === id && !state.selectedCommitHash && commits.length > 0) {
+        if (state.activeId === id && !newSelectedHash && commits.length > 0) {
           newSelectedHash = commits[0].hash;
         }
 
         return {
           repositories: updatedRepos,
-          selectedCommitHash: newSelectedHash
+          selectedCommitHash: newSelectedHash,
+          previewBranch,
+          previewCommits,
+          previewCommitLimit
         };
       });
     } catch (err: any) {

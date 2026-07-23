@@ -34,6 +34,7 @@ test.describe('Branch Preview - Click loads commits without checkout', () => {
   test('should load branch commits on click without checking out, and checkout via button', async () => {
     console.log('1. Launching Electron App...')
     const { app, page } = await launchElectronApp()
+    page.on('console', msg => console.log('BROWSER_CONSOLE:', msg.text()))
 
     try {
       console.log('2. Clearing localStorage...')
@@ -89,29 +90,20 @@ test.describe('Branch Preview - Click loads commits without checkout', () => {
       const commitMessage = page.locator('.commit-message', { hasText: 'Commit on feature branch' })
       await expect(commitMessage.first()).toBeVisible()
 
-      console.log('13. Clicking Exit Preview button...')
-      const exitPreviewBtn = page.locator('[data-testid="exit-branch-preview-btn"]')
-      await expect(exitPreviewBtn).toBeVisible()
-      await exitPreviewBtn.click()
-      await page.waitForTimeout(500)
-
-      console.log('14. Verifying preview banner is gone...')
-      await expect(previewBanner).not.toBeVisible()
-
-      console.log('15. Verifying active branch is still main...')
-      await expect(activeBranch).toContainText('main')
-
-      console.log('16. Now testing checkout via the checkout button...')
+      console.log('13. Hovering on feature-branch and checking it out while preview is active...')
       await featureBranchItem.hover()
       const checkoutBtn = page.locator('[data-testid="checkout-branch-btn-feature-branch"]')
       await expect(checkoutBtn).toBeVisible()
       await checkoutBtn.click()
       await page.waitForTimeout(1000)
 
-      console.log('17. Verifying active branch is now feature-branch...')
+      console.log('14. Verifying preview banner is automatically dismissed...')
+      await expect(previewBanner).not.toBeVisible()
+
+      console.log('15. Verifying active branch is now feature-branch...')
       await expect(activeBranch).toContainText('feature-branch')
 
-      console.log('18. Verifying Git repository HEAD is now feature-branch...')
+      console.log('16. Verifying Git repository HEAD is now feature-branch...')
       currentBranch = await sandbox.git.revparse(['--abbrev-ref', 'HEAD'])
       expect(currentBranch.trim()).toBe('feature-branch')
 
