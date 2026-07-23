@@ -94,9 +94,9 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:pull', async (_, repoPath) => {
+  ipcMain.handle('git:pull', async (_, repoPath, prune) => {
     try {
-      const data = await gitService.pull(repoPath)
+      const data = await gitService.pull(repoPath, prune)
       return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }

@@ -7,7 +7,7 @@ const api = {
     status: (repoPath: string) => ipcRenderer.invoke('git:status', repoPath),
     log: (repoPath: string, maxCount?: number) => ipcRenderer.invoke('git:log', repoPath, maxCount),
     fetch: (repoPath: string) => ipcRenderer.invoke('git:fetch', repoPath),
-    pull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
+    pull: (repoPath: string, prune?: boolean) => ipcRenderer.invoke('git:pull', repoPath, prune),
     push: (repoPath: string, force?: boolean, remote?: string, branch?: string, setUpstream?: boolean) => 
       ipcRenderer.invoke('git:push', repoPath, force, remote, branch, setUpstream),
     getRemotes: (repoPath: string) => ipcRenderer.invoke('git:getRemotes', repoPath),

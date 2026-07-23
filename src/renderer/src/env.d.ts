@@ -9,7 +9,7 @@ declare global {
         status: (repoPath: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         log: (repoPath: string, maxCount?: number) => Promise<{ success: boolean; data?: any; error?: string }>;
         fetch: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
-        pull: (repoPath: string) => Promise<{ success: boolean; data?: { hadConflicts: boolean }; error?: string }>;
+        pull: (repoPath: string, prune?: boolean) => Promise<{ success: boolean; data?: { hadConflicts: boolean }; error?: string }>;
         push: (repoPath: string, force?: boolean, remote?: string, branch?: string, setUpstream?: boolean) => Promise<{ success: boolean; error?: string }>;
         getRemotes: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ name: string; refs: { fetch: string; push: string } }>; error?: string }>;
         addRemote: (repoPath: string, name: string, url: string) => Promise<{ success: boolean; error?: string }>;

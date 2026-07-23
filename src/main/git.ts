@@ -132,13 +132,17 @@ export const gitService = {
 
   fetch: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
-    return await git.fetch();
+    return await git.fetch({ '--prune': null });
   },
 
-  pull: async (repoPath: string) => {
+  pull: async (repoPath: string, prune = true) => {
     const git = getGitInstance(repoPath);
     try {
-      await git.pull(undefined, undefined, { '--no-edit': null, '--no-rebase': null });
+      const options: any = { '--no-edit': null, '--no-rebase': null };
+      if (prune) {
+        options['--prune'] = null;
+      }
+      await git.pull(undefined, undefined, options);
       return { hadConflicts: false };
     } catch (err: any) {
       const msg: string = err.message || '';

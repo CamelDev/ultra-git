@@ -293,7 +293,24 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     if (!activeRepo || isPulling || isPushing) return
     setIsPulling(true)
     try {
-      const res = await window.api.git.pull(activeRepo.path)
+      const confirmRes = await window.api.app.showMessageBox({
+        type: 'question',
+        title: 'Pull Changes',
+        message: 'Are you sure you want to pull changes from the remote repository?',
+        buttons: ['Pull', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+        checkboxLabel: 'Prune deleted remote branches',
+        checkboxChecked: true
+      })
+
+      if (!confirmRes.success || confirmRes.response !== 0) {
+        setIsPulling(false)
+        return
+      }
+
+      const prune = confirmRes.checkboxChecked ?? true
+      const res = await window.api.git.pull(activeRepo.path, prune)
       await refreshRepo(activeRepo.id)
       if (res.success) {
         if (res.data?.hadConflicts) {
