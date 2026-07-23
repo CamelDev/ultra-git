@@ -70,10 +70,24 @@ const DetailsPanel: React.FC = () => {
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-all' }}>
                 {commit.message}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '4px 8px' }}>
-                <span>by {commit.author_name}</span>
-                <span>•</span>
-                <span>{new Date(commit.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px' }}>
+                  <span>by {commit.author_name}</span>
+                  <span>•</span>
+                  <span>{new Date(commit.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </div>
+                {commit.author_email && (
+                  <div 
+                    data-testid="commit-author-email"
+                    style={{ 
+                      color: 'var(--text-secondary)', 
+                      opacity: 0.8,
+                      fontStyle: 'italic'
+                    }}
+                  >
+                    &lt;{commit.author_email}&gt;
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                 <span>SHA:</span>
