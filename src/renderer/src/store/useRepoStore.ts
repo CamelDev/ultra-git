@@ -23,6 +23,8 @@ export interface Repository {
   id: string;
   path: string;
   name: string;
+  customName?: string;
+  customColor?: string;
   branch: string;
   status: any;
   commits: any[];
@@ -63,6 +65,8 @@ interface RepoState {
   loadBranchCommits: (branchName: string) => Promise<void>;
   loadMoreBranchCommits: () => Promise<void>;
   clearBranchPreview: () => void;
+  setRepoCustomName: (repoId: string, customName: string | undefined) => void;
+  setRepoTabColor: (repoId: string, customColor: string | undefined) => void;
   
   // Helper to get active repo
   getActiveRepo: () => Repository | undefined;
@@ -91,6 +95,24 @@ const saveToLocalStorage = (repositories: Repository[], activeId: string | null)
     }
   } catch (e) {
     console.error('Failed to save to localStorage', e);
+  }
+};
+
+const getRepoCustomizations = (): Record<string, { customName?: string; customColor?: string }> => {
+  if (typeof localStorage === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem('repo-tab-customizations') || '{}');
+  } catch (e) {
+    return {};
+  }
+};
+
+const saveRepoCustomizations = (customizations: Record<string, { customName?: string; customColor?: string }>) => {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem('repo-tab-customizations', JSON.stringify(customizations));
+  } catch (e) {
+    console.error('Failed to save repo customizations', e);
   }
 };
 
@@ -172,7 +194,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     const repoIdentities = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('repo-identities') || '{}') : {};
     const globalIdList = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [];
+    const repoCustomizations = getRepoCustomizations();
     const normalized = normalizePath(resolvedPath);
+    const customData = repoCustomizations[normalized] || {};
     let identityId = repoIdentities[normalized];
 
     if (!identityId && globalIdList.length === 1) {
@@ -195,6 +219,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       id,
       path: resolvedPath,
       name,
+      customName: customData.customName,
+      customColor: customData.customColor,
       branch: 'main',
       status: null,
       commits: [],
@@ -291,6 +317,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     const repoIdentities = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('repo-identities') || '{}') : {};
     const globalIdList = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [];
+    const repoCustomizations = getRepoCustomizations();
 
     // Build Repository objects
     const newRepos: Repository[] = await Promise.all(uniquePaths.map(async (p) => {
@@ -306,6 +333,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       }
       const id = Math.random().toString(36).substring(7);
       const normalized = normalizePath(p);
+      const customData = repoCustomizations[normalized] || {};
       let identityId = repoIdentities[normalized];
 
       if (!identityId && globalIdList.length === 1) {
@@ -328,6 +356,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         id,
         path: p,
         name,
+        customName: customData.customName,
+        customColor: customData.customColor,
         branch: 'main',
         status: null,
         commits: [],
@@ -698,5 +728,60 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     } else {
       await window.api.git.setRepositoryIdentity(repo.path, { name: '', email: '', sshKeyPath: undefined, personalAccessToken: undefined, username: undefined, provider: undefined });
     }
+  },
+
+  setRepoCustomName: (repoId: string, customName: string | undefined) => {
+    const { repositories } = get();
+    const repo = repositories.find(r => r.id === repoId);
+    if (!repo) return;
+
+    const trimmed = customName?.trim();
+    const finalCustomName = trimmed && trimmed.length > 0 ? trimmed : undefined;
+
+    const updatedRepos = repositories.map(r =>
+      r.id === repoId ? { ...r, customName: finalCustomName } : r
+    );
+    set({ repositories: updatedRepos });
+
+    const normalized = normalizePath(repo.path);
+    const customizations = getRepoCustomizations();
+    if (!customizations[normalized]) {
+      customizations[normalized] = {};
+    }
+    if (finalCustomName) {
+      customizations[normalized].customName = finalCustomName;
+    } else {
+      delete customizations[normalized].customName;
+      if (!customizations[normalized].customColor) {
+        delete customizations[normalized];
+      }
+    }
+    saveRepoCustomizations(customizations);
+  },
+
+  setRepoTabColor: (repoId: string, customColor: string | undefined) => {
+    const { repositories } = get();
+    const repo = repositories.find(r => r.id === repoId);
+    if (!repo) return;
+
+    const updatedRepos = repositories.map(r =>
+      r.id === repoId ? { ...r, customColor } : r
+    );
+    set({ repositories: updatedRepos });
+
+    const normalized = normalizePath(repo.path);
+    const customizations = getRepoCustomizations();
+    if (!customizations[normalized]) {
+      customizations[normalized] = {};
+    }
+    if (customColor) {
+      customizations[normalized].customColor = customColor;
+    } else {
+      delete customizations[normalized].customColor;
+      if (!customizations[normalized].customName) {
+        delete customizations[normalized];
+      }
+    }
+    saveRepoCustomizations(customizations);
   }
 }));

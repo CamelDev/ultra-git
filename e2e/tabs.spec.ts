@@ -251,4 +251,81 @@ test.describe('Multi-Repo Tab System', () => {
       }
     }
   });
+
+  test('should support tab customizations (custom name and color) and persist them across app restart', async () => {
+    // 1. Launch the native Electron Application
+    const { app: app1, page: page1 } = await launchElectronApp({ disableDefaultTab: true });
+
+    try {
+      // Mock dialog for sandbox
+      await app1.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath };
+        });
+      }, sandbox.dir);
+
+      // Click landing page open button to open sandbox
+      const landingOpenBtn = page1.locator('[data-testid="landing-open-repo-btn"]');
+      await expect(landingOpenBtn).toBeVisible();
+      await landingOpenBtn.click();
+
+      const tabs = page1.locator('[data-testid="repo-tab"]');
+      await expect(tabs).toHaveCount(1);
+
+      // Set custom tab name
+      const setCustomNameBtn = tabs.first().locator('[data-testid="set-tab-name-btn"]');
+      await expect(setCustomNameBtn).toBeVisible();
+      await setCustomNameBtn.click();
+
+      const renameInput = tabs.first().locator('[data-testid="tab-rename-input"]');
+      await expect(renameInput).toBeVisible();
+      await renameInput.fill('My Customized Sandbox');
+      await renameInput.press('Enter');
+
+      // Verify custom name is displayed
+      await expect(tabs.first()).toContainText('My Customized Sandbox');
+
+      // Set custom tab color
+      const setCustomColorBtn = tabs.first().locator('[data-testid="set-tab-color-btn"]');
+      await expect(setCustomColorBtn).toBeVisible();
+      await setCustomColorBtn.click();
+
+      const colorPopover = page1.locator('[data-testid="tab-color-popover"]');
+      await expect(colorPopover).toBeVisible();
+
+      const redSwatch = page1.locator('[data-testid="color-swatch-#ef4444"]');
+      await expect(redSwatch).toBeVisible();
+      await redSwatch.click();
+
+      // Verify color dot is visible inside the tab
+      const colorDot = tabs.first().locator('[data-testid="tab-color-dot"]');
+      await expect(colorDot).toBeVisible();
+
+      // Close the first app instance
+      await app1.close();
+
+      // 2. Launch app again (restart without clearing state)
+      const { app: app2, page: page2 } = await launchElectronApp({ cleanState: false });
+
+      try {
+        const tabs2 = page2.locator('[data-testid="repo-tab"]');
+        await expect(tabs2).toHaveCount(1);
+        await expect(tabs2.first()).toContainText('My Customized Sandbox');
+
+        const colorDot2 = tabs2.first().locator('[data-testid="tab-color-dot"]');
+        await expect(colorDot2).toBeVisible();
+
+      } finally {
+        await app2.close();
+      }
+
+    } finally {
+      try {
+        await app1.close();
+      } catch (e) {
+        // Ignore if already closed
+      }
+    }
+  });
 });

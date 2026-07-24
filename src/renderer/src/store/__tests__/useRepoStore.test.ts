@@ -240,4 +240,43 @@ describe('useRepoStore', () => {
     expect(state.previewBranch).toBeNull();
     expect(state.previewCommits).toEqual([]);
   });
+
+  it('should set custom repo name and color and persist to localStorage', async () => {
+    const { addRepo, setRepoCustomName, setRepoTabColor } = useRepoStore.getState();
+    await addRepo('/test-custom-repo');
+    const id = useRepoStore.getState().activeId!;
+
+    setRepoCustomName(id, 'My Custom Project');
+    setRepoTabColor(id, '#ef4444');
+
+    const state = useRepoStore.getState();
+    const repo = state.repositories.find(r => r.id === id);
+    expect(repo?.customName).toBe('My Custom Project');
+    expect(repo?.customColor).toBe('#ef4444');
+
+    // Verify localStorage persistence
+    const savedCustomizations = JSON.parse(localStore['repo-tab-customizations']);
+    expect(savedCustomizations['/test-custom-repo']).toEqual({
+      customName: 'My Custom Project',
+      customColor: '#ef4444'
+    });
+  });
+
+  it('should load custom name and color when initializing repos', async () => {
+    // Pre-populate localStorage
+    localStore['repo-tab-customizations'] = JSON.stringify({
+      '/test-init-repo': {
+        customName: 'Custom Init Name',
+        customColor: '#10b981'
+      }
+    });
+
+    const { initializeRepos } = useRepoStore.getState();
+    await initializeRepos(['/test-init-repo'], '/test-init-repo');
+
+    const state = useRepoStore.getState();
+    const repo = state.repositories[0];
+    expect(repo.customName).toBe('Custom Init Name');
+    expect(repo.customColor).toBe('#10b981');
+  });
 });
