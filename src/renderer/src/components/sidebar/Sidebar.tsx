@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, ChevronRight, ChevronDown, Search, LogIn } from "lucide-react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, ChevronRight, ChevronDown, Search, LogIn, HardDrive } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
@@ -1248,7 +1248,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                     data-tooltip={wt.path}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <Folder className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
+                      <HardDrive className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath} <span style={{ color: 'var(--text-secondary)' }}>({wt.branch})</span></span>
                     </div>
                     <div className="tag-actions" style={{ marginLeft: 'auto', gap: '4px', flexShrink: 0 }}>
