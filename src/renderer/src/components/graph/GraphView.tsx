@@ -649,34 +649,22 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                            (errorMsg.includes('fatal:') && errorMsg.includes('upstream'))
 
         if (noUpstream) {
-          const dialogRes = await showCustomPushDialog(
-            'No Remote Configured',
-            'This repository has no remote configured. Would you like to configure a remote now?',
-            'warning',
-            [
-              { label: 'Cancel', value: 'cancel', variant: 'secondary' },
-              { label: 'Configure', value: 'configure', variant: 'primary' }
-            ]
-          )
-          if (dialogRes === 'configure') {
-            setRemoteName('origin')
-            setRemoteBranch(activeRepo.branch || 'main')
-            
-            try {
-              const remotesRes = await window.api.git.getRemotes(activeRepo.path)
-              if (remotesRes.success && remotesRes.data && remotesRes.data.length > 0) {
-                setRemoteName(remotesRes.data[0].name)
-                setRemoteUrl(remotesRes.data[0].refs.push || remotesRes.data[0].refs.fetch || '')
-              } else {
-                setRemoteUrl('')
-              }
-            } catch (e) {
+          setRemoteName('origin')
+          setRemoteBranch(activeRepo.branch || 'main')
+          
+          try {
+            const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+            if (remotesRes.success && remotesRes.data && remotesRes.data.length > 0) {
+              setRemoteName(remotesRes.data[0].name)
+              setRemoteUrl(remotesRes.data[0].refs.push || remotesRes.data[0].refs.fetch || '')
+            } else {
               setRemoteUrl('')
             }
-            
-            setIsRemoteModalOpen(true)
-            return
+          } catch (e) {
+            setRemoteUrl('')
           }
+          
+          setIsRemoteModalOpen(true)
           return
         }
 
