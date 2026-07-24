@@ -279,4 +279,28 @@ describe('useRepoStore', () => {
     expect(repo.customName).toBe('Custom Init Name');
     expect(repo.customColor).toBe('#10b981');
   });
+
+  it('should manage recent repos list, cap at 20, and persist to localStorage', async () => {
+    const { addRecentRepo, removeRecentRepo } = useRepoStore.getState();
+
+    // Add 25 recent repos
+    for (let i = 1; i <= 25; i++) {
+      addRecentRepo(`/repo-${i}`, `Repo ${i}`);
+    }
+
+    let state = useRepoStore.getState();
+    expect(state.recentRepos.length).toBe(20);
+    expect(state.recentRepos[0]).toEqual({ path: '/repo-25', name: 'Repo 25' });
+
+    // Verify localStorage
+    const saved = JSON.parse(localStore['recent-repositories']);
+    expect(saved.length).toBe(20);
+    expect(saved[0].path).toBe('/repo-25');
+
+    // Remove a recent repo
+    removeRecentRepo('/repo-25');
+    state = useRepoStore.getState();
+    expect(state.recentRepos.length).toBe(19);
+    expect(state.recentRepos[0].path).toBe('/repo-24');
+  });
 });

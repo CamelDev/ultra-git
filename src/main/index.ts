@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, clipboard } from 'electron'
 import { join, resolve } from 'path'
-import { realpathSync } from 'fs'
+import { realpathSync, existsSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import iconWin from '../../resources/icon-win.png?asset'
@@ -491,6 +491,15 @@ app.whenReady().then(() => {
       } catch (err: any) {
         return { success: false, error: error.message }
       }
+    }
+  })
+
+  ipcMain.handle('app:exists', async (_, pathStr) => {
+    try {
+      const exists = existsSync(pathStr)
+      return { success: true, exists }
+    } catch (error: any) {
+      return { success: false, exists: false, error: error.message }
     }
   })
 

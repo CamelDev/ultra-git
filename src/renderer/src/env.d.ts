@@ -65,6 +65,7 @@ declare global {
         openDirectory: () => Promise<{ canceled: boolean; path?: string }>;
         openFile: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) => Promise<{ canceled: boolean; path?: string }>;
         resolvePath: (repoPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+        exists: (repoPath: string) => Promise<{ success: boolean; exists: boolean; error?: string }>;
         copyToClipboard: (text: string) => Promise<{ success: boolean; error?: string }>;
         showMessageBox: (options: {
           type: 'info' | 'warning' | 'error' | 'question';

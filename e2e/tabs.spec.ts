@@ -66,6 +66,10 @@ test.describe('Multi-Repo Tab System', () => {
       await expect(addBtn).toBeVisible();
       await addBtn.click();
 
+      const dropdownOpenBtn = page.locator('[data-testid="dropdown-open-repo-btn"]');
+      await expect(dropdownOpenBtn).toBeVisible();
+      await dropdownOpenBtn.click();
+
       // Verify we have 2 tabs now (sandbox and process.cwd())
       await expect(initialTabs).toHaveCount(2);
       await expect(initialTabs.last()).toContainText(expectedInitialTabName);
@@ -129,6 +133,10 @@ test.describe('Multi-Repo Tab System', () => {
       const addBtn = page1.locator('[data-testid="add-repo-btn"]');
       await expect(addBtn).toBeVisible();
       await addBtn.click();
+
+      const dropdownOpenBtn = page1.locator('[data-testid="dropdown-open-repo-btn"]');
+      await expect(dropdownOpenBtn).toBeVisible();
+      await dropdownOpenBtn.click();
 
       // Verify both tabs are open
       const expectedTabName = path.basename(sandbox.dir);
@@ -210,6 +218,10 @@ test.describe('Multi-Repo Tab System', () => {
       const addBtn = page1.locator('[data-testid="add-repo-btn"]');
       await expect(addBtn).toBeVisible();
       await addBtn.click();
+
+      const dropdownOpenBtn = page1.locator('[data-testid="dropdown-open-repo-btn"]');
+      await expect(dropdownOpenBtn).toBeVisible();
+      await dropdownOpenBtn.click();
 
       // Verify both tabs are open in initial order: [sandbox, process.cwd()]
       const expectedTabName = path.basename(sandbox.dir);
@@ -326,6 +338,66 @@ test.describe('Multi-Repo Tab System', () => {
       } catch (e) {
         // Ignore if already closed
       }
+    }
+  });
+
+  test('should display recent repositories dropdown, allow removing with trash icon, and handle opening', async () => {
+    const { app, page } = await launchElectronApp({ disableDefaultTab: true });
+
+    try {
+      // Mock dialog to open sandbox
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath };
+        });
+      }, sandbox.dir);
+
+      // Open sandbox from landing page
+      const landingOpenBtn = page.locator('[data-testid="landing-open-repo-btn"]');
+      await landingOpenBtn.click();
+
+      // Close the tab so no tab is currently open, but sandbox is in recent repos
+      const tabs = page.locator('[data-testid="repo-tab"]');
+      await expect(tabs).toHaveCount(1);
+      const closeBtn = tabs.first().locator('[data-testid="close-tab-btn"]');
+      await closeBtn.click();
+      await expect(tabs).toHaveCount(0);
+
+      // Click "+" button to open recent repos dropdown
+      const addBtn = page.locator('[data-testid="add-repo-btn"]');
+      await addBtn.click();
+
+      const dropdown = page.locator('[data-testid="recent-repos-dropdown"]');
+      await expect(dropdown).toBeVisible();
+
+      const dropdownOpenBtn = page.locator('[data-testid="dropdown-open-repo-btn"]');
+      await expect(dropdownOpenBtn).toBeVisible();
+
+      // Check that sandbox is listed in recent repos
+      const recentItems = page.locator('[data-testid="recent-repo-item"]');
+      await expect(recentItems).toHaveCount(1);
+      const expectedTabName = path.basename(sandbox.dir);
+      await expect(recentItems.first()).toContainText(expectedTabName);
+
+      // Click recent repo item -> opens it as a tab
+      await recentItems.first().click();
+      await expect(tabs).toHaveCount(1);
+
+      // Open dropdown again
+      await addBtn.click();
+      await expect(dropdown).toBeVisible();
+
+      // Remove recent repo using trash icon
+      const trashBtn = page.locator('[data-testid="remove-recent-repo-btn"]').first();
+      await trashBtn.click();
+
+      // Verify recent items list is now empty / displays placeholder
+      const emptyNotice = page.locator('.recent-repos-empty');
+      await expect(emptyNotice).toBeVisible();
+
+    } finally {
+      await app.close();
     }
   });
 });

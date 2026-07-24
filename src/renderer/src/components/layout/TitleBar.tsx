@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, X, Settings, Palette, Pencil, RotateCcw } from 'lucide-react'
+import { Plus, X, Settings, Palette, Pencil, RotateCcw, FolderOpen, Trash2 } from 'lucide-react'
 import { useRepoStore, Repository } from '../../store/useRepoStore'
 import logoIcon from '../../assets/icon.png'
 import { IdentitiesModal } from '../details/IdentitiesModal'
@@ -27,7 +27,9 @@ const TitleBar: React.FC = () => {
     addRepo,
     reorderRepos,
     setRepoCustomName,
-    setRepoTabColor
+    setRepoTabColor,
+    recentRepos,
+    removeRecentRepo
   } = useRepoStore()
   const { theme, setTheme } = useTheme()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -36,6 +38,10 @@ const TitleBar: React.FC = () => {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
   
+  // Recent repos dropdown state
+  const [isAddRepoDropdownOpen, setIsAddRepoDropdownOpen] = useState(false)
+  const [addRepoDropdownPos, setAddRepoDropdownPos] = useState<{ top: number; left: number } | null>(null)
+
   // Customization states
   const [editingTabId, setEditingTabId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState<string>('')
@@ -45,6 +51,8 @@ const TitleBar: React.FC = () => {
   const cogRef = useRef<SVGSVGElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const colorPickerRef = useRef<HTMLDivElement>(null)
+  const addRepoBtnRef = useRef<HTMLDivElement>(null)
+  const addRepoDropdownRef = useRef<HTMLDivElement>(null)
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index)
@@ -127,6 +135,61 @@ const TitleBar: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isSettingsOpen])
+
+  const handleToggleAddRepoDropdown = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!isAddRepoDropdownOpen && addRepoBtnRef.current) {
+      const rect = addRepoBtnRef.current.getBoundingClientRect()
+      setAddRepoDropdownPos({ top: rect.bottom + 6, left: Math.min(rect.left, window.innerWidth - 300) })
+    }
+    setIsAddRepoDropdownOpen(prev => !prev)
+  }
+
+  const handleOpenRepoFromDropdown = async () => {
+    setIsAddRepoDropdownOpen(false)
+    await handleAddRepo()
+  }
+
+  const handleSelectRecentRepo = async (repoPath: string) => {
+    try {
+      const check = await window.api.app.exists(repoPath)
+      if (check.exists) {
+        setIsAddRepoDropdownOpen(false)
+        await addRepo(repoPath)
+      } else {
+        await window.api.app.showMessageBox({
+          type: 'error',
+          title: 'Repository Not Found',
+          message: `The directory no longer exists on disk:\n${repoPath}`
+        })
+        removeRecentRepo(repoPath)
+      }
+    } catch (e) {
+      console.error('Error opening recent repository:', e)
+    }
+  }
+
+  const handleRemoveRecentRepo = (e: React.MouseEvent, repoPath: string) => {
+    e.stopPropagation()
+    removeRecentRepo(repoPath)
+  }
+
+  // Handle outside clicks to close add repo dropdown
+  useEffect(() => {
+    if (!isAddRepoDropdownOpen) return
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      const clickedBtn = addRepoBtnRef.current?.contains(target)
+      const clickedDropdown = addRepoDropdownRef.current?.contains(target)
+      if (!clickedBtn && !clickedDropdown) {
+        setIsAddRepoDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isAddRepoDropdownOpen])
 
   // Handle outside clicks to close color picker popover
   useEffect(() => {
@@ -256,10 +319,65 @@ const TitleBar: React.FC = () => {
             </div>
           )
         })}
-        <div className="add-tab-btn" onClick={handleAddRepo} data-tooltip="Open Repository" data-testid="add-repo-btn">
+        <div 
+          ref={addRepoBtnRef}
+          className={`add-tab-btn ${isAddRepoDropdownOpen ? 'active' : ''}`} 
+          onClick={handleToggleAddRepoDropdown} 
+          data-tooltip="Open Repository" 
+          data-testid="add-repo-btn"
+        >
           <Plus size={16} />
         </div>
       </div>
+
+      {isAddRepoDropdownOpen && addRepoDropdownPos && createPortal(
+        <div
+          ref={addRepoDropdownRef}
+          className="recent-repos-dropdown"
+          style={{ position: 'fixed', top: addRepoDropdownPos.top, left: addRepoDropdownPos.left }}
+          data-testid="recent-repos-dropdown"
+        >
+          <button
+            className="recent-repos-open-btn"
+            onClick={handleOpenRepoFromDropdown}
+            data-testid="dropdown-open-repo-btn"
+          >
+            <FolderOpen size={16} />
+            <span>Open Repository...</span>
+          </button>
+          <div className="recent-repos-divider" />
+          <div className="recent-repos-header">RECENT REPOSITORIES</div>
+          <div className="recent-repos-list">
+            {recentRepos.length === 0 ? (
+              <div className="recent-repos-empty">No recent repositories</div>
+            ) : (
+              recentRepos.slice(0, 20).map((item) => (
+                <div
+                  key={item.path}
+                  className="recent-repo-item"
+                  onClick={() => handleSelectRecentRepo(item.path)}
+                  data-testid="recent-repo-item"
+                  title={item.path}
+                >
+                  <div className="recent-repo-info">
+                    <span className="recent-repo-name">{item.name}</span>
+                    <span className="recent-repo-path">{item.path}</span>
+                  </div>
+                  <button
+                    className="recent-repo-remove-btn"
+                    onClick={(e) => handleRemoveRecentRepo(e, item.path)}
+                    data-testid="remove-recent-repo-btn"
+                    data-tooltip="Remove from recent"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
       
       {isSettingsOpen && dropdownPos && createPortal(
         <div

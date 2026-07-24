@@ -42,9 +42,15 @@ export interface Repository {
   worktrees?: Array<{ path: string; branch: string; hash: string }>;
 }
 
+export interface RecentRepo {
+  path: string;
+  name: string;
+}
+
 interface RepoState {
   repositories: Repository[];
   identities: Identity[];
+  recentRepos: RecentRepo[];
   activeId: string | null;
   selectedCommitHash: string | null;
   previewBranch: string | null;
@@ -67,6 +73,8 @@ interface RepoState {
   clearBranchPreview: () => void;
   setRepoCustomName: (repoId: string, customName: string | undefined) => void;
   setRepoTabColor: (repoId: string, customColor: string | undefined) => void;
+  addRecentRepo: (path: string, name?: string) => void;
+  removeRecentRepo: (path: string) => void;
   
   // Helper to get active repo
   getActiveRepo: () => Repository | undefined;
@@ -116,9 +124,30 @@ const saveRepoCustomizations = (customizations: Record<string, { customName?: st
   }
 };
 
+const getRecentReposFromStorage = (): RecentRepo[] => {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const data = localStorage.getItem('recent-repositories');
+    return data ? JSON.parse(data) : [];
+  } catch (e) {
+    console.error('Failed to parse recent repositories', e);
+    return [];
+  }
+};
+
+const saveRecentReposToStorage = (recent: RecentRepo[]) => {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem('recent-repositories', JSON.stringify(recent));
+  } catch (e) {
+    console.error('Failed to save recent repositories', e);
+  }
+};
+
 export const useRepoStore = create<RepoState>((set, get) => ({
   repositories: [],
   identities: typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [],
+  recentRepos: getRecentReposFromStorage(),
   activeId: null,
   selectedCommitHash: null,
   previewBranch: null,
@@ -175,6 +204,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     if (repositories.find(r => normalizePath(r.path) === normalizePath(resolvedPath))) {
       const existing = repositories.find(r => normalizePath(r.path) === normalizePath(resolvedPath))!;
       const latestHash = existing.commits.length > 0 ? existing.commits[0].hash : null;
+      get().addRecentRepo(existing.path, existing.customName || existing.name);
       set({ activeId: existing.id, selectedCommitHash: latestHash, previewBranch: null, previewCommits: [] });
       saveToLocalStorage(get().repositories, existing.id);
       return;
@@ -238,6 +268,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       previewCommits: []
     });
     saveToLocalStorage(get().repositories, id);
+    get().addRecentRepo(resolvedPath, customData.customName || name);
 
     window.api.git.watchRepo(resolvedPath).catch(err => console.error('Failed to watch repo on add', err));
     await get().refreshRepo(id);
@@ -391,6 +422,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       if (!mergedRepos.find(r => normalizePath(r.path) === normalizePath(nr.path))) {
         mergedRepos.push(nr);
       }
+      get().addRecentRepo(nr.path, nr.customName || nr.name);
     }
 
     const finalActiveId = get().activeId || activeId;
@@ -783,5 +815,29 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       }
     }
     saveRepoCustomizations(customizations);
+  },
+
+  addRecentRepo: (path: string, name?: string) => {
+    if (!path) return;
+    const normalized = normalizePath(path);
+    const current = getRecentReposFromStorage();
+    const existing = current.find(r => normalizePath(r.path) === normalized);
+    const repoName = name || existing?.name || path.split(/[\\/]/).pop() || path;
+
+    const filtered = current.filter(r => normalizePath(r.path) !== normalized);
+    const updated = [{ path, name: repoName }, ...filtered].slice(0, 20);
+
+    saveRecentReposToStorage(updated);
+    set({ recentRepos: updated });
+  },
+
+  removeRecentRepo: (path: string) => {
+    if (!path) return;
+    const normalized = normalizePath(path);
+    const current = getRecentReposFromStorage();
+    const updated = current.filter(r => normalizePath(r.path) !== normalized);
+
+    saveRecentReposToStorage(updated);
+    set({ recentRepos: updated });
   }
 }));
