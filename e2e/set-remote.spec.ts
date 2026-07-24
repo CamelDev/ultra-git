@@ -57,22 +57,20 @@ test.describe('Set Remote on Push', () => {
       await localSandbox.createCommit('changes.txt', 'some changes', 'Commit to push')
       await page.waitForTimeout(500)
 
-      // Mock dialog response to select "Configure" (index 1) when prompted
-      console.log('6. Mocking dialog:showMessageBox to click Configure...')
-      await app.evaluate(({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
-          if (options.message && options.message.includes('no remote configured')) {
-            return { success: true, response: 1 } // Index 1 is 'Configure'
-          }
-          return { success: true, response: 0 }
-        })
-      })
-
-      console.log('7. Clicking Push button to trigger warning dialog...')
+      console.log('7. Clicking Push button to trigger custom warning dialog...')
       const pushBtn = page.locator('[data-testid="push-btn"]')
       await expect(pushBtn).toBeVisible()
       await pushBtn.click()
+
+      console.log('7.5. Verifying custom push warning dialog is visible...')
+      const customDialog = page.locator('[data-testid="push-force-custom-dialog"]')
+      await expect(customDialog).toBeVisible()
+      await expect(customDialog).toContainText('No Remote Configured')
+
+      console.log('7.6. Clicking Configure button inside custom dialog...')
+      const configureBtn = page.locator('[data-testid="push-force-custom-dialog-action-configure"]')
+      await expect(configureBtn).toBeVisible()
+      await configureBtn.click()
 
       console.log('8. Verifying Set Remote modal is visible...')
       const modal = page.locator('.diff-modal-content')

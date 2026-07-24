@@ -649,13 +649,16 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                            (errorMsg.includes('fatal:') && errorMsg.includes('upstream'))
 
         if (noUpstream) {
-          const dialogRes = await window.api.app.showMessageBox({
-            type: 'question',
-            title: 'No Remote Configured',
-            message: 'This repository has no remote configured. Would you like to configure a remote now?',
-            buttons: ['Cancel', 'Configure']
-          })
-          if (dialogRes.success && dialogRes.response === 1) {
+          const dialogRes = await showCustomPushDialog(
+            'No Remote Configured',
+            'This repository has no remote configured. Would you like to configure a remote now?',
+            'warning',
+            [
+              { label: 'Cancel', value: 'cancel', variant: 'secondary' },
+              { label: 'Configure', value: 'configure', variant: 'primary' }
+            ]
+          )
+          if (dialogRes === 'configure') {
             setRemoteName('origin')
             setRemoteBranch(activeRepo.branch || 'main')
             
