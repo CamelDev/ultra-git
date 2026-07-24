@@ -14,6 +14,8 @@
   --tab-inactive: var(--bg-secondary);
   --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.2), 0 2px 4px -2px rgb(0 0 0 / 0.2);
   --glass: blur(12px) saturate(180%);
+  --glass-bg: rgba(22, 25, 32, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
   --tooltip-bg: #1e2530;
   --tooltip-text: #f8fafc;
   --tooltip-border: rgba(255, 255, 255, 0.08);
@@ -48,6 +50,8 @@
   --tab-active: var(--bg-primary);
   --tab-inactive: var(--bg-secondary);
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(15, 23, 42, 0.08);
   --tooltip-bg: #ffffff;
   --tooltip-text: #0f172a;
   --tooltip-border: rgba(15, 23, 42, 0.12);

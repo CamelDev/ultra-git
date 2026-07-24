@@ -28,9 +28,9 @@
 
 /* Glassmorphism styling */
 .about-modal-content.glass {
-  background: rgba(22, 25, 32, 0.7);
+  background: var(--glass-bg, rgba(22, 25, 32, 0.7));
   backdrop-filter: var(--glass);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
 }
 
 .about-modal-header {
