@@ -461,7 +461,7 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
               placeholder="Search local branches..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="branch-filter-input"
+              className={`branch-filter-input ${searchText ? 'filter-active' : ''}`}
               data-testid="delete-branches-search-input"
               style={{
                 paddingLeft: "30px",

@@ -35,6 +35,9 @@
   --diff-add-bg-subtle: rgba(16, 185, 129, 0.08);
   --diff-add-inline-bg: rgba(16, 185, 129, 0.45);
   --diff-add-inline-text: #6ee7b7;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.45);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.7);
+  --scrollbar-track: rgba(255, 255, 255, 0.06);
 }
 
 :root.light-theme {
@@ -71,6 +74,9 @@
   --diff-add-bg-subtle: rgba(16, 185, 129, 0.04);
   --diff-add-inline-bg: rgba(16, 185, 129, 0.25);
   --diff-add-inline-text: #14532d; /* Deep Green 900 */
+  --scrollbar-thumb: rgba(15, 23, 42, 0.45);
+  --scrollbar-thumb-hover: rgba(15, 23, 42, 0.7);
+  --scrollbar-track: rgba(15, 23, 42, 0.06);
 }
 
 /* ===== Custom Tooltip System =====
@@ -278,7 +284,8 @@ body {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  height: 100%;
+  overflow-y: hidden;
   box-sizing: border-box;
 }
 
@@ -1359,6 +1366,57 @@ body {
   display: flex;
 }
 
+/* Scrollable lists to keep sidebar organized */
+.sidebar-tags-list,
+.sidebar-stashes-list {
+  flex: 1;
+  overflow-y: scroll;
+}
+
+.stashes-section,
+.tags-section {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.stashes-section.expanded,
+.tags-section.expanded {
+  flex: 1 1 25%;
+  max-height: 25%;
+}
+
+.sidebar-tags-list::-webkit-scrollbar,
+.sidebar-stashes-list::-webkit-scrollbar,
+.branches-container::-webkit-scrollbar {
+  -webkit-appearance: none;
+  width: 7px;
+}
+
+.sidebar-tags-list::-webkit-scrollbar-track,
+.sidebar-stashes-list::-webkit-scrollbar-track,
+.branches-container::-webkit-scrollbar-track {
+  -webkit-appearance: none;
+  background: var(--scrollbar-track);
+  border-radius: 3px;
+}
+
+.sidebar-tags-list::-webkit-scrollbar-thumb,
+.sidebar-stashes-list::-webkit-scrollbar-thumb,
+.branches-container::-webkit-scrollbar-thumb {
+  -webkit-appearance: none;
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+  min-height: 24px;
+}
+
+.sidebar-tags-list::-webkit-scrollbar-thumb:hover,
+.sidebar-stashes-list::-webkit-scrollbar-thumb:hover,
+.branches-container::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
 /* Landing Page */
 .landing-page {
   display: flex;
@@ -1478,6 +1536,40 @@ body {
 .branch-filter-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Active Branch Filter Glow Styles */
+.branch-filter-input.filter-active {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.05) !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.35) !important;
+}
+
+.branch-filter-input.filter-active:focus {
+  border-color: #f87171 !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5) !important;
+}
+
+/* Container around branches */
+.branches-container {
+  flex: 1 1 50%;
+  max-height: 50%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: scroll;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  margin: 0;
+}
+
+.branches-container.filter-active {
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
+  background-color: rgba(239, 68, 68, 0.015);
+  margin: 8px 12px;
+  padding: 4px 0;
 }
 
 .branch-filter-clear-btn {
