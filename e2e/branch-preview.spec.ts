@@ -71,7 +71,7 @@ test.describe('Branch Preview - Click loads commits without checkout', () => {
       await expect(featureBranchItem).toBeVisible()
 
       console.log('8. Clicking on feature-branch to load its commits (should NOT checkout)...')
-      await featureBranchItem.click()
+      await featureBranchItem.click({ position: { x: 10, y: 10 } })
       await page.waitForTimeout(1000)
 
       console.log('9. Verifying active branch is still main (no checkout happened)...')
@@ -147,7 +147,7 @@ test.describe('Branch Preview - Click loads commits without checkout', () => {
       console.log('6. Clicking on feature-branch to load its commits (preview)...')
       const featureBranchItem = page.locator('[data-testid="sidebar-branch-feature-branch"]')
       await expect(featureBranchItem).toBeVisible()
-      await featureBranchItem.click()
+      await featureBranchItem.click({ position: { x: 10, y: 10 } })
       await page.waitForTimeout(1000)
 
       console.log('7. Verifying branch preview banner is visible...')

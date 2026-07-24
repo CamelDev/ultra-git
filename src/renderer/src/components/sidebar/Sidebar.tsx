@@ -1248,7 +1248,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                     key={wt.path}
                     className={`sidebar-item ${isActiveRepo ? 'active' : ''}`}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: isActiveRepo ? 'default' : 'pointer' }}
-                    onClick={() => !isActiveRepo && handleSwitchWorktree(wt.path)}
+                    onClick={() => {
+                      if (!isActiveRepo) handleSwitchWorktree(wt.path);
+                    }}
                     data-tooltip={wt.path}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

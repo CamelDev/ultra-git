@@ -507,17 +507,28 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   },
 
   loadBranchCommits: async (branchName: string) => {
+    console.log('loadBranchCommits: called for branchName:', branchName);
     const activeRepo = get().getActiveRepo();
-    if (!activeRepo) return;
+    if (!activeRepo) {
+      console.log('loadBranchCommits: no active repository found!');
+      return;
+    }
 
+    console.log('loadBranchCommits: activeRepo found, path is:', activeRepo.path);
     // If already previewing this branch, do nothing
-    if (get().previewBranch === branchName) return;
+    if (get().previewBranch === branchName) {
+      console.log('loadBranchCommits: already previewing this branch, ignoring');
+      return;
+    }
 
+    console.log('loadBranchCommits: setting state previewBranch to:', branchName);
     set({ isLoadingPreview: true, previewBranch: branchName, previewCommits: [] });
 
     try {
       const limit = get().previewCommitLimit || 50;
+      console.log('loadBranchCommits: calling window.api.git.getBranchCommits for:', branchName, 'with limit:', limit);
       const res = await window.api.git.getBranchCommits(activeRepo.path, branchName, limit);
+      console.log('loadBranchCommits: window.api.git.getBranchCommits result success:', res.success, 'res has error:', !!res.error, 'commits length:', res.data?.length);
       if (res.success) {
         const commits = res.data || [];
         set({ previewCommits: commits, isLoadingPreview: false });

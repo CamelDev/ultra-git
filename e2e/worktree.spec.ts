@@ -109,7 +109,7 @@ test.describe('Git Worktrees Integration', () => {
 
       // REQUIREMENT 2: "do not switch to another reop tab when worktree is selected - load it and show as normal branch in the same tab from the repo"
       // Click on the worktree item to switch to it
-      await extraWtItem.click();
+      await extraWtItem.click({ position: { x: 10, y: 10 } });
 
       // Wait a moment for state update and refresh
       await page.waitForTimeout(500);
@@ -136,7 +136,7 @@ test.describe('Git Worktrees Integration', () => {
       await expect(commitBranchBtn).toBeDisabled();
 
       // REQUIREMENT 2 CONTINUED: Switch back to main repository from worktree using worktree list
-      await parentWtItem.click();
+      await parentWtItem.click({ position: { x: 10, y: 10 } });
       await page.waitForTimeout(500);
 
       // Verify active branch changed back to the default branch
@@ -214,7 +214,7 @@ test.describe('Git Worktrees Integration', () => {
       await expect(newWtItem).toContainText('feature/wt-from-base');
 
       // Click to switch to the new worktree
-      await newWtItem.click();
+      await newWtItem.click({ position: { x: 10, y: 10 } });
       await page.waitForTimeout(500);
 
       // Verify new worktree is active
@@ -257,7 +257,7 @@ test.describe('Git Worktrees Integration', () => {
       await expect(worktreeSection).toBeVisible();
       
       const extraWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-test' });
-      await extraWtItem.click();
+      await extraWtItem.click({ position: { x: 10, y: 10 } });
       await page.waitForTimeout(500);
 
       // Verify worktree is active (active class on worktree item)
@@ -336,7 +336,7 @@ test.describe('Git Worktrees Integration', () => {
       console.log('[Worktree Rebase Test] 5. Switching active worktree to feature/wt-test...');
       const worktreeSection = page.locator('.sidebar-section:has-text("Worktree")');
       const extraWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-test' });
-      await extraWtItem.click();
+      await extraWtItem.click({ position: { x: 10, y: 10 } });
       await page.waitForTimeout(500);
 
       // Verify worktree is active
