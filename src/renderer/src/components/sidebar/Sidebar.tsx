@@ -95,7 +95,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const activeRepo = repositories.find(r => r.id === activeId)
 
   const [filterText, setFilterText] = useState("")
-  const [selectedStashIndex, setSelectedStashIndex] = useState<number | null>(null)
   const [conflictWarning, setConflictWarning] = useState(false)
   const [poppingIndex, setPoppingIndex] = useState<number | null>(null)
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null)
@@ -354,7 +353,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         if (res.data?.hadConflicts) {
           setConflictWarning(true)
         }
-        setSelectedStashIndex(null)
         await refreshRepo(activeRepo.id)
       } else {
         console.error('Failed to pop stash:', res.error)
@@ -387,7 +385,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     try {
       const res = await window.api.git.stashDrop(activeRepo.path, index)
       if (res.success) {
-        setSelectedStashIndex(null)
         await refreshRepo(activeRepo.id)
       } else {
         console.error('Failed to delete stash:', res.error)
@@ -910,7 +907,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             className="branch-actions"
             style={{
               marginLeft: (currentAhead > 0 || currentBehind > 0) ? '8px' : 'auto',
-              display: 'flex',
               gap: '4px',
               flexShrink: 0,
             }}
@@ -934,7 +930,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: isCurrentRepoWorktree ? 0.5 : 1,
+                ...(isCurrentRepoWorktree ? { opacity: 0.5 } : {}),
                 cursor: isCurrentRepoWorktree ? 'not-allowed' : 'pointer',
               }}
               onClick={(e) => !isCurrentRepoWorktree && openCreateBranchModal(e)}
@@ -1010,14 +1006,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           className="branch-actions"
           style={{
             marginLeft: (currentAhead > 0 || currentBehind > 0) ? '8px' : 'auto',
-            display: 'flex',
             gap: '4px',
             flexShrink: 0,
           }}
         >
           <button
             className="stash-action-btn checkout"
-            style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ padding: 0, height: '24px', width: '48px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             onClick={(e) => { e.stopPropagation(); handleCheckoutBranch(name); }}
             data-tooltip={`Checkout ${name}`}
             data-testid={`checkout-branch-btn-${name}`}
@@ -1129,14 +1124,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           className="branch-actions"
           style={{
             marginLeft: 'auto',
-            display: 'flex',
             gap: '4px',
             flexShrink: 0,
           }}
         >
           <button
-            className="stash-action-btn"
-            style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            className="stash-action-btn checkout"
+            style={{ padding: 0, height: '24px', width: '48px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             onClick={(e) => {
               e.stopPropagation();
               handleCheckoutRemoteBranch(name);
@@ -1257,7 +1251,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                       <Folder className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath} <span style={{ color: 'var(--text-secondary)' }}>({wt.branch})</span></span>
                     </div>
-                    <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    <div className="tag-actions" style={{ marginLeft: 'auto', gap: '4px', flexShrink: 0 }}>
                       {!isActiveRepo && (
                         <>
                           <button
@@ -1393,19 +1387,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               <div className="stash-empty">No stashes</div>
             ) : (
               stashes.map((stash) => {
-                const isSelected = selectedStashIndex === stash.index
                 const isPopping = poppingIndex === stash.index
                 return (
                   <div
                     key={stash.ref}
-                    className={`sidebar-item stash-item${isSelected ? ' stash-selected' : ''}`}
-                    onClick={() => setSelectedStashIndex(isSelected ? null : stash.index)}
+                    className="sidebar-item stash-item"
                     data-testid={`stash-item-${stash.index}`}
                   >
                     <Package
                       className="sidebar-item-icon"
                       size={14}
-                      style={{ color: isSelected ? 'var(--accent-light)' : 'var(--text-secondary)', flexShrink: 0 }}
+                      style={{ color: 'var(--text-secondary)', flexShrink: 0 }}
                     />
                     <div className="stash-item-info">
                       <div className="stash-item-message" data-tooltip={stash.message}>
@@ -1413,37 +1405,35 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                       </div>
                       <div className="stash-item-date">{formatStashDate(stash.date)}</div>
                     </div>
-                    {isSelected && (
-                      <div className="stash-actions">
-                        <button
-                          className="stash-action-btn pop"
-                          onClick={(e) => handlePopStash(e, stash.index)}
-                          disabled={isPopping || deletingIndex === stash.index}
-                          data-tooltip="Pop this stash back to working directory"
-                          data-testid={`stash-pop-btn-${stash.index}`}
-                        >
-                          {isPopping ? '…' : 'Pop'}
-                        </button>
-                        <button
-                          className="stash-action-btn details"
-                          onClick={(e) => handleShowStashDetails(e, stash.index, stash.message)}
-                          disabled={isPopping || deletingIndex === stash.index}
-                          data-tooltip="View stash files and diff details"
-                          data-testid={`stash-details-btn-${stash.index}`}
-                        >
-                          <List size={13} />
-                        </button>
-                        <button
-                          className="stash-action-btn delete"
-                          onClick={(e) => handleDeleteStash(e, stash.index)}
-                          disabled={isPopping || deletingIndex === stash.index}
-                          data-tooltip="Delete this stash"
-                          data-testid={`stash-delete-btn-${stash.index}`}
-                        >
-                          {deletingIndex === stash.index ? '…' : <Trash2 size={13} />}
-                        </button>
-                      </div>
-                    )}
+                    <div className="stash-actions">
+                      <button
+                        className="stash-action-btn pop"
+                        onClick={(e) => handlePopStash(e, stash.index)}
+                        disabled={isPopping || deletingIndex === stash.index}
+                        data-tooltip="Pop this stash back to working directory"
+                        data-testid={`stash-pop-btn-${stash.index}`}
+                      >
+                        {isPopping ? '…' : 'Pop'}
+                      </button>
+                      <button
+                        className="stash-action-btn details"
+                        onClick={(e) => handleShowStashDetails(e, stash.index, stash.message)}
+                        disabled={isPopping || deletingIndex === stash.index}
+                        data-tooltip="View stash files and diff details"
+                        data-testid={`stash-details-btn-${stash.index}`}
+                      >
+                        <List size={13} />
+                      </button>
+                      <button
+                        className="stash-action-btn delete"
+                        onClick={(e) => handleDeleteStash(e, stash.index)}
+                        disabled={isPopping || deletingIndex === stash.index}
+                        data-tooltip="Delete this stash"
+                        data-testid={`stash-delete-btn-${stash.index}`}
+                      >
+                        {deletingIndex === stash.index ? '…' : <Trash2 size={13} />}
+                      </button>
+                    </div>
                   </div>
                 )
               })
@@ -1538,7 +1528,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                         {tag}
                       </span>
                     </div>
-                    <div className="tag-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    <div className="tag-actions" style={{ marginLeft: 'auto', gap: '4px', flexShrink: 0 }}>
                       <button
                         className="stash-action-btn delete"
                         style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}

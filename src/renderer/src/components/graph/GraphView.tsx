@@ -1326,7 +1326,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                     display: 'inline-flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    opacity: isCurrentRepoWorktree ? 0.5 : 1,
+                    ...(isCurrentRepoWorktree ? { opacity: 0.5 } : {}),
                     cursor: isCurrentRepoWorktree ? 'not-allowed' : 'pointer'
                   }}
                   onClick={(e) => {
@@ -1343,43 +1343,47 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 >
                   <GitBranch size={13} />
                 </button>
-                <button
-                  className="stash-action-btn"
-                  style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setResetTargetCommit(c)
-                    setResetMode('soft')
-                    setResetError('')
-                    setIsResetModalOpen(true)
-                  }}
-                  data-tooltip={`Reset branch to ${c.hash.substring(0, 7)}`}
-                  data-testid={`commit-reset-btn-${c.hash}`}
-                >
-                  <RotateCcw size={13} />
-                </button>
-                <button
-                  className="stash-action-btn"
-                  style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    const idx = commits.findIndex((commit) => commit.hash === c.hash)
-                    if (idx === -1) return
-                    const commitsToSquash = commits.slice(0, idx + 1)
-                    const combinedMessages = commitsToSquash
-                      .map((commit) => commit.message)
-                      .reverse()
-                      .join('\n\n')
-                    setSquashTargetCommit(c)
-                    setSquashMessage(combinedMessages)
-                    setSquashError('')
-                    setIsSquashModalOpen(true)
-                  }}
-                  data-tooltip={`Squash this and newer commits`}
-                  data-testid={`commit-squash-btn-${c.hash}`}
-                >
-                  <Layers size={13} />
-                </button>
+                {commits.length > 0 && commits[0].hash !== c.hash && (
+                  <>
+                    <button
+                      className="stash-action-btn"
+                      style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setResetTargetCommit(c)
+                        setResetMode('soft')
+                        setResetError('')
+                        setIsResetModalOpen(true)
+                      }}
+                      data-tooltip={`Reset branch to ${c.hash.substring(0, 7)}`}
+                      data-testid={`commit-reset-btn-${c.hash}`}
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                    <button
+                      className="stash-action-btn"
+                      style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const idx = commits.findIndex((commit) => commit.hash === c.hash)
+                        if (idx === -1) return
+                        const commitsToSquash = commits.slice(0, idx + 1)
+                        const combinedMessages = commitsToSquash
+                          .map((commit) => commit.message)
+                          .reverse()
+                          .join('\n\n')
+                        setSquashTargetCommit(c)
+                        setSquashMessage(combinedMessages)
+                        setSquashError('')
+                        setIsSquashModalOpen(true)
+                      }}
+                      data-tooltip={`Squash this and newer commits`}
+                      data-testid={`commit-squash-btn-${c.hash}`}
+                    >
+                      <Layers size={13} />
+                    </button>
+                  </>
+                )}
               </div>
               <div className="commit-author" style={{ width: `${authorWidth}px`, paddingLeft: '12px' }}>{c.author_name}</div>
               <div className="commit-date" style={{ width: `${dateWidth}px` }}>
