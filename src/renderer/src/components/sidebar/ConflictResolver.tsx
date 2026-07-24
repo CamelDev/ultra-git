@@ -536,15 +536,16 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
                           flex: 1,
                           margin: 0,
                           padding: "12px",
-                        fontSize: "12px",
-                        fontFamily: "monospace",
-                        color: "var(--text-primary)",
-                        background: "rgba(52, 211, 153, 0.03)",
-                        overflow: "auto",
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
-                        lineHeight: 1.6
-                      }}>
+                          fontSize: "12px",
+                          fontFamily: "monospace",
+                          color: "var(--text-primary)",
+                          background: "rgba(52, 211, 153, 0.03)",
+                          overflow: "auto",
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          lineHeight: 1.6,
+                          userSelect: "text"
+                        }}>
                         {resolvedHunks[activeHunk]?.content || "(empty)"}
                       </pre>
                     </div>
@@ -626,7 +627,8 @@ const HunkPane: React.FC<HunkPaneProps> = ({ label, content, color, isSelected, 
       whiteSpace: "pre-wrap",
       wordBreak: "break-word",
       lineHeight: 1.6,
-      transition: "background 0.15s"
+      transition: "background 0.15s",
+      userSelect: "text"
     }}>
       {content || "(empty)"}
     </pre>

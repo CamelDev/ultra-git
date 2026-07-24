@@ -641,17 +641,41 @@ body {
   transform: rotate(90deg);
 }
 
+.diff-copy-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.diff-copy-btn:hover {
+  background-color: var(--hover);
+  color: var(--text-primary);
+  border-color: var(--accent-light);
+}
+
 .diff-modal-body {
   flex: 1;
   display: flex;
   position: relative;
   overflow: hidden;
   background-color: var(--bg-primary);
+  user-select: text;
 }
 
 .diff-modal-scroll {
   flex: 1;
   overflow: auto;
+  user-select: text;
 }
 
 .diff-overview-ruler {
@@ -674,11 +698,13 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 100%;
+  user-select: text;
 }
 
 .diff-row {
   display: flex;
   width: 100%;
+  user-select: text;
 }
 
 .diff-col {
@@ -686,6 +712,7 @@ body {
   display: flex;
   align-items: stretch;
   overflow: hidden;
+  user-select: text;
 }
 
 .diff-col.left {
@@ -718,6 +745,7 @@ body {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   color: var(--text-primary);
+  user-select: text;
 }
 
 .diff-row.type-delete {

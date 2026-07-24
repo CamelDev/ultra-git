@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { X, FileText } from 'lucide-react'
+import { X, FileText, Copy, Check } from 'lucide-react'
 
 interface DiffModalProps {
   isOpen: boolean
@@ -515,6 +515,94 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     .map((row, idx) => ({ rowType: row.rowType, idx }))
     .filter((r) => r.rowType !== 'normal')
 
+  const [copiedSide, setCopiedSide] = useState<'left' | 'right' | null>(null)
+
+  const handleCopyLeft = () => {
+    const leftLines = renderRows
+      .filter((r) => r.beforeLine !== undefined)
+      .map((r) => r.beforeLine)
+      .join('\n')
+    navigator.clipboard.writeText(leftLines)
+    setCopiedSide('left')
+    setTimeout(() => setCopiedSide(null), 2000)
+  }
+
+  const handleCopyRight = () => {
+    const rightLines = renderRows
+      .filter((r) => r.afterLine !== undefined)
+      .map((r) => r.afterLine)
+      .join('\n')
+    navigator.clipboard.writeText(rightLines)
+    setCopiedSide('right')
+    setTimeout(() => setCopiedSide(null), 2000)
+  }
+
+  const handleCopy = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed) return
+
+    const range = selection.getRangeAt(0)
+    const container = range.commonAncestorContainer
+    const targetElement =
+      container.nodeType === Node.TEXT_NODE ? container.parentElement : (container as HTMLElement)
+    if (!targetElement) return
+
+    const diffTable = targetElement.closest('.diff-table')
+    if (!diffTable) return
+
+    const anchorNode = selection.anchorNode
+    const anchorEl = anchorNode
+      ? anchorNode.nodeType === Node.TEXT_NODE
+        ? anchorNode.parentElement
+        : (anchorNode as HTMLElement)
+      : null
+
+    const focusNode = selection.focusNode
+    const focusEl = focusNode
+      ? focusNode.nodeType === Node.TEXT_NODE
+        ? focusNode.parentElement
+        : (focusNode as HTMLElement)
+      : null
+
+    const anchorLeft = anchorEl?.closest('.diff-col.left')
+    const anchorRight = anchorEl?.closest('.diff-col.right')
+    const focusLeft = focusEl?.closest('.diff-col.left')
+    const focusRight = focusEl?.closest('.diff-col.right')
+
+    const isLeft = !!(anchorLeft && (focusLeft || !focusRight))
+    const isRight = !!(anchorRight && (focusRight || !focusLeft))
+
+    if (isLeft || isRight) {
+      const side = isLeft ? 'left' : 'right'
+      const rows = Array.from(diffTable.querySelectorAll('.diff-row'))
+      const lines: string[] = []
+
+      rows.forEach((row) => {
+        if (selection.containsNode(row, true)) {
+          const col = row.querySelector(`.diff-col.${side}`)
+          if (col && !col.classList.contains('empty-side')) {
+            const lineContent = col.querySelector('.diff-line-content')
+            if (lineContent) {
+              lines.push(lineContent.textContent || '')
+            }
+          }
+        }
+      })
+
+      if (lines.length > 1) {
+        e.clipboardData.setData('text/plain', lines.join('\n'))
+        e.preventDefault()
+        return
+      }
+    }
+
+    const rawText = selection.toString()
+    if (rawText) {
+      e.clipboardData.setData('text/plain', rawText)
+      e.preventDefault()
+    }
+  }
+
   // Overview ruler jump helper
   const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -568,9 +656,29 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               </div>
             </div>
           </div>
-          <button className="diff-modal-close" onClick={onClose}>
-            <X size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              className="diff-copy-btn"
+              data-testid="copy-left-btn"
+              onClick={handleCopyLeft}
+              title="Copy Old (Left) File Content"
+            >
+              {copiedSide === 'left' ? <Check size={14} style={{ color: '#34d399' }} /> : <Copy size={14} />}
+              <span>{copiedSide === 'left' ? 'Copied Old!' : 'Copy Old'}</span>
+            </button>
+            <button
+              className="diff-copy-btn"
+              data-testid="copy-right-btn"
+              onClick={handleCopyRight}
+              title="Copy New (Right) File Content"
+            >
+              {copiedSide === 'right' ? <Check size={14} style={{ color: '#34d399' }} /> : <Copy size={14} />}
+              <span>{copiedSide === 'right' ? 'Copied New!' : 'Copy New'}</span>
+            </button>
+            <button className="diff-modal-close" onClick={onClose} title="Close">
+              <X size={18} />
+            </button>
+          </div>
         </div>
         <div className="diff-modal-body">
           {isStash && (
@@ -699,6 +807,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           <div
             ref={bodyRef}
             className="diff-modal-scroll"
+            onCopy={handleCopy}
             style={{ display: isStash && !selectedStashFile ? 'none' : 'block' }}
           >
             {loading && (

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { X, FileText, Copy, AlertTriangle, GitCommit, GitBranch } from 'lucide-react'
+import { X, FileText, Copy, Check, AlertTriangle, GitCommit, GitBranch } from 'lucide-react'
 
 interface CherryPickModalProps {
   isOpen: boolean
@@ -496,6 +496,94 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
     .map((row, idx) => ({ rowType: row.rowType, idx }))
     .filter((r) => r.rowType !== 'normal')
 
+  const [copiedSide, setCopiedSide] = useState<'left' | 'right' | null>(null)
+
+  const handleCopyLeft = () => {
+    const leftLines = renderRows
+      .filter((r) => r.beforeLine !== undefined)
+      .map((r) => r.beforeLine)
+      .join('\n')
+    navigator.clipboard.writeText(leftLines)
+    setCopiedSide('left')
+    setTimeout(() => setCopiedSide(null), 2000)
+  }
+
+  const handleCopyRight = () => {
+    const rightLines = renderRows
+      .filter((r) => r.afterLine !== undefined)
+      .map((r) => r.afterLine)
+      .join('\n')
+    navigator.clipboard.writeText(rightLines)
+    setCopiedSide('right')
+    setTimeout(() => setCopiedSide(null), 2000)
+  }
+
+  const handleCopy = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed) return
+
+    const range = selection.getRangeAt(0)
+    const container = range.commonAncestorContainer
+    const targetElement =
+      container.nodeType === Node.TEXT_NODE ? container.parentElement : (container as HTMLElement)
+    if (!targetElement) return
+
+    const diffTable = targetElement.closest('.diff-table')
+    if (!diffTable) return
+
+    const anchorNode = selection.anchorNode
+    const anchorEl = anchorNode
+      ? anchorNode.nodeType === Node.TEXT_NODE
+        ? anchorNode.parentElement
+        : (anchorNode as HTMLElement)
+      : null
+
+    const focusNode = selection.focusNode
+    const focusEl = focusNode
+      ? focusNode.nodeType === Node.TEXT_NODE
+        ? focusNode.parentElement
+        : (focusNode as HTMLElement)
+      : null
+
+    const anchorLeft = anchorEl?.closest('.diff-col.left')
+    const anchorRight = anchorEl?.closest('.diff-col.right')
+    const focusLeft = focusEl?.closest('.diff-col.left')
+    const focusRight = focusEl?.closest('.diff-col.right')
+
+    const isLeft = !!(anchorLeft && (focusLeft || !focusRight))
+    const isRight = !!(anchorRight && (focusRight || !focusLeft))
+
+    if (isLeft || isRight) {
+      const side = isLeft ? 'left' : 'right'
+      const rows = Array.from(diffTable.querySelectorAll('.diff-row'))
+      const lines: string[] = []
+
+      rows.forEach((row) => {
+        if (selection.containsNode(row, true)) {
+          const col = row.querySelector(`.diff-col.${side}`)
+          if (col && !col.classList.contains('empty-side')) {
+            const lineContent = col.querySelector('.diff-line-content')
+            if (lineContent) {
+              lines.push(lineContent.textContent || '')
+            }
+          }
+        }
+      })
+
+      if (lines.length > 1) {
+        e.clipboardData.setData('text/plain', lines.join('\n'))
+        e.preventDefault()
+        return
+      }
+    }
+
+    const rawText = selection.toString()
+    if (rawText) {
+      e.clipboardData.setData('text/plain', rawText)
+      e.preventDefault()
+    }
+  }
+
   const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const clickY = e.clientY - rect.top
@@ -775,11 +863,45 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
           </div>
 
           {/* Diff viewer */}
-          <div
-            ref={bodyRef}
-            className="diff-modal-scroll"
-            style={{ flex: 1, overflowY: 'auto', display: !selectedFile ? 'none' : 'block' }}
-          >
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            {selectedFile && !diffLoading && !diffError && !isBinary && (
+              <div
+                style={{
+                  padding: '6px 16px',
+                  borderBottom: '1px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: '8px',
+                  background: 'var(--bg-secondary)'
+                }}
+              >
+                <button
+                  className="diff-copy-btn"
+                  data-testid="cherry-pick-copy-left-btn"
+                  onClick={handleCopyLeft}
+                  title="Copy Old (Left) File Content"
+                >
+                  {copiedSide === 'left' ? <Check size={13} style={{ color: '#34d399' }} /> : <Copy size={13} />}
+                  <span>{copiedSide === 'left' ? 'Copied Old!' : 'Copy Old'}</span>
+                </button>
+                <button
+                  className="diff-copy-btn"
+                  data-testid="cherry-pick-copy-right-btn"
+                  onClick={handleCopyRight}
+                  title="Copy New (Right) File Content"
+                >
+                  {copiedSide === 'right' ? <Check size={13} style={{ color: '#34d399' }} /> : <Copy size={13} />}
+                  <span>{copiedSide === 'right' ? 'Copied New!' : 'Copy New'}</span>
+                </button>
+              </div>
+            )}
+            <div
+              ref={bodyRef}
+              className="diff-modal-scroll"
+              onCopy={handleCopy}
+              style={{ flex: 1, overflowY: 'auto', display: !selectedFile ? 'none' : 'block' }}
+            >
             {diffLoading && (
               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
                 Loading file diff...
@@ -853,6 +975,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
               })}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

@@ -128,6 +128,24 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       await expect(changeRow.locator('.diff-col.left .diff-line-content')).toContainText('Line 2')
       await expect(changeRow.locator('.diff-col.right .diff-line-content')).toContainText('Line 2 Modified')
 
+      // Verify copy old/new buttons exist
+      const copyLeftBtn = page.locator('[data-testid="copy-left-btn"]')
+      const copyRightBtn = page.locator('[data-testid="copy-right-btn"]')
+      await expect(copyLeftBtn).toBeVisible()
+      await expect(copyRightBtn).toBeVisible()
+
+      // Click Copy Old button and verify button status feedback
+      await copyLeftBtn.click()
+      await expect(copyLeftBtn).toContainText('Copied Old!')
+
+      // Click Copy New button and verify button status feedback
+      await copyRightBtn.click()
+      await expect(copyRightBtn).toContainText('Copied New!')
+
+      // Verify user-select: text CSS property on diff line content
+      const lineContentStyle = await changeRow.locator('.diff-col.left .diff-line-content').evaluate(el => window.getComputedStyle(el).userSelect)
+      expect(lineContentStyle).toBe('text')
+
       // Close the modal
       const closeBtn = page.locator('.diff-modal-close')
       await expect(closeBtn).toBeVisible()
