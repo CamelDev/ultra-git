@@ -5,6 +5,7 @@ import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
 import { DeleteBranchesModal } from "./DeleteBranchesModal"
 import { AppDialog } from "../dialogs/AppDialog"
+import { useToaster } from "../toaster/ToasterContext"
 
 const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
@@ -92,6 +93,7 @@ const buildBranchTree = (
 
 const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const { repositories, activeId, refreshRepo, switchActiveRepoPath, loadBranchCommits, clearBranchPreview, previewBranch } = useRepoStore()
+  const { addToast } = useToaster()
   const activeRepo = repositories.find(r => r.id === activeId)
 
   const [filterText, setFilterText] = useState("")
@@ -634,8 +636,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     try {
       const res = await window.api.git.pushTags(activeRepo.path)
       if (res.success) {
-        setPushTagsAlert({
-          open: true,
+        addToast({
           variant: 'success',
           title: 'Tags Pushed',
           message: 'All local tags have been successfully pushed to the remote repository.'
@@ -1890,7 +1891,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         onCancel={() => setIsPushTagsConfirmOpen(false)}
       />
 
-      {/* Tag push result dialog (in-app, replaces native alert) */}
+      {/* Tag push error dialog – only shown on failure; success uses the toaster */}
       <AppDialog
         isOpen={pushTagsAlert.open}
         title={pushTagsAlert.title}

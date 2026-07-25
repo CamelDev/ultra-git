@@ -10,6 +10,8 @@ import { ConflictResolver } from "./components/sidebar/ConflictResolver"
 import LandingPage from "./components/layout/LandingPage"
 import { useTooltip } from "./hooks/useTooltip"
 import { useTheme } from "./hooks/useTheme"
+import { ToasterProvider } from "./components/toaster/ToasterContext"
+import { Toaster } from "./components/toaster/Toaster"
 
 interface ConflictState {
   active: boolean
@@ -398,10 +400,11 @@ function App() {
   }
 
   return (
-    <>
+    <ToasterProvider>
       <TitleBar />
       {renderContent()}
-    </>
+      <Toaster />
+    </ToasterProvider>
   )
 }
 

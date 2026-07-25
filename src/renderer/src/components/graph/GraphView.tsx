@@ -3,6 +3,7 @@ import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, Git
 import { useRepoStore } from '../../store/useRepoStore'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 import { AppDialog, AppDialogAction } from '../dialogs/AppDialog'
+import { useToaster } from '../toaster/ToasterContext'
 
 interface GraphViewProps {
   onOpenConflictResolver?: () => void
@@ -21,6 +22,7 @@ const extractTags = (refs: string | undefined): string[] => {
 
 const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const { getActiveRepo, selectedCommitHash, setSelectedCommitHash, refreshRepo, identities, setRepoIdentity, previewBranch, previewCommits, previewCommitLimit, clearBranchPreview, loadMoreBranchCommits, isLoadingPreview } = useRepoStore()
+  const { addToast } = useToaster()
   const activeRepo = getActiveRepo()
   const isPreviewing = !!previewBranch;
   const commits = isPreviewing ? previewCommits : (activeRepo?.commits || []);
@@ -318,6 +320,12 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
             type: 'warning',
             title: 'Merge Conflicts Detected',
             message: 'Pull succeeded but resulted in merge conflicts. Conflicting files are listed under active changes with conflict markers. Please resolve them and commit.'
+          })
+        } else {
+          addToast({
+            variant: 'success',
+            title: 'Pull Successful',
+            message: 'Changes have been pulled from the remote repository.'
           })
         }
       } else {
@@ -621,7 +629,13 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
       const res = await window.api.git.push(activeRepo.path, force)
       await refreshRepo(activeRepo.id)
       if (res.success) {
-        // Success
+        addToast({
+          variant: 'success',
+          title: force ? 'Force Push Successful' : 'Push Successful',
+          message: force
+            ? 'Local changes have been force-pushed to the remote repository.'
+            : 'Local commits have been pushed to the remote repository.'
+        })
       } else {
         const errorMsg = res.error || ''
         const isRejected = errorMsg.includes('[rejected]') || errorMsg.includes('non-fast-forward') || errorMsg.includes('behind its remote counterpart')
