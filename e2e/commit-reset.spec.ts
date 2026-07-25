@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 import fs from 'fs'
 import path from 'path'
@@ -41,9 +41,7 @@ test.describe('Reset Branch to Commit', () => {
       }, sandbox.dir)
 
       console.log('4. Clicking to add repository...')
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('5. Switching to the newly added repository tab...')
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -126,9 +124,7 @@ test.describe('Reset Branch to Commit', () => {
       }, sandbox.dir)
 
       console.log('4. Clicking to add repository...')
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('5. Switching to the newly added repository tab...')
       const tabs = page.locator('[data-testid="repo-tab"]')

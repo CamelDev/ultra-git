@@ -1,9 +1,25 @@
-import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { _electron as electron, type ElectronApplication, type Page, expect } from '@playwright/test';
 import path from 'path';
 
 export interface LaunchedApp {
   app: ElectronApplication;
   page: Page;
+}
+
+/**
+ * Clicks the "Add Repository" button in the TitleBar and then the
+ * "Open Repository..." option in the resulting dropdown, triggering the
+ * mocked dialog:openDirectory handler. Encapsulates the two-step UI flow
+ * so individual specs don't need to know about the dropdown implementation.
+ */
+export async function addRepoViaUI(page: Page): Promise<void> {
+  const addBtn = page.locator('[data-testid="add-repo-btn"]');
+  await expect(addBtn).toBeVisible();
+  await addBtn.click();
+
+  const dropdownOpenBtn = page.locator('[data-testid="dropdown-open-repo-btn"]');
+  await expect(dropdownOpenBtn).toBeVisible();
+  await dropdownOpenBtn.click();
 }
 
 let currentUserDataDir: string | null = null;
@@ -41,7 +57,7 @@ export async function launchElectronApp(options: LaunchOptions = {}): Promise<La
   });
 
   const page = await app.firstWindow();
-  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('networkidle');
 
   if (cleanState) {
     await page.evaluate((disable) => {
@@ -51,7 +67,7 @@ export async function launchElectronApp(options: LaunchOptions = {}): Promise<La
       }
     }, disableDefaultTab);
     await page.reload();
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('networkidle');
   }
 
   return { app, page };

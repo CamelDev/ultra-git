@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 
 test.describe('Set Upstream branch on push', () => {
@@ -42,9 +42,7 @@ test.describe('Set Upstream branch on push', () => {
         })
       }, localSandbox.dir)
 
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)
@@ -102,9 +100,7 @@ test.describe('Set Upstream branch on push', () => {
         })
       }, localSandbox.dir)
 
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)

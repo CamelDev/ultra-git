@@ -1246,6 +1246,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                       if (!isActiveRepo) handleSwitchWorktree(wt.path);
                     }}
                     data-tooltip={wt.path}
+                    data-testid="sidebar-worktree-item"
                   >
                     <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <HardDrive className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />

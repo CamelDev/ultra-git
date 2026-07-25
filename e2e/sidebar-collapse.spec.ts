@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 import fs from 'fs'
 import path from 'path'
@@ -54,9 +54,7 @@ test.describe('Sidebar Collapse and Expansion Persistence', () => {
       }, sandbox.dir)
 
       console.log('[Sidebar Collapse Test] 5. Adding sandbox repository...');
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('[Sidebar Collapse Test] 6. Switching to repository tab...');
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -65,7 +63,10 @@ test.describe('Sidebar Collapse and Expansion Persistence', () => {
       await page.waitForTimeout(1000)
 
       // Get locators for items
-      const worktreeItem = page.locator(`[data-tooltip="${sandbox.dir}"]`)
+      // Use the stable data-testid instead of the path-based data-tooltip,
+      // which is fragile on Windows because backslashes are interpreted as
+      // CSS escape characters inside attribute selectors.
+      const worktreeItem = page.locator('[data-testid="sidebar-worktree-item"]')
       const branchItem = page.locator('[data-testid="sidebar-branch-feature-branch"]')
       const stashItem = page.locator('[data-testid="stash-item-0"]')
       const tagItem = page.locator('[data-testid="sidebar-tag-v1.0.0"]')

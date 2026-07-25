@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 import path from 'path'
 import fs from 'fs'
@@ -66,9 +66,7 @@ test.describe('Branch Sync Status', () => {
       }, localSandbox.dir)
 
       // Click to add repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       // Switch to the newly added repository tab
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -138,8 +136,7 @@ test.describe('Branch Sync Status', () => {
         })
       }, localSandbox.dir)
 
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)
@@ -207,8 +204,7 @@ test.describe('Branch Sync Status', () => {
         })
       }, localSandbox.dir)
 
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)
@@ -264,8 +260,7 @@ test.describe('Branch Sync Status', () => {
         })
       }, localSandbox.dir)
 
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)
@@ -324,8 +319,7 @@ test.describe('Branch Sync Status', () => {
         })
       }, localSandbox.dir)
 
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)

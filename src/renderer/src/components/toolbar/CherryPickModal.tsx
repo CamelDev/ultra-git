@@ -289,6 +289,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
 
   const [cherryPickLoading, setCherryPickLoading] = useState(false)
   const [cherryPickError, setCherryPickError] = useState<string | null>(null)
+  const [copiedSide, setCopiedSide] = useState<'left' | 'right' | null>(null)
 
   const bodyRef = useRef<HTMLDivElement>(null)
 
@@ -495,8 +496,6 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
   const changeIndexes = renderRows
     .map((row, idx) => ({ rowType: row.rowType, idx }))
     .filter((r) => r.rowType !== 'normal')
-
-  const [copiedSide, setCopiedSide] = useState<'left' | 'right' | null>(null)
 
   const handleCopyLeft = () => {
     const leftLines = renderRows

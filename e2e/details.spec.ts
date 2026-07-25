@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { launchElectronApp } from './helpers/launcher';
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher';
 import { GitSandbox } from './helpers/git-sandbox';
 import path from 'path';
 
@@ -112,9 +112,7 @@ test.describe('Resizable Details Panel', () => {
       }, sandbox.dir);
 
       // Click to add repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]');
-      await expect(addBtn).toBeVisible();
-      await addBtn.click();
+      await addRepoViaUI(page)
 
       // Switch to the sandbox repository tab
       const expectedTabName = path.basename(sandbox.dir);

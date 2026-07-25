@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 import path from 'path'
 import fs from 'fs'
@@ -39,9 +39,7 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       }, sandbox.dir)
 
       console.log('4. Clicking to add repository...')
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('5. Switching to the newly added repository tab...')
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -249,9 +247,7 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       }, sandbox.dir)
 
       console.log('[Tag Sort Test] 5. Clicking to add repository...')
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('[Tag Sort Test] 6. Switching to sandbox repository tab...')
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -300,9 +296,7 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       }, sandbox.dir)
 
       console.log('[Tag Collapse Test] Clicking to add repository...')
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('[Tag Collapse Test] Switching to sandbox repository tab...')
       const tabs = page.locator('[data-testid="repo-tab"]')

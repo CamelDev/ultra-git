@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { launchElectronApp } from './helpers/launcher';
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher';
 import { GitSandbox } from './helpers/git-sandbox';
 import path from 'path';
 import fs from 'fs';
@@ -57,9 +57,7 @@ test.describe('Interactive Conflict Resolver', () => {
       }, sandbox.dir);
 
       console.log('[Test 1] Adding repository...');
-      const addBtn = page.locator('[data-testid="add-repo-btn"]');
-      await expect(addBtn).toBeVisible();
-      await addBtn.click();
+      await addRepoViaUI(page)
 
       console.log('[Test 1] Switching to repository tab...');
       const tabs = page.locator('[data-testid="repo-tab"]');
@@ -197,9 +195,7 @@ test.describe('Interactive Conflict Resolver', () => {
       }, sandbox.dir);
 
       // Add sandbox repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]');
-      await expect(addBtn).toBeVisible();
-      await addBtn.click();
+      await addRepoViaUI(page)
 
       // Switch to sandbox tab
       const tabs = page.locator('[data-testid="repo-tab"]');

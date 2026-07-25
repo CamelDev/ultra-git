@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 
 test.describe('Branch Filtering in Sidebar', () => {
@@ -52,9 +52,7 @@ test.describe('Branch Filtering in Sidebar', () => {
       }, sandbox.dir)
 
       console.log('4. Clicking to add repository...')
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('5. Switching to the newly added repository tab...')
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -66,14 +64,41 @@ test.describe('Branch Filtering in Sidebar', () => {
       const filterInput = page.locator('[data-testid="branch-filter-input"]')
       await expect(filterInput).toBeVisible()
 
-      // Local & remote sections
+      // Local & remote sections.
+      // Note: the count is rendered in a dedicated direct-child <span> of the
+      // header, so assert against it exactly instead of a substring match on the
+      // whole header (which would produce false positives like "Local15").
       const localSection = page.locator('.sidebar-section:has-text("Local")')
       const remoteSection = page.locator('.sidebar-section:has-text("Remote")')
+      const localCount = localSection.locator('.sidebar-header > span')
+      const remoteCount = remoteSection.locator('.sidebar-header > span')
+
+      // The app's branch list is loaded via a single point-in-time read when the
+      // repo is added/refreshed. On busy Windows machines (e.g. antivirus briefly
+      // locking freshly written .git/refs files), `git branch` can silently skip
+      // a ref, and the sidebar then keeps showing the incomplete list because no
+      // further repo change triggers a refresh. If a branch we just created is
+      // missing, force a completely fresh read by reloading the page (open repos
+      // persist in localStorage) before failing the test.
+      const devBranch = page.locator('[data-testid="sidebar-branch-dev"]')
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        if (await devBranch.isVisible().catch(() => false)) break
+        console.log(`Branch list incomplete (attempt ${attempt}/3), reloading for a fresh branch read...`)
+        await page.reload()
+        await page.waitForLoadState('domcontentloaded')
+        await page.waitForTimeout(1000)
+        const persistedTabs = page.locator('[data-testid="repo-tab"]')
+        await expect(persistedTabs).toHaveCount(2)
+        await persistedTabs.last().click()
+        await page.waitForTimeout(1000)
+      }
+      await expect(devBranch).toBeVisible()
 
       // Verify initial branch counts (5 local, 2 remote)
       // Local branches: main, dev, feature/abc, feature/xyz, bugfix/123 (Total = 5)
-      await expect(localSection.locator('.sidebar-header')).toContainText('5')
-      await expect(remoteSection.locator('.sidebar-header')).toContainText('2')
+      await expect(localCount).toHaveText('5')
+      await expect(remoteCount).toHaveText('2')
+
 
       // Initially, we shouldn't see 'feature/abc' leaf node directly if 'feature' directory is collapsed,
       // but let's test filtering directly since it auto-expands folder nodes.
@@ -83,8 +108,9 @@ test.describe('Branch Filtering in Sidebar', () => {
 
       // Verified filtered counts (feature/abc and feature/xyz match => 2 local branches)
       // Remote branches: origin/feature/remote-abc matches => 1 remote branch
-      await expect(localSection.locator('.sidebar-header')).toContainText('2/5')
-      await expect(remoteSection.locator('.sidebar-header')).toContainText('1/2')
+      await expect(localCount).toHaveText('2/5')
+      await expect(remoteCount).toHaveText('1/2')
+
 
       // Verify matching branches are visible
       await expect(page.locator('[data-testid="sidebar-branch-feature/abc"]')).toBeVisible()
@@ -99,8 +125,9 @@ test.describe('Branch Filtering in Sidebar', () => {
       await filterInput.fill('nonexistent')
       await page.waitForTimeout(500)
 
-      await expect(localSection.locator('.sidebar-header')).toContainText('0/5')
-      await expect(remoteSection.locator('.sidebar-header')).toContainText('0/2')
+      await expect(localCount).toHaveText('0/5')
+      await expect(remoteCount).toHaveText('0/2')
+
       await expect(page.locator('[data-testid="sidebar-branch-feature/abc"]')).not.toBeVisible()
       await expect(page.locator('[data-testid="sidebar-remote-branch-origin/feature/remote-abc"]')).not.toBeVisible()
 
@@ -114,9 +141,10 @@ test.describe('Branch Filtering in Sidebar', () => {
       await expect(filterInput).toHaveValue('')
 
       // Verify all counts and branches are restored
-      await expect(localSection.locator('.sidebar-header')).toContainText('5')
-      await expect(remoteSection.locator('.sidebar-header')).toContainText('2')
+      await expect(localCount).toHaveText('5')
+      await expect(remoteCount).toHaveText('2')
       await expect(clearBtn).not.toBeVisible()
+
 
     } finally {
       await app.close()

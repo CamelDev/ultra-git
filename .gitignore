@@ -34,10 +34,11 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
-# AI tools local directories
+# AI and dev tools local directories
 .gemini/
 .antigravitycli/
-.kiro
+.kiro/
+.vs/
 
 # GSD local/machine-specific configurations
 .agents/settings.json

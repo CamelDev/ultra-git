@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 import fs from 'fs'
 
@@ -43,9 +43,7 @@ test.describe('Set Remote on Push', () => {
       }, localSandbox.dir)
 
       console.log('4. Adding local repository...')
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('5. Clicking local repository tab...')
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -118,9 +116,7 @@ test.describe('Set Remote on Push', () => {
       }, localSandbox.dir)
 
       console.log('4. Adding local repository...')
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('5. Clicking local repository tab...')
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -191,8 +187,7 @@ test.describe('Set Remote on Push', () => {
       }, localSandbox.dir)
 
       console.log('4. Adding local repository...')
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('5. Clicking local repository tab...')
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -280,8 +275,7 @@ test.describe('Set Remote on Push', () => {
       }, localSandbox.dir)
 
       console.log('4. Adding local repository...')
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('5. Clicking local repository tab...')
       const tabs = page.locator('[data-testid="repo-tab"]')

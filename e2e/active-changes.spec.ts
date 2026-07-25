@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 import path from 'path'
 import fs from 'fs'
@@ -37,9 +37,7 @@ test.describe('Active Changes Panel', () => {
       }, sandbox.dir)
 
       // Click to add repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const expectedTabName = path.basename(sandbox.dir)
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -182,9 +180,7 @@ test.describe('Active Changes Panel', () => {
       }, sandbox.dir)
 
       // Click to add repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)
@@ -254,9 +250,7 @@ test.describe('Active Changes Panel', () => {
       }, sandbox.dir)
 
       // Click to add repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)
@@ -321,9 +315,7 @@ test.describe('Active Changes Panel', () => {
       }, sandbox.dir)
 
       // Click to add repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)

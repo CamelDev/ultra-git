@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { launchElectronApp } from './helpers/launcher';
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher';
 import { GitSandbox } from './helpers/git-sandbox';
 import path from 'path';
 import fs from 'fs';
@@ -78,9 +78,7 @@ test.describe('Git Worktrees Integration', () => {
       }, sandbox.dir);
 
       // Add sandbox repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]');
-      await expect(addBtn).toBeVisible();
-      await addBtn.click();
+      await addRepoViaUI(page)
 
       // Verify repo tab is added
       const tabs = page.locator('[data-testid="repo-tab"]');
@@ -168,9 +166,7 @@ test.describe('Git Worktrees Integration', () => {
       }, sandbox.dir);
 
       // Add sandbox repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]');
-      await expect(addBtn).toBeVisible();
-      await addBtn.click();
+      await addRepoViaUI(page)
 
       // Verify repo tab is added and switch to it
       const tabs = page.locator('[data-testid="repo-tab"]');
@@ -243,9 +239,7 @@ test.describe('Git Worktrees Integration', () => {
       }, sandbox.dir);
 
       // Add sandbox repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]');
-      await expect(addBtn).toBeVisible();
-      await addBtn.click();
+      await addRepoViaUI(page)
 
       // Switch to sandbox tab
       const tabs = page.locator('[data-testid="repo-tab"]');
@@ -325,9 +319,7 @@ test.describe('Git Worktrees Integration', () => {
       }, sandbox.dir);
 
       console.log('[Worktree Rebase Test] 4. Adding sandbox repository...');
-      const addBtn = page.locator('[data-testid="add-repo-btn"]');
-      await expect(addBtn).toBeVisible();
-      await addBtn.click();
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]');
       await expect(tabs).toHaveCount(2);
@@ -387,14 +379,9 @@ test.describe('Git Worktrees Integration', () => {
       }, sandbox.dir);
 
       console.log('[Worktree Delete Test] 3. Adding sandbox repository...');
-      const addBtn = page.locator('[data-testid="add-repo-btn"]');
-      await expect(addBtn).toBeVisible();
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]');
-      await expect(tabs).toHaveCount(1); // Wait for initial default repo tab to load
-
-      await addBtn.click();
-
       await expect(tabs).toHaveCount(2);
       await tabs.last().click();
       await page.waitForTimeout(500);

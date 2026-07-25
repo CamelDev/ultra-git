@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: '0'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
@@ -24,8 +26,10 @@ jobs:
       - name: Check for Lockfile
         run: ls -la bun.lock || echo "No bun.lock found"
 
-      - name: Install Playwright OS Dependencies
-        run: bunx playwright install --with-deps
+      - name: Install Playwright OS Dependencies and Browsers
+        run: |
+          bunx playwright install --with-deps
+          bunx playwright install chromium
 
       - name: Build Application
         run: bun run build

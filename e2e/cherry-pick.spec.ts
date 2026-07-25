@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 import fs from 'fs'
 import path from 'path'
@@ -40,9 +40,7 @@ test.describe('Cherry Pick Feature', () => {
         })
       }, sandbox.dir)
 
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)
@@ -119,8 +117,7 @@ test.describe('Cherry Pick Feature', () => {
         })
       }, sandbox.dir)
 
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)

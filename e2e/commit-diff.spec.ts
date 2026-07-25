@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 import path from 'path'
 import fs from 'fs'
@@ -53,9 +53,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       }, sandbox.dir)
 
       // Click to add repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       // Verify and switch to the sandbox repository tab
       const expectedTabName = path.basename(sandbox.dir)
@@ -178,9 +176,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       }, sandbox.dir)
 
       // Click to add repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       // switch to the sandbox repository tab
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -260,9 +256,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       }, sandbox.dir)
 
       // Click to add repository
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       // Switch to the sandbox repository tab
       const tabs = page.locator('[data-testid="repo-tab"]')
@@ -358,9 +352,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       }, sandbox.dir)
 
       console.log('[Binary File Diff Test] 5. Clicking to add repository...');
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('[Binary File Diff Test] 6. Switching to sandbox repository tab...');
       const tabs = page.locator('[data-testid="repo-tab"]')

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { launchElectronApp } from './helpers/launcher'
+import { launchElectronApp, addRepoViaUI } from './helpers/launcher'
 import { GitSandbox } from './helpers/git-sandbox'
 import fs from 'fs'
 import path from 'path'
@@ -40,12 +40,7 @@ test.describe('Git Stashes Improvements', () => {
     console.log('Electron App launched.');
 
     try {
-      console.log('4. Clearing localStorage...');
-      await page.evaluate(() => localStorage.clear())
-      await page.reload()
-      await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(1000)
-      console.log('localStorage cleared and page reloaded.');
+      console.log('4. Skipping redundant localStorage clear (already done by launcher)...');
 
       console.log('5. Mocking dialog:openDirectory...');
       await app.evaluate(async ({ ipcMain }, repoPath) => {
@@ -57,16 +52,17 @@ test.describe('Git Stashes Improvements', () => {
       console.log('dialog:openDirectory mocked.');
 
       console.log('6. Clicking to add repository...');
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
       console.log('add-repo-btn clicked.');
 
       console.log('7. Switching to the newly added repository tab...');
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)
       await tabs.last().click()
-      await page.waitForTimeout(1000)
+      // Wait a bit for tab content to render
+      await page.waitForTimeout(500)
+      const stashItem = page.locator('[data-testid="stash-item-0"]')
+      await expect(stashItem).toBeVisible({ timeout: 5000 })
       console.log('Switched to tab.');
 
       console.log('8. Verifying active branch...');
@@ -75,34 +71,43 @@ test.describe('Git Stashes Improvements', () => {
       console.log('Active branch verified.');
 
       console.log('9. Verifying stash entry in sidebar...');
-      const stashItem = page.locator('[data-testid="stash-item-0"]')
-      await expect(stashItem).toBeVisible()
+      // stashItem already waited in previous step
       await expect(stashItem).toContainText('My Awesome Stash')
       console.log('Stash entry verified in sidebar.');
 
-      console.log('10. Selecting stash entry...');
-      await stashItem.click()
-      await page.waitForTimeout(300)
-      console.log('Stash entry clicked.');
-
+      console.log('10. Hovering over stash entry to reveal action buttons...');
+      // Hover over stash item to make action buttons visible
+      await stashItem.hover()
+      await page.waitForTimeout(200)
       const popBtn = page.locator('[data-testid="stash-pop-btn-0"]')
+      await expect(popBtn).toBeVisible({ timeout: 3000 })
+      console.log('Action buttons revealed.');
+
       const detailsBtn = page.locator('[data-testid="stash-details-btn-0"]')
       const deleteBtn = page.locator('[data-testid="stash-delete-btn-0"]')
 
-      console.log('11. Verifying Pop, Details, Delete buttons...');
-      await expect(popBtn).toBeVisible()
+      console.log('11. Verifying Pop, Details, Delete buttons are visible...');
+      // Need to keep hovering to keep buttons visible
+      await stashItem.hover()
+      await page.waitForTimeout(100)
+      // popBtn already verified above
       await expect(detailsBtn).toBeVisible()
       await expect(deleteBtn).toBeVisible()
       console.log('Buttons verified.');
 
       console.log('12. Clicking Details button...');
+      // Ensure buttons are visible by hovering
+      await stashItem.hover()
+      await page.waitForTimeout(200)
       await detailsBtn.click()
-      await page.waitForTimeout(500)
+      // Wait a bit for modal animation to complete
+      await page.waitForTimeout(300)
+      const diffModal = page.locator('.diff-modal-content')
+      await expect(diffModal).toBeVisible({ timeout: 3000 })
       console.log('Details button clicked.');
 
       console.log('13. Verifying DiffModal content...');
-      const diffModal = page.locator('.diff-modal-content')
-      await expect(diffModal).toBeVisible()
+      // diffModal already waited above
       await expect(diffModal).toContainText('Stash details: stash@0')
 
       const sidebarFiles = diffModal.locator('.diff-modal-sidebar')
@@ -115,11 +120,18 @@ test.describe('Git Stashes Improvements', () => {
       console.log('14. Closing DiffModal...');
       const closeModalBtn = diffModal.locator('.diff-modal-close')
       await closeModalBtn.click()
-      await page.waitForTimeout(300)
-      await expect(diffModal).not.toBeVisible()
+      // Wait for modal animation to complete
+      await page.waitForTimeout(500)
+      await expect(diffModal).not.toBeVisible({ timeout: 3000 })
       console.log('DiffModal closed.');
 
-      console.log('15. Stash entry is already selected, proceeding...');
+      console.log('15. Re-hovering over stash entry after modal close...');
+      // Modal has closed, re-hover to make buttons visible again
+      await expect(stashItem).toBeVisible({ timeout: 3000 })
+      await stashItem.hover()
+      await page.waitForTimeout(200)
+      await expect(deleteBtn).toBeVisible({ timeout: 3000 })
+      console.log('Action buttons visible again after modal close.');
 
       console.log('16. Mocking dialog:showMessageBox to Cancel (0)...');
       await app.evaluate(async ({ ipcMain }) => {
@@ -131,15 +143,23 @@ test.describe('Git Stashes Improvements', () => {
       console.log('dialog:showMessageBox mocked.');
 
       console.log('17. Testing Delete Cancel...');
+      // Ensure buttons are visible by hovering
+      await stashItem.hover()
+      await page.waitForTimeout(200)
       await deleteBtn.click()
-      await page.waitForTimeout(500)
-      await expect(stashItem).toBeVisible()
+      // Dialog should be handled by mock, wait for stash item to still be visible
+      await page.waitForTimeout(300)
+      await expect(stashItem).toBeVisible({ timeout: 3000 })
       console.log('Delete Cancel verified.');
 
       console.log('18. Testing Pop Cancel...');
+      // Ensure buttons are visible by hovering
+      await stashItem.hover()
+      await page.waitForTimeout(200)
       await popBtn.click()
-      await page.waitForTimeout(500)
-      await expect(stashItem).toBeVisible()
+      // Dialog should be handled by mock, wait for stash item to still be visible
+      await page.waitForTimeout(300)
+      await expect(stashItem).toBeVisible({ timeout: 3000 })
       console.log('Pop Cancel verified.');
 
       console.log('19. Mocking dialog:showMessageBox to Confirm (1)...');
@@ -152,9 +172,13 @@ test.describe('Git Stashes Improvements', () => {
       console.log('dialog:showMessageBox mocked to confirm.');
 
       console.log('20. Testing Delete Confirm...');
+      // Ensure buttons are visible by hovering
+      await stashItem.hover()
+      await page.waitForTimeout(200)
       await deleteBtn.click()
-      await page.waitForTimeout(800)
-      await expect(stashItem).not.toBeVisible()
+      // Dialog should be handled by mock, wait for stash item to be removed
+      await page.waitForTimeout(500)
+      await expect(stashItem).not.toBeVisible({ timeout: 5000 })
       console.log('Delete Confirm verified. Stash is gone.');
 
     } finally {
@@ -187,11 +211,7 @@ test.describe('Git Stashes Improvements', () => {
     page.on('pageerror', err => console.error('  [BROWSER ERROR]', err.message));
 
     try {
-      console.log('[Stash Conflict Test] 5. Clearing localStorage...');
-      await page.evaluate(() => localStorage.clear())
-      await page.reload()
-      await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(1000)
+      console.log('[Stash Conflict Test] 5. Skipping redundant localStorage clear (already done by launcher)...');
 
       console.log('[Stash Conflict Test] 6. Mocking dialog:openDirectory...');
       await app.evaluate(async ({ ipcMain }, repoPath) => {
@@ -202,27 +222,25 @@ test.describe('Git Stashes Improvements', () => {
       }, sandbox.dir)
 
       console.log('[Stash Conflict Test] 7. Adding sandbox repository...');
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('[Stash Conflict Test] 8. Switching to repository tab...');
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)
       await tabs.last().click()
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(500)
+      const stashItem = page.locator('[data-testid="stash-item-0"]')
+      await expect(stashItem).toBeVisible({ timeout: 5000 })
 
       console.log('[Stash Conflict Test] 9. Verifying stash entry in sidebar...');
-      const stashItem = page.locator('[data-testid="stash-item-0"]')
-      await expect(stashItem).toBeVisible()
+      // stashItem already waited in previous step
       await expect(stashItem).toContainText('Stash to pop with conflict')
 
       console.log('[Stash Conflict Test] 10. Selecting stash entry...');
       await stashItem.click()
       await page.waitForTimeout(300)
-
       const popBtn = page.locator('[data-testid="stash-pop-btn-0"]')
-      await expect(popBtn).toBeVisible()
+      await expect(popBtn).toBeVisible({ timeout: 3000 })
 
       console.log('[Stash Conflict Test] 11. Mocking showMessageBox to Confirm Pop...');
       await app.evaluate(async ({ ipcMain }) => {
@@ -234,7 +252,10 @@ test.describe('Git Stashes Improvements', () => {
 
       console.log('[Stash Conflict Test] 12. Clicking Pop button...');
       await popBtn.click()
-      await page.waitForTimeout(2000) // Increase wait to let git finish
+      // Wait for the pop operation to complete and conflict banner to appear
+      await page.waitForTimeout(1000)
+      const conflictBanner = page.locator('[data-testid="stash-conflict-banner"]')
+      await expect(conflictBanner).toBeVisible({ timeout: 5000 })
 
       console.log('[Stash Conflict Test] Debugging repository state...');
       const debugStatus = await sandbox.git.status();
@@ -244,8 +265,7 @@ test.describe('Git Stashes Improvements', () => {
       console.log('[Stash Conflict Test] Remaining stashes count:', debugStashes.total);
 
       console.log('[Stash Conflict Test] 13. Verifying stash conflict banner is visible...');
-      const conflictBanner = page.locator('[data-testid="stash-conflict-banner"]')
-      await expect(conflictBanner).toBeVisible()
+      // conflictBanner already waited above
       await expect(conflictBanner).toContainText('Conflicts detected')
 
       console.log('[Stash Conflict Test] 14. Checking git status for conflicts on disk...');
@@ -272,11 +292,7 @@ test.describe('Git Stashes Improvements', () => {
     const { app, page } = await launchElectronApp()
 
     try {
-      console.log('[Stash Collapse Test] 3. Clearing localStorage...');
-      await page.evaluate(() => localStorage.clear())
-      await page.reload()
-      await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(1000)
+      console.log('[Stash Collapse Test] 3. Skipping redundant localStorage clear (already done by launcher)...');
 
       console.log('[Stash Collapse Test] 4. Mocking dialog:openDirectory...');
       await app.evaluate(async ({ ipcMain }, repoPath) => {
@@ -287,28 +303,28 @@ test.describe('Git Stashes Improvements', () => {
       }, sandbox.dir)
 
       console.log('[Stash Collapse Test] 5. Adding sandbox repository...');
-      const addBtn = page.locator('[data-testid="add-repo-btn"]')
-      await expect(addBtn).toBeVisible()
-      await addBtn.click()
+      await addRepoViaUI(page)
 
       console.log('[Stash Collapse Test] 6. Switching to repository tab...');
       const tabs = page.locator('[data-testid="repo-tab"]')
       await expect(tabs).toHaveCount(2)
       await tabs.last().click()
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(500)
+      const stashItem = page.locator('[data-testid="stash-item-0"]')
+      await expect(stashItem).toBeVisible({ timeout: 5000 })
 
       console.log('[Stash Collapse Test] 7. Verifying stash entry is visible initially...');
-      const stashItem = page.locator('[data-testid="stash-item-0"]')
-      await expect(stashItem).toBeVisible()
+      // stashItem already verified in previous step
 
       console.log('[Stash Collapse Test] 8. Collapsing stashes section...');
       const stashesHeader = page.locator('[data-testid="sidebar-stashes-header"]')
       await expect(stashesHeader).toBeVisible()
       await stashesHeader.click()
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(300)
+      await expect(stashItem).not.toBeVisible({ timeout: 3000 })
 
       console.log('[Stash Collapse Test] 9. Verifying stash entry is NOT visible...');
-      await expect(stashItem).not.toBeVisible()
+      // Already verified above
 
       console.log('[Stash Collapse Test] 10. Verifying localStorage has saved collapsed state as true...');
       const collapsedStorageValue = await page.evaluate(() => localStorage.getItem('sidebar-stashes-collapsed'))
@@ -316,10 +332,11 @@ test.describe('Git Stashes Improvements', () => {
 
       console.log('[Stash Collapse Test] 11. Expanding stashes section...');
       await stashesHeader.click()
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(300)
+      await expect(stashItem).toBeVisible({ timeout: 3000 })
 
       console.log('[Stash Collapse Test] 12. Verifying stash entry is visible again...');
-      await expect(stashItem).toBeVisible()
+      // Already verified above
 
       console.log('[Stash Collapse Test] 13. Verifying localStorage has saved collapsed state as false...');
       const expandedStorageValue = await page.evaluate(() => localStorage.getItem('sidebar-stashes-collapsed'))
@@ -328,21 +345,20 @@ test.describe('Git Stashes Improvements', () => {
       console.log('[Stash Collapse Test] 14. Testing persistence across reload...');
       // Explicitly collapse section, reload and check
       await stashesHeader.click()
-      await page.waitForTimeout(500)
-      await expect(stashItem).not.toBeVisible()
+      await page.waitForTimeout(300)
+      await expect(stashItem).not.toBeVisible({ timeout: 3000 })
 
       console.log('[Stash Collapse Test] 15. Reloading page...');
       await page.reload()
-      await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(1000)
+      await page.waitForLoadState('networkidle')
 
       console.log('[Stash Collapse Test] 16. Verifying section starts collapsed...');
       await expect(stashItem).not.toBeVisible()
 
       console.log('[Stash Collapse Test] 17. Expanding section after reload...');
       await stashesHeader.click()
-      await page.waitForTimeout(500)
-      await expect(stashItem).toBeVisible()
+      await page.waitForTimeout(300)
+      await expect(stashItem).toBeVisible({ timeout: 3000 })
 
     } finally {
       console.log('Closing app...');
