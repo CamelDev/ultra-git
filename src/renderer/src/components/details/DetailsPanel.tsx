@@ -3,6 +3,47 @@ import { FileText, Copy, Check } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { DiffModal } from './DiffModal'
 
+type CopiedField = 'sha' | 'message' | 'author'
+
+interface CopyButtonProps {
+  copied: boolean
+  onClick: () => void
+  tooltip: string
+  testId: string
+}
+
+const CopyButton: React.FC<CopyButtonProps> = ({ copied, onClick, tooltip, testId }) => (
+  <button
+    onClick={onClick}
+    className="copy-sha-btn"
+    data-testid={testId}
+    style={{
+      background: 'transparent',
+      border: 'none',
+      cursor: 'pointer',
+      color: copied ? '#10b981' : 'var(--text-secondary)',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '2px',
+      borderRadius: '4px',
+      transition: 'all 0.2s ease',
+      flexShrink: 0,
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.backgroundColor = 'var(--hover)'
+      e.currentTarget.style.color = copied ? '#10b981' : 'var(--text-primary)'
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.backgroundColor = 'transparent'
+      e.currentTarget.style.color = copied ? '#10b981' : 'var(--text-secondary)'
+    }}
+    data-tooltip={tooltip}
+  >
+    {copied ? <Check size={12} /> : <Copy size={12} />}
+  </button>
+)
+
 const DetailsPanel: React.FC = () => {
   const { getActiveRepo, selectedCommitHash } = useRepoStore()
   const activeRepo = getActiveRepo()
@@ -11,19 +52,19 @@ const DetailsPanel: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedFileForDiff, setSelectedFileForDiff] = useState<any | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copiedField, setCopiedField] = useState<CopiedField | null>(null)
 
   const commit = activeRepo?.commits.find((c) => c.hash === selectedCommitHash)
 
   // Reset copied state when selected commit changes
   useEffect(() => {
-    setCopied(false)
+    setCopiedField(null)
   }, [selectedCommitHash])
 
-  const handleCopySHA = (hash: string) => {
-    window.api.app.copyToClipboard(hash)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const handleCopy = (text: string, field: CopiedField) => {
+    window.api.app.copyToClipboard(text)
+    setCopiedField(field)
+    setTimeout(() => setCopiedField(null), 2000)
   }
 
   useEffect(() => {
@@ -67,12 +108,26 @@ const DetailsPanel: React.FC = () => {
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
           {commit ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-all' }}>
-                {commit.message}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-all', flex: 1 }}>
+                  {commit.message}
+                </div>
+                <CopyButton
+                  copied={copiedField === 'message'}
+                  onClick={() => handleCopy(commit.message, 'message')}
+                  tooltip="Copy commit message"
+                  testId="copy-message-btn"
+                />
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px', alignItems: 'center' }}>
                   <span>by {commit.author_name}</span>
+                  <CopyButton
+                    copied={copiedField === 'author'}
+                    onClick={() => handleCopy(commit.author_email ? `${commit.author_name} <${commit.author_email}>` : commit.author_name, 'author')}
+                    tooltip="Copy author"
+                    testId="copy-author-btn"
+                  />
                   <span>•</span>
                   <span>{new Date(commit.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
                 </div>
@@ -105,34 +160,12 @@ const DetailsPanel: React.FC = () => {
                 >
                   {commit.hash.substring(0, 7)}
                 </code>
-                <button
-                  onClick={() => handleCopySHA(commit.hash)}
-                  className="copy-sha-btn"
-                  data-testid="copy-sha-btn"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: copied ? '#10b981' : 'var(--text-secondary)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '2px',
-                    borderRadius: '4px',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--hover)'
-                    e.currentTarget.style.color = copied ? '#10b981' : 'var(--text-primary)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent'
-                    e.currentTarget.style.color = copied ? '#10b981' : 'var(--text-secondary)'
-                  }}
-                  data-tooltip="Copy full SHA"
-                >
-                  {copied ? <Check size={12} /> : <Copy size={12} />}
-                </button>
+                <CopyButton
+                  copied={copiedField === 'sha'}
+                  onClick={() => handleCopy(commit.hash, 'sha')}
+                  tooltip="Copy full SHA"
+                  testId="copy-sha-btn"
+                />
               </div>
             </div>
           ) : (

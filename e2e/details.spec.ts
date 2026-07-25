@@ -137,4 +137,71 @@ test.describe('Resizable Details Panel', () => {
       await sandbox.destroy();
     }
   });
+
+  test('should copy commit message and author via copy buttons', async () => {
+    const sandbox = new GitSandbox();
+    await sandbox.init();
+
+    // Create a commit with a known message and author
+    await sandbox.createCommit('copy.txt', 'Copy Content', 'Copy buttons test commit');
+
+    const { app, page } = await launchElectronApp();
+
+    try {
+      // Clear localStorage to ensure clean state
+      await page.evaluate(() => localStorage.clear());
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(1000);
+
+      // Mock openDirectory dialog to load sandbox repo
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath };
+        });
+      }, sandbox.dir);
+
+      // Click to add repository
+      await addRepoViaUI(page)
+
+      // Switch to the sandbox repository tab
+      const tabs = page.locator('[data-testid="repo-tab"]');
+      await expect(tabs).toHaveCount(2);
+      await tabs.last().click();
+      await page.waitForTimeout(1000);
+
+      // Click the first commit
+      const commitItems = page.locator('.commit-item');
+      await expect(commitItems).toHaveCount(2);
+      await commitItems.first().click();
+      await page.waitForTimeout(500);
+
+      const readClipboard = async () => app.evaluate(async ({ clipboard }) => {
+        return clipboard.readText();
+      });
+
+      // 1. Copy commit message
+      const copyMessageBtn = page.locator('[data-testid="copy-message-btn"]');
+      await expect(copyMessageBtn).toBeVisible();
+      await copyMessageBtn.click();
+      expect(await readClipboard()).toBe('Copy buttons test commit');
+
+      // 2. Copy author (Name <email>)
+      const copyAuthorBtn = page.locator('[data-testid="copy-author-btn"]');
+      await expect(copyAuthorBtn).toBeVisible();
+      await copyAuthorBtn.click();
+      expect(await readClipboard()).toBe('Test User <test@example.com>');
+
+      // 3. Copy SHA still works
+      const copyShaBtn = page.locator('[data-testid="copy-sha-btn"]');
+      await expect(copyShaBtn).toBeVisible();
+      await copyShaBtn.click();
+      const shaText = await readClipboard();
+      expect(shaText.length).toBe(40);
+    } finally {
+      await app.close();
+      await sandbox.destroy();
+    }
+  });
 });
