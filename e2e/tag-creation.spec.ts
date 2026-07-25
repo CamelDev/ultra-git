@@ -157,22 +157,18 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await pushTagsConfirmBtn.click()
       await page.waitForTimeout(500)
 
-      console.log('20.3. Verifying in-app success dialog is visible (replaces native alert)...')
-      const pushTagsAlertDialog = page.locator('[data-testid="push-tags-alert-dialog"]')
-      await expect(pushTagsAlertDialog).toBeVisible()
-      await expect(pushTagsAlertDialog).toContainText('All local tags have been successfully pushed')
-      await expect(pushTagsAlertDialog).toContainText('Tags Pushed')
+      console.log('20.3. Verifying success toast notification is visible...')
+      const successToast = page.locator('[data-testid="toast"][data-variant="success"]')
+      await expect(successToast).toBeVisible()
+      await expect(successToast).toContainText('All local tags have been successfully pushed')
+      await expect(successToast).toContainText('Tags Pushed')
 
-      // Confirm the dialog uses the new in-app style class (not the OS message box)
-      const dialogVariant = await pushTagsAlertDialog.getAttribute('data-variant')
-      expect(dialogVariant).toBe('success')
-
-      console.log('20.4. Closing the in-app success dialog via OK button...')
-      const pushTagsAlertOk = page.locator('[data-testid="push-tags-alert-dialog-ok"]')
-      await expect(pushTagsAlertOk).toBeVisible()
-      await pushTagsAlertOk.click()
-      await page.waitForTimeout(300)
-      await expect(pushTagsAlertDialog).not.toBeVisible()
+      console.log('20.4. Dismissing the success toast...')
+      const toastCloseBtn = successToast.locator('[data-testid="toast-close"]')
+      await expect(toastCloseBtn).toBeVisible()
+      await toastCloseBtn.click()
+      await page.waitForTimeout(500)
+      await expect(successToast).not.toBeVisible()
 
       console.log('21. Mocking dialog:showMessageBox for deleting tag (still uses native dialog)...')
       await app.evaluate(async ({ ipcMain }) => {
