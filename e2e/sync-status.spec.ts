@@ -130,10 +130,6 @@ test.describe('Branch Sync Status', () => {
         ipcMain.handle('dialog:openDirectory', async () => {
           return { canceled: false, path: sandboxPath }
         })
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async () => {
-          return { success: true, response: 0 }
-        })
       }, localSandbox.dir)
 
       await addRepoViaUI(page)
@@ -161,8 +157,14 @@ test.describe('Branch Sync Status', () => {
       await expect(pushAheadBadge).toBeVisible()
       await expect(pushAheadBadge).toContainText('1')
 
-      // Click Pull
+      // Click Pull, then confirm in the custom pull dialog
       await pullBtn.click()
+      const pullDialog = page.locator('[data-testid="pull-custom-dialog"]')
+      await expect(pullDialog).toBeVisible()
+      await expect(pullDialog).toContainText('Pull Changes')
+      const pullConfirmBtn = page.locator('[data-testid="pull-custom-dialog-action-pull"]')
+      await expect(pullConfirmBtn).toBeVisible()
+      await pullConfirmBtn.click()
       await expect(pullBtn).toBeEnabled({ timeout: 15000 }) // Wait for pull to complete and refresh
 
       // Pull behind badge should be gone
@@ -212,18 +214,23 @@ test.describe('Branch Sync Status', () => {
       await page.waitForTimeout(1000)
 
       const pullBtn = page.locator('[data-testid="pull-btn"]')
-      
-      // Mock message box response so it doesn't block the test
-      await app.evaluate(({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async () => {
-          return { success: true, response: 0 }
-        })
-      })
 
-      // Click Pull to cause conflict
+      // Click Pull, then confirm in the custom pull dialog
       await pullBtn.click()
+      const pullDialog = page.locator('[data-testid="pull-custom-dialog"]')
+      await expect(pullDialog).toBeVisible()
+      const pullConfirmBtn = page.locator('[data-testid="pull-custom-dialog-action-pull"]')
+      await expect(pullConfirmBtn).toBeVisible()
+      await pullConfirmBtn.click()
       await expect(pullBtn).toBeEnabled({ timeout: 15000 })
+
+      // Dismiss the custom conflict result dialog (replaces the native warning)
+      const resultDialog = page.locator('[data-testid="pull-result-dialog"]')
+      await expect(resultDialog).toBeVisible()
+      await expect(resultDialog).toContainText('Merge Conflicts Detected')
+      const okBtn = page.locator('[data-testid="pull-result-dialog-ok"]')
+      await expect(okBtn).toBeVisible()
+      await okBtn.click()
 
       // Conflict banner should be visible
       const conflictBanner = page.locator('[data-testid="pull-conflict-banner"]')

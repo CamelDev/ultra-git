@@ -106,6 +106,32 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     })
   }
 
+  // Pull confirmation dialog state
+  const [pullDialog, setPullDialog] = useState<{
+    isOpen: boolean
+    resolve?: (result: { action: string; prune: boolean }) => void
+  }>({ isOpen: false })
+
+  // Pull result dialog state (conflicts / errors after a pull)
+  const [pullResultDialog, setPullResultDialog] = useState<{
+    isOpen: boolean
+    variant: 'info' | 'success' | 'warning' | 'error'
+    title: string
+    message: string
+  }>({ isOpen: false, variant: 'info', title: '', message: '' })
+
+  const showCustomPullDialog = (): Promise<{ action: string; prune: boolean }> => {
+    return new Promise((resolve) => {
+      setPullDialog({
+        isOpen: true,
+        resolve: (result) => {
+          setPullDialog((prev) => ({ ...prev, isOpen: false }))
+          resolve(result)
+        }
+      })
+    })
+  }
+
   // Commit search state
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchFocused, setIsSearchFocused] = useState(false)
@@ -293,31 +319,20 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
 
   const handlePull = async () => {
     if (!activeRepo || isPulling || isPushing) return
+
+    const confirmResult = await showCustomPullDialog()
+    if (confirmResult.action !== 'pull') return
+
     setIsPulling(true)
     try {
-      const confirmRes = await window.api.app.showMessageBox({
-        type: 'question',
-        title: 'Pull Changes',
-        message: 'Are you sure you want to pull changes from the remote repository?',
-        buttons: ['Pull', 'Cancel'],
-        defaultId: 0,
-        cancelId: 1,
-        checkboxLabel: 'Prune deleted remote branches',
-        checkboxChecked: true
-      })
-
-      if (!confirmRes.success || confirmRes.response !== 0) {
-        setIsPulling(false)
-        return
-      }
-
-      const prune = confirmRes.checkboxChecked ?? true
+      const prune = confirmResult.prune
       const res = await window.api.git.pull(activeRepo.path, prune)
       await refreshRepo(activeRepo.id)
       if (res.success) {
         if (res.data?.hadConflicts) {
-          await window.api.app.showMessageBox({
-            type: 'warning',
+          setPullResultDialog({
+            isOpen: true,
+            variant: 'warning',
             title: 'Merge Conflicts Detected',
             message: 'Pull succeeded but resulted in merge conflicts. Conflicting files are listed under active changes with conflict markers. Please resolve them and commit.'
           })
@@ -329,15 +344,17 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
           })
         }
       } else {
-        await window.api.app.showMessageBox({
-          type: 'error',
+        setPullResultDialog({
+          isOpen: true,
+          variant: 'error',
           title: 'Pull Failed',
           message: res.error || 'Failed to pull from remote repository.'
         })
       }
     } catch (err: any) {
-      await window.api.app.showMessageBox({
-        type: 'error',
+      setPullResultDialog({
+        isOpen: true,
+        variant: 'error',
         title: 'Error',
         message: err.message || 'An unexpected error occurred during pull.'
       })
@@ -2243,6 +2260,34 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
           if (pushForceDialog.resolve) pushForceDialog.resolve('cancel')
         }}
         testId="push-force-custom-dialog"
+      />
+
+      <AppDialog
+        isOpen={pullDialog.isOpen}
+        title="Pull Changes"
+        message="Are you sure you want to pull changes from the remote repository?"
+        variant="info"
+        actions={[
+          { label: 'Pull', value: 'pull', variant: 'primary' },
+          { label: 'Cancel', value: 'cancel', variant: 'secondary' }
+        ]}
+        checkbox={{ label: 'Prune deleted remote branches', initialChecked: true }}
+        onResolve={(value, checkboxChecked) => {
+          if (pullDialog.resolve) pullDialog.resolve({ action: value, prune: checkboxChecked ?? true })
+        }}
+        onCancel={() => {
+          if (pullDialog.resolve) pullDialog.resolve({ action: 'cancel', prune: true })
+        }}
+        testId="pull-custom-dialog"
+      />
+
+      <AppDialog
+        isOpen={pullResultDialog.isOpen}
+        title={pullResultDialog.title}
+        message={pullResultDialog.message}
+        variant={pullResultDialog.variant}
+        onCancel={() => setPullResultDialog((prev) => ({ ...prev, isOpen: false }))}
+        testId="pull-result-dialog"
       />
     </div>
   )

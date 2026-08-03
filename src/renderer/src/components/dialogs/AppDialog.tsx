@@ -38,8 +38,10 @@ export interface AppDialogProps {
   /**
    * Called with the `value` of the clicked action. If undefined or omitted,
    * the dialog is closed automatically when an action is clicked.
+   * When a `checkbox` is provided, the current checkbox state is passed as
+   * the second argument.
    */
-  onResolve?: (value: string) => void
+  onResolve?: (value: string, checkboxChecked?: boolean) => void
   /**
    * Called when the dialog is dismissed without choosing an action (overlay
    * click, close button, Escape key). When omitted, the dialog is treated
@@ -113,7 +115,7 @@ export const AppDialog: React.FC<AppDialogProps> = ({
 
   const handleActionClick = (action: AppDialogAction) => {
     if (action.setsBusy) setBusyValue(action.value)
-    if (onResolve) onResolve(action.value)
+    if (onResolve) onResolve(action.value, checkbox ? checkboxChecked : undefined)
   }
 
   const defaultIcon = (() => {
