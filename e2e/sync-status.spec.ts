@@ -224,13 +224,15 @@ test.describe('Branch Sync Status', () => {
       await pullConfirmBtn.click()
       await expect(pullBtn).toBeEnabled({ timeout: 15000 })
 
-      // Dismiss the custom conflict result dialog (replaces the native warning)
+      // Dismiss the custom conflict result dialog via the "Later" action
+      // (Smart Pull offers Resolve / Abort Pull / Later for conflicted pulls)
       const resultDialog = page.locator('[data-testid="pull-result-dialog"]')
       await expect(resultDialog).toBeVisible()
       await expect(resultDialog).toContainText('Merge Conflicts Detected')
-      const okBtn = page.locator('[data-testid="pull-result-dialog-ok"]')
-      await expect(okBtn).toBeVisible()
-      await okBtn.click()
+      const laterBtn = page.locator('[data-testid="pull-result-dialog-action-later"]')
+      await expect(laterBtn).toBeVisible()
+      // dispatchEvent: an inline <pre> conflict preview may overlay the button
+      await laterBtn.dispatchEvent('click')
 
       // Conflict banner should be visible
       const conflictBanner = page.locator('[data-testid="pull-conflict-banner"]')

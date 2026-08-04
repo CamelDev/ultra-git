@@ -20,6 +20,16 @@ const extractTags = (refs: string | undefined): string[] => {
     .map(ref => ref.substring(5));
 };
 
+/** User's choice returned by the Smart Pull dialog. */
+interface SmartPullChoice {
+  action: 'pull' | 'cancel'
+  mode: 'direct' | 'stash' | 'commit'
+  strategy: PullStrategy
+  includeUntracked: boolean
+  prune: boolean
+  commitMessage?: string
+}
+
 const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const { getActiveRepo, selectedCommitHash, setSelectedCommitHash, refreshRepo, identities, setRepoIdentity, previewBranch, previewCommits, previewCommitLimit, clearBranchPreview, loadMoreBranchCommits, isLoadingPreview } = useRepoStore()
   const { addToast } = useToaster()
@@ -106,31 +116,83 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     })
   }
 
-  // Pull confirmation dialog state
-  const [pullDialog, setPullDialog] = useState<{
+  // Smart Pull dialog state (see docs/smart-pull-design.md)
+  const [smartPullDialog, setSmartPullDialog] = useState<{
     isOpen: boolean
-    resolve?: (result: { action: string; prune: boolean }) => void
-  }>({ isOpen: false })
+    plan: PullPlan | null
+    resolve?: (choice: SmartPullChoice) => void
+  }>({ isOpen: false, plan: null })
 
-  // Pull result dialog state (conflicts / errors after a pull)
+  // Smart Pull dialog form state (reset every time the dialog opens)
+  const [pullMode, setPullMode] = useState<'stash' | 'commit'>('stash')
+  const [pullStrategy, setPullStrategy] = useState<PullStrategy>('merge')
+  const [pullIncludeUntracked, setPullIncludeUntracked] = useState(true)
+  const [pullPrune, setPullPrune] = useState(true)
+  const [pullCommitMessage, setPullCommitMessage] = useState('')
+
+  // Pull result dialog state — supports action buttons (Resolve/Abort/Later, retries)
   const [pullResultDialog, setPullResultDialog] = useState<{
     isOpen: boolean
     variant: 'info' | 'success' | 'warning' | 'error'
     title: string
     message: string
+    actions?: AppDialogAction[]
+    resolve?: (value: string) => void
   }>({ isOpen: false, variant: 'info', title: '', message: '' })
 
-  const showCustomPullDialog = (): Promise<{ action: string; prune: boolean }> => {
+  const showSmartPullDialog = (plan: PullPlan): Promise<SmartPullChoice> => {
     return new Promise((resolve) => {
-      setPullDialog({
+      setPullMode('stash')
+      setPullStrategy('merge')
+      setPullIncludeUntracked(true)
+      setPullPrune(true)
+      setPullCommitMessage('')
+      setSmartPullDialog({
         isOpen: true,
-        resolve: (result) => {
-          setPullDialog((prev) => ({ ...prev, isOpen: false }))
-          resolve(result)
+        plan,
+        resolve: (choice) => {
+          setSmartPullDialog((prev) => ({ ...prev, isOpen: false }))
+          resolve(choice)
         }
       })
     })
   }
+
+  const showPullResultDialog = (
+    title: string,
+    message: string,
+    variant: 'info' | 'success' | 'warning' | 'error',
+    actions?: AppDialogAction[]
+  ): Promise<string> => {
+    return new Promise((resolve) => {
+      setPullResultDialog({
+        isOpen: true,
+        title,
+        message,
+        variant,
+        actions,
+        resolve: (value) => {
+          setPullResultDialog((prev) => ({ ...prev, isOpen: false }))
+          resolve(value)
+        }
+      })
+    })
+  }
+
+  // Close Smart Pull dialog on Escape
+  useEffect(() => {
+    if (!smartPullDialog.isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        if (smartPullDialog.resolve) {
+          smartPullDialog.resolve({ action: 'cancel', mode: 'direct', strategy: 'merge', includeUntracked: true, prune: true })
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [smartPullDialog.isOpen, smartPullDialog.resolve])
 
   // Commit search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -317,47 +379,232 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     }
   }, [selectedCommitHash, filteredCommits])
 
-  const handlePull = async () => {
-    if (!activeRepo || isPulling || isPushing) return
+  /** Maps a typed pull error code to a friendly message (raw git output as fallback). */
+  const friendlyPullError = (result: PullResult): string => {
+    switch (result.errorCode) {
+      case 'NO_UPSTREAM':
+        return 'The current branch is not tracking any remote branch. Set an upstream branch first.'
+      case 'UNRELATED_HISTORIES':
+        return 'The remote repository has a completely different history than your local repository (unrelated histories). The merge was refused.'
+      case 'DIRTY_OVERLAP':
+        return 'Your local uncommitted changes would be overwritten by the incoming changes. Please stash or commit them first.'
+      case 'AUTH':
+        return 'Authentication with the remote repository failed. Check the credentials of the identity configured for this repository.'
+      case 'NETWORK':
+        return 'Could not connect to the remote repository. Check your network connection and try again.'
+      case 'STASH_FAILED':
+        return `Failed to stash your local changes before pulling. The pull was not started.\n\n${result.detail || ''}`
+      default:
+        return result.detail || 'Failed to pull from remote repository.'
+    }
+  }
 
-    const confirmResult = await showCustomPullDialog()
-    if (confirmResult.action !== 'pull') return
+  /** Aborts an in-progress merge/rebase left behind by a conflicted pull. */
+  const handlePullAbort = async (strategy?: PullStrategy) => {
+    if (!activeRepo) return
+    try {
+      const res = strategy === 'rebase'
+        ? await window.api.git.abortRebase(activeRepo.path)
+        : await window.api.git.abortMerge(activeRepo.path)
+      if (res.success) {
+        addToast({
+          variant: 'info',
+          title: 'Pull Aborted',
+          message: 'The pull was rolled back. Your repository is back to its pre-pull state.'
+        })
+      } else {
+        addToast({ variant: 'error', title: 'Abort Failed', message: res.error || 'Failed to abort the operation.' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Abort Failed', message: err.message || 'Failed to abort the operation.' })
+    } finally {
+      await refreshRepo(activeRepo.id)
+    }
+  }
+
+  /** Routes a typed PullResult to the appropriate UX (toast / dialog / resolver / abort). */
+  const presentPullResult = async (result: PullResult, behindCount: number, upstream: string, stashedAndReapplied: boolean, prune: boolean): Promise<void> => {
+    if (!activeRepo) return
+    switch (result.status) {
+      case 'up-to-date':
+        addToast({ variant: 'info', title: 'Already Up To Date', message: `No new changes on ${upstream}.` })
+        break
+      case 'success':
+        addToast({
+          variant: 'success',
+          title: 'Pull Successful',
+          message: stashedAndReapplied
+            ? `Pulled ${behindCount} commit(s) from ${upstream} and re-applied your uncommitted changes.`
+            : `Pulled ${behindCount} commit(s) from ${upstream}.`
+        })
+        break
+      case 'merge-conflicts': {
+        const stashNote = result.stashedChanges
+          ? '\n\nYour uncommitted changes were stashed beforehand and are safe in the Stashes panel — re-apply them after resolving.'
+          : ''
+        const action = await showPullResultDialog(
+          'Merge Conflicts Detected',
+          `Pull stopped with conflicts in ${result.conflictedFiles?.length ?? 0} file(s). Resolve them and commit to complete the pull, or abort to roll back to the pre-pull state.${stashNote}`,
+          'warning',
+          [
+            { label: 'Resolve Conflicts', value: 'resolve', variant: 'primary' },
+            { label: 'Abort Pull', value: 'abort', variant: 'danger' },
+            { label: 'Later', value: 'later', variant: 'secondary' }
+          ]
+        )
+        if (action === 'resolve' && onOpenConflictResolver) onOpenConflictResolver()
+        else if (action === 'abort') await handlePullAbort(result.strategy)
+        break
+      }
+      case 'stash-pop-conflicts': {
+        const conflictCount = result.conflictedFiles?.length ?? 0
+        const what = conflictCount > 0
+          ? `caused conflicts in ${conflictCount} file(s)`
+          : 'could not be fully re-applied (some stashed files now exist upstream)'
+        const action = await showPullResultDialog(
+          'Changes Re-applied With Conflicts',
+          `The pull itself succeeded, but re-applying your uncommitted changes ${what}.\n\nNothing is lost — your stash (${result.stashRef || 'stash@{0}'}) was kept and is listed in the Stashes panel. Resolve the conflicts, then drop the stash.`,
+          'warning',
+          [
+            { label: 'Resolve Conflicts', value: 'resolve', variant: 'primary' },
+            { label: 'Later', value: 'later', variant: 'secondary' }
+          ]
+        )
+        if (action === 'resolve' && onOpenConflictResolver) onOpenConflictResolver()
+        break
+      }
+      case 'failed': {
+        if (result.errorCode === 'FF_ONLY_DIVERGED') {
+          const action = await showPullResultDialog(
+            'Fast-Forward Not Possible',
+            'Your local branch has diverged from the remote, so it cannot be fast-forwarded.\n\nPull again creating a merge commit instead?',
+            'warning',
+            [
+              { label: 'Pull with Merge', value: 'merge', variant: 'primary' },
+              { label: 'Cancel', value: 'cancel', variant: 'secondary' }
+            ]
+          )
+          if (action === 'merge') {
+            const retryRes = await window.api.git.smartPull(activeRepo.path, { strategy: 'merge', stash: false, prune })
+            await refreshRepo(activeRepo.id)
+            if (retryRes.success && retryRes.data) {
+              await presentPullResult(retryRes.data, behindCount, upstream, false, prune)
+            } else {
+              await showPullResultDialog('Pull Failed', retryRes.error || 'Failed to pull from remote repository.', 'error')
+            }
+          }
+        } else {
+          await showPullResultDialog('Pull Failed', friendlyPullError(result), 'error')
+        }
+        break
+      }
+    }
+  }
+
+  const handlePull = async () => {
+    if (!activeRepo || isPulling || isPushing || smartPullDialog.isOpen || pullResultDialog.isOpen) return
 
     setIsPulling(true)
     try {
-      const prune = confirmResult.prune
-      const res = await window.api.git.pull(activeRepo.path, prune)
-      await refreshRepo(activeRepo.id)
-      if (res.success) {
-        if (res.data?.hadConflicts) {
-          setPullResultDialog({
-            isOpen: true,
-            variant: 'warning',
-            title: 'Merge Conflicts Detected',
-            message: 'Pull succeeded but resulted in merge conflicts. Conflicting files are listed under active changes with conflict markers. Please resolve them and commit.'
-          })
-        } else {
-          addToast({
-            variant: 'success',
-            title: 'Pull Successful',
-            message: 'Changes have been pulled from the remote repository.'
-          })
-        }
-      } else {
-        setPullResultDialog({
-          isOpen: true,
-          variant: 'error',
-          title: 'Pull Failed',
-          message: res.error || 'Failed to pull from remote repository.'
-        })
+      // Phase 1: preflight — fetch + state/overlap analysis
+      const preRes = await window.api.git.pullPreflight(activeRepo.path)
+      if (!preRes.success || !preRes.data) {
+        setIsPulling(false)
+        await showPullResultDialog('Pull Failed', preRes.error || 'Failed to analyze the repository state before pulling.', 'error')
+        return
       }
-    } catch (err: any) {
-      setPullResultDialog({
-        isOpen: true,
-        variant: 'error',
-        title: 'Error',
-        message: err.message || 'An unexpected error occurred during pull.'
+      const plan = preRes.data
+
+      // Blockers: states in which pulling is impossible or unsafe
+      if (!plan.ok) {
+        setIsPulling(false)
+        switch (plan.blocker) {
+          case 'NO_UPSTREAM': {
+            const action = await showPullResultDialog(
+              'No Upstream Branch',
+              `The current branch "${activeRepo.branch}" is not tracking any remote branch, so there is nothing to pull from.\n\nSet an upstream branch to enable pulling.`,
+              'warning',
+              [
+                { label: 'Set Upstream...', value: 'set-upstream', variant: 'primary' },
+                { label: 'Cancel', value: 'cancel', variant: 'secondary' }
+              ]
+            )
+            if (action === 'set-upstream') {
+              let initialRemote = 'origin'
+              const initialBranch = activeRepo.branch || 'main'
+              try {
+                const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+                if (remotesRes.success && remotesRes.data && remotesRes.data.length > 0) {
+                  initialRemote = remotesRes.data[0].name
+                }
+              } catch (e) {
+                console.error('Failed to load remotes', e)
+              }
+              setUpstreamRemote(initialRemote)
+              setUpstreamBranch(initialBranch)
+              setUpstreamError('')
+              setIsUpstreamModalOpen(true)
+            }
+            return
+          }
+          case 'MERGE_IN_PROGRESS':
+            await showPullResultDialog('Merge In Progress', 'A merge is already in progress in this repository. Resolve it (or abort it) before pulling new changes.', 'warning')
+            return
+          case 'REBASE_IN_PROGRESS':
+            await showPullResultDialog('Rebase In Progress', 'A rebase is already in progress in this repository. Finish it (or abort it) before pulling new changes.', 'warning')
+            return
+          case 'CHERRY_PICK_IN_PROGRESS':
+            await showPullResultDialog('Cherry-pick In Progress', 'A cherry-pick is already in progress in this repository. Finish it (or abort it) before pulling new changes.', 'warning')
+            return
+          case 'FETCH_FAILED':
+            await showPullResultDialog('Fetch Failed', `Could not reach the remote repository to check for new changes.\n\n${plan.detail || ''}`, 'error')
+            return
+          default:
+            await showPullResultDialog('Pull Failed', 'The repository is not in a state that allows pulling.', 'error')
+            return
+        }
+      }
+
+      // Nothing to pull
+      if (plan.behind === 0) {
+        addToast({ variant: 'info', title: 'Already Up To Date', message: `Your branch is up to date with ${plan.upstream}.` })
+        await refreshRepo(activeRepo.id)
+        return
+      }
+
+      // Phase 2: state-aware dialog
+      const choice = await showSmartPullDialog(plan)
+      if (choice.action !== 'pull') return
+
+      // Commit-first path: commit staged changes before pulling
+      if (choice.mode === 'commit' && choice.commitMessage) {
+        const commitRes = await window.api.git.commit(activeRepo.path, choice.commitMessage)
+        if (!commitRes.success) {
+          setIsPulling(false)
+          await showPullResultDialog('Commit Failed', `${commitRes.error || 'Failed to commit staged changes.'}\n\nThe pull was not started.`, 'error')
+          return
+        }
+      }
+
+      // Phase 3: orchestrated pull (optional app-managed autostash)
+      const res = await window.api.git.smartPull(activeRepo.path, {
+        strategy: choice.strategy,
+        stash: choice.mode !== 'direct',
+        stashIncludeUntracked: choice.includeUntracked,
+        prune: choice.prune
       })
+      await refreshRepo(activeRepo.id)
+      // The git work is done — release the busy state before presenting
+      // (potentially long-lived) result dialogs.
+      setIsPulling(false)
+      if (!res.success || !res.data) {
+        await showPullResultDialog('Pull Failed', res.error || 'Failed to pull from remote repository.', 'error')
+        return
+      }
+      await presentPullResult(res.data, plan.behind, plan.upstream || 'the remote', choice.mode !== 'direct', choice.prune)
+    } catch (err: any) {
+      setIsPulling(false)
+      await showPullResultDialog('Error', err.message || 'An unexpected error occurred during pull.', 'error')
     } finally {
       setIsPulling(false)
     }
@@ -1135,7 +1382,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         >
           <AlertTriangle size={14} style={{ flexShrink: 0 }} />
           <span>
-            Merge conflicts detected in {activeRepo.status.conflicted.length} file(s).
+            Merge conflicts detected in {activeRepo?.status?.conflicted?.length} file(s).
           </span>
           {onOpenConflictResolver && (
             <button
@@ -2262,31 +2509,283 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         testId="push-force-custom-dialog"
       />
 
-      <AppDialog
-        isOpen={pullDialog.isOpen}
-        title="Pull Changes"
-        message="Are you sure you want to pull changes from the remote repository?"
-        variant="info"
-        actions={[
-          { label: 'Pull', value: 'pull', variant: 'primary' },
-          { label: 'Cancel', value: 'cancel', variant: 'secondary' }
-        ]}
-        checkbox={{ label: 'Prune deleted remote branches', initialChecked: true }}
-        onResolve={(value, checkboxChecked) => {
-          if (pullDialog.resolve) pullDialog.resolve({ action: value, prune: checkboxChecked ?? true })
-        }}
-        onCancel={() => {
-          if (pullDialog.resolve) pullDialog.resolve({ action: 'cancel', prune: true })
-        }}
-        testId="pull-custom-dialog"
-      />
+      {/* Smart Pull dialog — state-aware options driven by the preflight PullPlan */}
+      {smartPullDialog.isOpen && smartPullDialog.plan && (() => {
+        const plan = smartPullDialog.plan
+        const untrackedOverlap = plan.overlappingFiles.filter((f) => plan.untrackedFiles.includes(f))
+        const forceIncludeUntracked = untrackedOverlap.length > 0
+        const showStashOptions = plan.needsStash
+        const commitInvalid = showStashOptions && pullMode === 'commit' && pullCommitMessage.trim().length <= 2
+
+        const resolveWith = (action: 'pull' | 'cancel') => {
+          if (!smartPullDialog.resolve) return
+          smartPullDialog.resolve({
+            action,
+            mode: showStashOptions ? pullMode : 'direct',
+            strategy: plan.diverged ? pullStrategy : 'merge',
+            includeUntracked: forceIncludeUntracked ? true : pullIncludeUntracked,
+            prune: pullPrune,
+            commitMessage: showStashOptions && pullMode === 'commit' ? pullCommitMessage.trim() : undefined
+          })
+        }
+
+        const radioCardStyle = (active: boolean, accent = 'var(--accent)') => ({
+          border: active ? `2px solid ${accent}` : '1px solid var(--border)',
+          borderRadius: '6px',
+          padding: '10px 12px',
+          cursor: 'pointer',
+          backgroundColor: active ? 'rgba(99, 102, 241, 0.05)' : 'transparent',
+          transition: 'all 0.15s ease'
+        }) as React.CSSProperties
+
+        return (
+          <div
+            className="diff-modal-overlay"
+            style={{ zIndex: 1100 }}
+            onClick={() => resolveWith('cancel')}
+          >
+            <div
+              className="diff-modal-content"
+              style={{
+                maxWidth: '500px',
+                width: '90%',
+                height: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                padding: 0
+              }}
+              onClick={(e) => e.stopPropagation()}
+              data-testid="pull-custom-dialog"
+            >
+              {/* Header */}
+              <div className="diff-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+                <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ArrowDown size={16} />
+                  Pull Changes
+                </h2>
+                <button
+                  className="diff-modal-close"
+                  onClick={() => resolveWith('cancel')}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}
+                  data-testid="pull-custom-dialog-close"
+                  data-tooltip="Close dialog"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '70vh', overflowY: 'auto' }}>
+                {/* Sync summary */}
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }} data-testid="pull-dialog-summary">
+                  <strong>{plan.behind}</strong> new commit(s) on <strong>{plan.upstream}</strong>.
+                  {plan.diverged
+                    ? <> Your branch has <strong>{plan.ahead}</strong> local commit(s) that are not on the remote.</>
+                    : plan.canFastForward
+                      ? <> Your branch will be fast-forwarded.</>
+                      : null}
+                </div>
+
+                {/* Overlap warning + handling options */}
+                {showStashOptions && (
+                  <>
+                    <div
+                      style={{
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        border: '1px solid rgba(245, 158, 11, 0.4)',
+                        borderRadius: '6px',
+                        padding: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px'
+                      }}
+                      data-testid="pull-overlap-warning"
+                    >
+                      <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b', fontSize: '12px' }}>
+                        <AlertTriangle size={14} />
+                        Uncommitted changes overlap with incoming commits
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        {plan.overlappingFiles.length} file(s) have local changes and are also changed upstream — a plain pull would fail:
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '110px', overflowY: 'auto' }}>
+                        {plan.overlappingFiles.slice(0, 8).map((f) => (
+                          <code key={f} style={{ fontSize: '11px', color: 'var(--text-primary)', backgroundColor: 'var(--bg-primary)', borderRadius: '3px', padding: '2px 6px' }}>
+                            {f}
+                          </code>
+                        ))}
+                        {plan.overlappingFiles.length > 8 && (
+                          <span style={{ fontSize: '10px', color: 'var(--text-secondary)', paddingLeft: '4px' }}>
+                            +{plan.overlappingFiles.length - 8} more…
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div
+                        onClick={() => setPullMode('stash')}
+                        style={radioCardStyle(pullMode === 'stash')}
+                        data-testid="pull-mode-stash-card"
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                          <input type="radio" name="pullMode" checked={pullMode === 'stash'} onChange={() => setPullMode('stash')} style={{ cursor: 'pointer' }} />
+                          <strong style={{ fontSize: '12px', color: 'var(--text-primary)' }}>Stash, pull, and re-apply</strong>
+                          <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recommended</span>
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', paddingLeft: '22px' }}>
+                          Your changes are safely stashed, the incoming commits are pulled, then your changes are re-applied on top.
+                        </div>
+                      </div>
+
+                      {plan.hasStaged && (
+                        <div
+                          onClick={() => setPullMode('commit')}
+                          style={radioCardStyle(pullMode === 'commit')}
+                          data-testid="pull-mode-commit-card"
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                            <input type="radio" name="pullMode" checked={pullMode === 'commit'} onChange={() => setPullMode('commit')} style={{ cursor: 'pointer' }} />
+                            <strong style={{ fontSize: '12px', color: 'var(--text-primary)' }}>Commit staged changes first</strong>
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', paddingLeft: '22px' }}>
+                            Turns your staged changes into a local commit, then pulls. Remaining uncommitted changes are stashed and re-applied.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {pullMode === 'commit' && plan.hasStaged && (
+                      <input
+                        type="text"
+                        placeholder="Commit message for staged changes..."
+                        value={pullCommitMessage}
+                        onChange={(e) => setPullCommitMessage(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '4px',
+                          border: commitInvalid ? '1px solid rgba(245, 158, 11, 0.6)' : '1px solid var(--border)',
+                          backgroundColor: 'var(--bg-primary)',
+                          color: 'var(--text-primary)',
+                          fontSize: '13px',
+                          outline: 'none',
+                          boxSizing: 'border-box'
+                        }}
+                        data-testid="pull-commit-message-input"
+                      />
+                    )}
+                  </>
+                )}
+
+                {/* Non-overlapping dirty tree notice */}
+                {!showStashOptions && plan.dirtyKind !== 'clean' && (
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }} data-testid="pull-safe-dirty-note">
+                    <AlertTriangle size={12} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                    Your uncommitted changes do not overlap with the incoming commits and will be preserved.
+                  </div>
+                )}
+
+                {/* Integration strategy (only when histories diverged) */}
+                {plan.diverged && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }} data-testid="pull-strategy-section">
+                    <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      INTEGRATION STRATEGY
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                      <input type="radio" name="pullStrategy" checked={pullStrategy === 'merge'} onChange={() => setPullStrategy('merge')} data-testid="pull-strategy-merge" />
+                      Merge commit <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>— combines both histories (default)</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                      <input type="radio" name="pullStrategy" checked={pullStrategy === 'rebase'} onChange={() => setPullStrategy('rebase')} data-testid="pull-strategy-rebase" />
+                      Rebase <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>— replays your {plan.ahead} commit(s) on top, linear history</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                      <input type="radio" name="pullStrategy" checked={pullStrategy === 'ff-only'} onChange={() => setPullStrategy('ff-only')} data-testid="pull-strategy-ff-only" />
+                      Fast-forward only <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>— fails instead of merging (safest)</span>
+                    </label>
+                  </div>
+                )}
+
+                {/* Options */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {(showStashOptions || plan.dirtyKind !== 'clean') && (
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '12px',
+                        color: 'var(--text-primary)',
+                        cursor: forceIncludeUntracked ? 'not-allowed' : 'pointer',
+                        opacity: forceIncludeUntracked ? 0.7 : 1
+                      }}
+                      data-tooltip={forceIncludeUntracked ? 'Required: an untracked file collides with an incoming file' : undefined}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={forceIncludeUntracked ? true : pullIncludeUntracked}
+                        disabled={forceIncludeUntracked}
+                        onChange={(e) => setPullIncludeUntracked(e.target.checked)}
+                        style={{ cursor: forceIncludeUntracked ? 'not-allowed' : 'pointer' }}
+                        data-testid="pull-include-untracked-checkbox"
+                      />
+                      Include untracked files in stash
+                    </label>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={pullPrune}
+                      onChange={(e) => setPullPrune(e.target.checked)}
+                      style={{ cursor: 'pointer' }}
+                      data-testid="pull-prune-checkbox"
+                    />
+                    Prune deleted remote branches
+                  </label>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px', backgroundColor: 'var(--bg-secondary)' }}>
+                <button
+                  className="btn-secondary"
+                  onClick={() => resolveWith('cancel')}
+                  data-testid="pull-custom-dialog-action-cancel"
+                  data-tooltip="Cancel and close dialog"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={() => resolveWith('pull')}
+                  disabled={commitInvalid}
+                  style={{ opacity: commitInvalid ? 0.5 : 1, cursor: commitInvalid ? 'not-allowed' : 'pointer' }}
+                  data-testid="pull-custom-dialog-action-pull"
+                  data-tooltip={commitInvalid ? 'Enter a commit message (3+ characters) for your staged changes' : 'Pull changes from the remote repository'}
+                >
+                  {showStashOptions && pullMode === 'commit' ? 'Commit & Pull' : 'Pull'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       <AppDialog
         isOpen={pullResultDialog.isOpen}
         title={pullResultDialog.title}
         message={pullResultDialog.message}
         variant={pullResultDialog.variant}
-        onCancel={() => setPullResultDialog((prev) => ({ ...prev, isOpen: false }))}
+        actions={pullResultDialog.actions}
+        onResolve={(value) => {
+          if (pullResultDialog.resolve) pullResultDialog.resolve(value)
+        }}
+        onCancel={() => {
+          if (pullResultDialog.resolve) pullResultDialog.resolve('cancel')
+          else setPullResultDialog((prev) => ({ ...prev, isOpen: false }))
+        }}
         testId="pull-result-dialog"
       />
     </div>

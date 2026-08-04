@@ -2,6 +2,46 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 
 declare global {
+  // Smart Pull types (mirrors src/main/git.ts — keep in sync)
+  type PullDirtyKind = 'clean' | 'untracked-only' | 'tracked-dirty'
+  type PullBlocker = 'NO_UPSTREAM' | 'MERGE_IN_PROGRESS' | 'REBASE_IN_PROGRESS' | 'CHERRY_PICK_IN_PROGRESS' | 'FETCH_FAILED'
+  type PullStrategy = 'merge' | 'rebase' | 'ff-only'
+
+  interface PullPlan {
+    ok: boolean
+    blocker?: PullBlocker
+    upstream?: string
+    ahead: number
+    behind: number
+    canFastForward: boolean
+    diverged: boolean
+    dirtyKind: PullDirtyKind
+    changedFiles: string[]
+    untrackedFiles: string[]
+    incomingFiles: string[]
+    overlappingFiles: string[]
+    hasStaged: boolean
+    needsStash: boolean
+    detail?: string
+  }
+
+  interface SmartPullOptions {
+    strategy?: PullStrategy
+    stash?: boolean
+    stashIncludeUntracked?: boolean
+    prune?: boolean
+  }
+
+  interface PullResult {
+    status: 'up-to-date' | 'success' | 'merge-conflicts' | 'stash-pop-conflicts' | 'failed'
+    errorCode?: 'NO_UPSTREAM' | 'UNRELATED_HISTORIES' | 'FF_ONLY_DIVERGED' | 'DIRTY_OVERLAP' | 'AUTH' | 'NETWORK' | 'STASH_FAILED' | 'UNKNOWN'
+    conflictedFiles?: Array<{ path: string; status: string }>
+    stashedChanges: boolean
+    stashRef?: string
+    strategy?: PullStrategy
+    detail?: string
+  }
+
   interface Window {
     electron: ElectronAPI
     api: {
@@ -10,6 +50,8 @@ declare global {
         log: (repoPath: string, maxCount?: number) => Promise<{ success: boolean; data?: any; error?: string }>;
         fetch: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         pull: (repoPath: string, prune?: boolean) => Promise<{ success: boolean; data?: { hadConflicts: boolean }; error?: string }>;
+        pullPreflight: (repoPath: string) => Promise<{ success: boolean; data?: PullPlan; error?: string }>;
+        smartPull: (repoPath: string, options?: SmartPullOptions) => Promise<{ success: boolean; data?: PullResult; error?: string }>;
         push: (repoPath: string, force?: boolean, remote?: string, branch?: string, setUpstream?: boolean) => Promise<{ success: boolean; error?: string }>;
         getRemotes: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ name: string; refs: { fetch: string; push: string } }>; error?: string }>;
         addRemote: (repoPath: string, name: string, url: string) => Promise<{ success: boolean; error?: string }>;

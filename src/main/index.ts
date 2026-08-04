@@ -104,6 +104,24 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:pullPreflight', async (_, repoPath) => {
+    try {
+      const data = await gitService.pullPreflight(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:smartPull', async (_, repoPath, options) => {
+    try {
+      const data = await gitService.smartPull(repoPath, options)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:push', async (_, repoPath, force, remote, branch, setUpstream) => {
     try {
       const data = await gitService.push(repoPath, force, remote, branch, setUpstream)

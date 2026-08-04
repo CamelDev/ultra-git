@@ -8,6 +8,9 @@ const api = {
     log: (repoPath: string, maxCount?: number) => ipcRenderer.invoke('git:log', repoPath, maxCount),
     fetch: (repoPath: string) => ipcRenderer.invoke('git:fetch', repoPath),
     pull: (repoPath: string, prune?: boolean) => ipcRenderer.invoke('git:pull', repoPath, prune),
+    pullPreflight: (repoPath: string) => ipcRenderer.invoke('git:pullPreflight', repoPath),
+    smartPull: (repoPath: string, options?: { strategy?: 'merge' | 'rebase' | 'ff-only'; stash?: boolean; stashIncludeUntracked?: boolean; prune?: boolean }) =>
+      ipcRenderer.invoke('git:smartPull', repoPath, options),
     push: (repoPath: string, force?: boolean, remote?: string, branch?: string, setUpstream?: boolean) => 
       ipcRenderer.invoke('git:push', repoPath, force, remote, branch, setUpstream),
     getRemotes: (repoPath: string) => ipcRenderer.invoke('git:getRemotes', repoPath),

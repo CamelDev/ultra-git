@@ -14,6 +14,83 @@ export interface ConflictHunk {
   startLine: number; // 1-indexed line where <<<<<<< begins
 }
 
+// ---------------------------------------------------------------------------
+// Smart Pull types (see docs/smart-pull-design.md)
+// ---------------------------------------------------------------------------
+
+export type PullDirtyKind = 'clean' | 'untracked-only' | 'tracked-dirty';
+
+export type PullBlocker =
+  | 'NO_UPSTREAM'
+  | 'MERGE_IN_PROGRESS'
+  | 'REBASE_IN_PROGRESS'
+  | 'CHERRY_PICK_IN_PROGRESS'
+  | 'FETCH_FAILED';
+
+/** Result of the read-only pre-pull analysis. */
+export interface PullPlan {
+  ok: boolean;
+  blocker?: PullBlocker;
+  upstream?: string;
+  ahead: number;
+  behind: number;
+  canFastForward: boolean;
+  diverged: boolean;
+  dirtyKind: PullDirtyKind;
+  /** Tracked files with staged and/or unstaged changes. */
+  changedFiles: string[];
+  untrackedFiles: string[];
+  /** Files the incoming upstream commits will touch. */
+  incomingFiles: string[];
+  /** (changed ∪ untracked) ∩ incoming — files that make a plain pull fail. */
+  overlappingFiles: string[];
+  hasStaged: boolean;
+  needsStash: boolean;
+  detail?: string;
+}
+
+export type PullStrategy = 'merge' | 'rebase' | 'ff-only';
+
+export interface SmartPullOptions {
+  strategy?: PullStrategy;
+  /** Stash local changes before the pull and re-apply (pop) afterwards. */
+  stash?: boolean;
+  stashIncludeUntracked?: boolean;
+  prune?: boolean;
+}
+
+export type PullResultStatus =
+  | 'up-to-date'
+  | 'success'
+  | 'merge-conflicts'
+  | 'stash-pop-conflicts'
+  | 'failed';
+
+export type PullErrorCode =
+  | 'NO_UPSTREAM'
+  | 'UNRELATED_HISTORIES'
+  | 'FF_ONLY_DIVERGED'
+  | 'DIRTY_OVERLAP'
+  | 'AUTH'
+  | 'NETWORK'
+  | 'STASH_FAILED'
+  | 'UNKNOWN';
+
+export interface PullResult {
+  status: PullResultStatus;
+  errorCode?: PullErrorCode;
+  conflictedFiles?: ConflictedFile[];
+  /** A pre-pull stash exists that was NOT cleanly re-applied. */
+  stashedChanges: boolean;
+  stashRef?: string;
+  /** Strategy that was in effect when the result was produced (for abort). */
+  strategy?: PullStrategy;
+  detail?: string;
+}
+
+/** Stash message prefix used to identify auto-stashes created by Smart Pull. */
+export const SMART_PULL_STASH_MESSAGE = 'ultra-git: auto-stash before pull';
+
 // Manage simple-git instances per repository path
 const gitInstances = new Map<string, SimpleGit>();
 
@@ -151,6 +228,311 @@ export const gitService = {
       }
       throw err;
     }
+  },
+
+  /**
+   * Read-only pre-pull analysis (Smart Pull phase 1).
+   * Fetches, then computes ahead/behind, working-tree state and — crucially —
+   * the overlap between uncommitted changes and files touched by incoming
+   * upstream commits. The renderer uses this to offer state-aware options
+   * instead of letting `git pull` fail with a raw error.
+   */
+  pullPreflight: async (repoPath: string): Promise<PullPlan> => {
+    const git = getGitInstance(repoPath);
+    const emptyPlan = (overrides: Partial<PullPlan>): PullPlan => ({
+      ok: false,
+      ahead: 0,
+      behind: 0,
+      canFastForward: false,
+      diverged: false,
+      dirtyKind: 'clean',
+      changedFiles: [],
+      untrackedFiles: [],
+      incomingFiles: [],
+      overlappingFiles: [],
+      hasStaged: false,
+      needsStash: false,
+      ...overrides
+    });
+
+    // 1. An operation already in progress blocks pulling entirely.
+    try {
+      const mergeStatus = await gitService.getMergeStatus(repoPath);
+      if (mergeStatus.isMerge) return emptyPlan({ blocker: 'MERGE_IN_PROGRESS' });
+      if (mergeStatus.isRebase) return emptyPlan({ blocker: 'REBASE_IN_PROGRESS' });
+      if (mergeStatus.isCherryPick) return emptyPlan({ blocker: 'CHERRY_PICK_IN_PROGRESS' });
+    } catch (e) {
+      console.warn('pullPreflight: failed to read merge status', e);
+    }
+
+    // 2. Resolve the upstream tracking branch.
+    let upstream = '';
+    try {
+      upstream = (await git.raw(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])).trim();
+    } catch (e) {
+      return emptyPlan({ blocker: 'NO_UPSTREAM' });
+    }
+
+    // 3. Fetch so the remote-tracking ref is current (best effort).
+    try {
+      await git.fetch({ '--prune': null });
+    } catch (err: any) {
+      return emptyPlan({ blocker: 'FETCH_FAILED', upstream, detail: err?.message || String(err) });
+    }
+
+    // 4. Ahead/behind relative to upstream.
+    let ahead = 0;
+    let behind = 0;
+    try {
+      const countsRaw = await git.raw(['rev-list', '--left-right', '--count', `HEAD...${upstream}`]);
+      const parts = countsRaw.trim().split(/\s+/);
+      ahead = parseInt(parts[0] || '0', 10) || 0;
+      behind = parseInt(parts[1] || '0', 10) || 0;
+    } catch (e) {
+      console.warn('pullPreflight: failed to compute ahead/behind', e);
+    }
+
+    // 5. Fast-forward is possible iff we have no local commits the upstream
+    //    lacks (HEAD is an ancestor of upstream ⟺ ahead === 0).
+    //    NOTE: not implemented via `merge-base --is-ancestor` because
+    //    simple-git's raw() resolves instead of throwing on exit code 1.
+    const canFastForward = ahead === 0;
+
+    // 6. Working-tree state (staged / unstaged / untracked).
+    const changedSet = new Set<string>();
+    const untrackedFiles: string[] = [];
+    let hasStaged = false;
+    try {
+      const statusResult = await git.status();
+      for (const f of statusResult.files as Array<{ path: string; index: string; working_dir: string }>) {
+        if (f.index === '?' || f.working_dir === '?') {
+          untrackedFiles.push(f.path);
+          continue;
+        }
+        if (f.index !== ' ') hasStaged = true;
+        changedSet.add(f.path);
+      }
+    } catch (e) {
+      console.warn('pullPreflight: failed to read status', e);
+    }
+
+    // 7. Files the incoming upstream commits will touch (since merge-base).
+    let incomingFiles: string[] = [];
+    if (behind > 0) {
+      try {
+        const diffRaw = await git.raw(['diff', '--name-only', `HEAD...${upstream}`]);
+        incomingFiles = diffRaw.split('\n').map(l => l.trim()).filter(Boolean);
+      } catch (e) {
+        console.warn('pullPreflight: failed to diff incoming changes', e);
+      }
+    }
+
+    const incomingSet = new Set(incomingFiles);
+    const overlappingFiles = [...changedSet, ...untrackedFiles].filter(p => incomingSet.has(p));
+    const dirtyKind: PullDirtyKind =
+      changedSet.size > 0 ? 'tracked-dirty' : untrackedFiles.length > 0 ? 'untracked-only' : 'clean';
+
+    return {
+      ok: true,
+      upstream,
+      ahead,
+      behind,
+      canFastForward,
+      diverged: ahead > 0 && behind > 0,
+      dirtyKind,
+      changedFiles: [...changedSet],
+      untrackedFiles,
+      incomingFiles,
+      overlappingFiles,
+      hasStaged,
+      needsStash: overlappingFiles.length > 0
+    };
+  },
+
+  /**
+   * Orchestrated pull (Smart Pull phase 3): optional app-managed autostash
+   * (stash → pull → pop) with a chosen integration strategy and typed,
+   * step-attributed results. Never throws for expected git outcomes.
+   */
+  smartPull: async (repoPath: string, options?: SmartPullOptions): Promise<PullResult> => {
+    const git = getGitInstance(repoPath);
+    const opts: Required<SmartPullOptions> = {
+      strategy: options?.strategy ?? 'merge',
+      stash: options?.stash ?? false,
+      stashIncludeUntracked: options?.stashIncludeUntracked ?? true,
+      prune: options?.prune ?? true
+    };
+
+    // Upstream must exist.
+    let upstream = '';
+    try {
+      upstream = (await git.raw(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])).trim();
+    } catch (e) {
+      return { status: 'failed', errorCode: 'NO_UPSTREAM', stashedChanges: false, strategy: opts.strategy };
+    }
+
+    // Refresh remote-tracking refs, then check whether there is anything to do.
+    try {
+      await git.fetch(opts.prune ? { '--prune': null } : {});
+    } catch (e) {
+      // Non-fatal: the pull itself will surface a proper typed error below.
+      console.warn('smartPull: fetch before pull failed (continuing)', e);
+    }
+    let behind = 0;
+    try {
+      const countsRaw = await git.raw(['rev-list', '--left-right', '--count', `HEAD...${upstream}`]);
+      behind = parseInt(countsRaw.trim().split(/\s+/)[1] || '0', 10) || 0;
+    } catch (e) {
+      console.warn('smartPull: failed to compute behind count', e);
+    }
+    if (behind === 0) {
+      return { status: 'up-to-date', stashedChanges: false, strategy: opts.strategy };
+    }
+
+    // Step 1: stash local changes (app-managed autostash).
+    let stashed = false;
+    if (opts.stash) {
+      try {
+        const args = ['stash', 'push'];
+        if (opts.stashIncludeUntracked) args.push('--include-untracked');
+        args.push('-m', SMART_PULL_STASH_MESSAGE);
+        const out = await git.raw(args);
+        // git prints "No local changes to save" and creates nothing in that case.
+        stashed = !out.includes('No local changes to save');
+      } catch (err: any) {
+        return {
+          status: 'failed',
+          errorCode: 'STASH_FAILED',
+          stashedChanges: false,
+          strategy: opts.strategy,
+          detail: err?.message || String(err)
+        };
+      }
+    }
+
+    // Restores the pre-pull stash after a failed pull step (best effort).
+    // Returns true when the stash could NOT be cleanly restored and still exists.
+    const restoreStash = async (): Promise<boolean> => {
+      if (!stashed) return false;
+      try {
+        const popRes = await gitService.stashPop(repoPath, 0);
+        if (popRes.hadConflicts) return true;
+        stashed = false;
+      } catch (e) {
+        console.warn('smartPull: failed to restore pre-pull stash after error', e);
+        return true; // stash still exists
+      }
+      return false;
+    };
+
+    // Step 2: pull with the chosen integration strategy.
+    const pullArgs = ['pull', '--no-edit'];
+    if (opts.strategy === 'rebase') pullArgs.push('--rebase');
+    else if (opts.strategy === 'ff-only') pullArgs.push('--ff-only');
+    else pullArgs.push('--no-rebase');
+    if (opts.prune) pullArgs.push('--prune');
+
+    // IMPORTANT: simple-git's raw() RESOLVES (does not throw) when git exits
+    // with code 1 — which is exactly how merge/rebase conflicts and dirty-tree
+    // refusals report themselves. Classify from BOTH the output text and the
+    // repository state, not only from thrown errors.
+    let pullOutput = '';
+    let pullError: any = null;
+    try {
+      pullOutput = await git.raw(pullArgs);
+    } catch (err: any) {
+      pullError = err;
+    }
+    const msg: string = [pullError?.message, pullOutput].filter(Boolean).join('\n');
+
+    if (msg.includes('Not possible to fast-forward') || msg.includes('non-fast-forward') || msg.includes('divergent branches')) {
+      const stillStashed = await restoreStash();
+      return { status: 'failed', errorCode: 'FF_ONLY_DIVERGED', stashedChanges: stillStashed, stashRef: stillStashed ? 'stash@{0}' : undefined, strategy: opts.strategy, detail: msg };
+    }
+    if (msg.includes('unrelated histories')) {
+      const stillStashed = await restoreStash();
+      return { status: 'failed', errorCode: 'UNRELATED_HISTORIES', stashedChanges: stillStashed, stashRef: stillStashed ? 'stash@{0}' : undefined, strategy: opts.strategy, detail: msg };
+    }
+    if (msg.includes('would be overwritten')) {
+      // Safety net — preflight should have caught this.
+      const stillStashed = await restoreStash();
+      return { status: 'failed', errorCode: 'DIRTY_OVERLAP', stashedChanges: stillStashed, stashRef: stillStashed ? 'stash@{0}' : undefined, strategy: opts.strategy, detail: msg };
+    }
+
+    // Merge/rebase conflicts: repo is left in MERGING/REBASING state.
+    // The pre-pull stash is intentionally NOT popped onto a conflicted tree.
+    let conflicted = /CONFLICT|Merge conflict|Automatic merge failed|could not apply|Resolve all conflicts/i.test(msg);
+    if (!conflicted) {
+      try {
+        const mergeStatus = await gitService.getMergeStatus(repoPath);
+        conflicted = mergeStatus.inProgress;
+      } catch (e) { /* ignore */ }
+    }
+    if (!conflicted) {
+      try {
+        const statusAfter = await git.status();
+        conflicted = statusAfter.conflicted.length > 0;
+      } catch (e) { /* ignore */ }
+    }
+    if (conflicted) {
+      const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+      return {
+        status: 'merge-conflicts',
+        conflictedFiles,
+        stashedChanges: stashed,
+        stashRef: stashed ? 'stash@{0}' : undefined,
+        strategy: opts.strategy,
+        detail: msg
+      };
+    }
+
+    if (pullError) {
+      if (/Authentication failed|Permission denied|could not read (Username|Password)|Repository not found/i.test(msg)) {
+        const stillStashed = await restoreStash();
+        return { status: 'failed', errorCode: 'AUTH', stashedChanges: stillStashed, stashRef: stillStashed ? 'stash@{0}' : undefined, strategy: opts.strategy, detail: msg };
+      }
+      if (/Could not resolve host|Connection refused|Failed to connect|Operation timed out|Timeout|network|unable to access/i.test(msg)) {
+        const stillStashed = await restoreStash();
+        return { status: 'failed', errorCode: 'NETWORK', stashedChanges: stillStashed, stashRef: stillStashed ? 'stash@{0}' : undefined, strategy: opts.strategy, detail: msg };
+      }
+      const stillStashed = await restoreStash();
+      return { status: 'failed', errorCode: 'UNKNOWN', stashedChanges: stillStashed, stashRef: stillStashed ? 'stash@{0}' : undefined, strategy: opts.strategy, detail: msg };
+    }
+
+    // Step 3: re-apply stashed changes on top of the pulled state.
+    if (stashed) {
+      try {
+        const popRes = await gitService.stashPop(repoPath, 0);
+        if (popRes.hadConflicts) {
+          // git keeps the stash on a conflicted pop — nothing is lost.
+          const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+          return {
+            status: 'stash-pop-conflicts',
+            conflictedFiles,
+            stashedChanges: true,
+            stashRef: 'stash@{0}',
+            strategy: opts.strategy
+          };
+        }
+        stashed = false;
+      } catch (err: any) {
+        // Pop failed entirely (e.g. an untracked file from the stash now exists
+        // in the pulled tree: "could not restore untracked files from stash").
+        // git keeps the stash — the pull succeeded, only the re-apply needs
+        // manual attention. Report it as a re-apply conflict.
+        const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+        return {
+          status: 'stash-pop-conflicts',
+          conflictedFiles,
+          stashedChanges: true,
+          stashRef: 'stash@{0}',
+          strategy: opts.strategy,
+          detail: err?.message || String(err)
+        };
+      }
+    }
+
+    return { status: 'success', stashedChanges: false, strategy: opts.strategy };
   },
 
   push: async (repoPath: string, force?: boolean, remote?: string, branch?: string, setUpstream?: boolean) => {
