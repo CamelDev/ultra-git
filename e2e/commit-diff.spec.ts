@@ -203,12 +203,14 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       const diffModalOverlay = page.locator('.diff-modal-overlay')
       await expect(diffModalOverlay).toBeVisible()
 
-      // 2. Verify auto-scroll: container scroll position should be greater than 0 since change is deep (line 120)
+      // 2. Verify auto-scroll: switch to Full File mode where container has scrollable content for deep changes
+      const toggleFullBtn = page.locator('[data-testid="toggle-full-btn"]')
+      await expect(toggleFullBtn).toBeVisible()
+      await toggleFullBtn.click()
+      await page.waitForTimeout(300)
+
       const scrollContainer = page.locator('.diff-modal-scroll')
       await expect(scrollContainer).toBeVisible()
-      
-      // Wait a tiny bit for the auto-scroll useEffect logic to run
-      await page.waitForTimeout(300)
 
       const scrollTop = await scrollContainer.evaluate(el => el.scrollTop)
       expect(scrollTop).toBeGreaterThan(0)

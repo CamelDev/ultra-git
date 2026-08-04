@@ -820,7 +820,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     }
   }, [isOpen, loadDiffContent])
 
-  // Scroll to first change on load
+  // Scroll to first change on load or viewMode change
   useEffect(() => {
     if (!loading && diffItems.length > 0) {
       const timer = setTimeout(() => {
@@ -836,7 +836,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       return () => clearTimeout(timer)
     }
     return undefined
-  }, [loading, diffItems])
+  }, [loading, diffItems, viewMode])
 
   const changeIndexes = useMemo(
     () =>
