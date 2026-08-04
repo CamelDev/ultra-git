@@ -230,6 +230,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:applyPatch', async (_, repoPath, patch, options) => {
+    try {
+      await gitService.applyPatch(repoPath, patch, options)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:discardChanges', async (_, repoPath, filePath, isStaged) => {
     try {
       await gitService.discardChanges(repoPath, filePath, isStaged)

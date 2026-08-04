@@ -1,6 +1,7 @@
 import simpleGit, { SimpleGit, SimpleGitOptions } from 'simple-git';
 import fs from 'fs';
 import { join, resolve } from 'path';
+import { execFile } from 'child_process';
 
 export interface ConflictedFile {
   path: string;
@@ -737,6 +738,43 @@ export const gitService = {
     return await git.reset(['--', filePath]);
   },
 
+  applyPatch: async (
+    repoPath: string,
+    patch: string,
+    options?: { cached?: boolean; reverse?: boolean }
+  ) => {
+    const runGitApply = (extraArgs: string[] = []): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const args = ['apply', '--whitespace=nowarn', '--recount', ...extraArgs];
+        if (options?.cached) args.push('--cached');
+        if (options?.reverse) args.push('--reverse');
+        args.push('-');
+
+        const child = execFile('git', args, { cwd: repoPath }, (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(stderr || error.message));
+          } else {
+            resolve(stdout);
+          }
+        });
+
+        child.stdin?.write(patch);
+        child.stdin?.end();
+      });
+    };
+
+    try {
+      return await runGitApply();
+    } catch (err: any) {
+      // Retry with --ignore-space-change if whitespace or line endings differ
+      try {
+        return await runGitApply(['--ignore-space-change']);
+      } catch (retryErr: any) {
+        throw new Error(retryErr.message || err.message);
+      }
+    }
+  },
+
   discardChanges: async (repoPath: string, filePath: string, isStaged: boolean) => {
     const git = getGitInstance(repoPath);
     
@@ -1094,7 +1132,12 @@ export const gitService = {
       try {
         after = await git.show([`:${filePath}`]);
       } catch (e) {
-        after = '';
+        try {
+          const fullPath = join(repoPath, filePath);
+          after = await fs.promises.readFile(fullPath, 'utf8');
+        } catch (e2) {
+          after = '';
+        }
       }
     } else {
       // Unstaged file diff: before is Index version (or HEAD if not in index), after is Working Tree version
@@ -1393,7 +1436,12 @@ export const gitService = {
       }
 
       const remoteName = remotes[0].name || 'origin';
-      const lsRemotePromise = git.raw(['ls-remote', '--tags', remoteName]);
+      // Pass -c credential.helper= and GIT_TERMINAL_PROMPT=0 to prevent macOS osxkeychain popups
+      const lsRemotePromise = git
+        .env({ GIT_TERMINAL_PROMPT: '0' })
+        .raw(['-c', 'credential.helper=', 'ls-remote', '--tags', remoteName]);
+      lsRemotePromise.catch(() => {}); // Suppress dangling rejection on timeout
+
       const lsRemoteResult = await Promise.race([
         lsRemotePromise,
         new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500))
@@ -1419,7 +1467,6 @@ export const gitService = {
       const localTags = await git.tags();
       return localTags.all.filter(tag => !remoteTags.has(tag));
     } catch (e) {
-      console.warn('getUnpushedTags failed or timed out:', e);
       return [];
     }
   },

@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
 import { FileText, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { useToaster } from '../toaster/ToasterContext'
 import { DiffModal } from '../details/DiffModal'
 
 export const ActiveChanges: React.FC = () => {
   const { getActiveRepo, refreshRepo, identities } = useRepoStore()
+  const { addToast } = useToaster()
   const activeRepo = getActiveRepo()
 
   const [selectedFileForDiff, setSelectedFileForDiff] = useState<{
@@ -36,10 +38,10 @@ export const ActiveChanges: React.FC = () => {
       if (res.success) {
         await refreshRepo(activeRepo.id)
       } else {
-        console.error('Failed to stage file:', res.error)
+        addToast({ variant: 'error', title: 'Stage Failed', message: res.error || 'Failed to stage file' })
       }
-    } catch (err) {
-      console.error('Error staging file:', err)
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Stage Error', message: err.message || 'Error staging file' })
     }
   }
 
@@ -49,10 +51,10 @@ export const ActiveChanges: React.FC = () => {
       if (res.success) {
         await refreshRepo(activeRepo.id)
       } else {
-        console.error('Failed to unstage file:', res.error)
+        addToast({ variant: 'error', title: 'Unstage Failed', message: res.error || 'Failed to unstage file' })
       }
-    } catch (err) {
-      console.error('Error unstaging file:', err)
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Unstage Error', message: err.message || 'Error unstaging file' })
     }
   }
 
@@ -74,11 +76,12 @@ export const ActiveChanges: React.FC = () => {
       const res = await window.api.git.discardChanges(activeRepo.path, filePath, isStaged)
       if (res.success) {
         await refreshRepo(activeRepo.id)
+        addToast({ variant: 'success', title: 'Changes Discarded', message: `Discarded changes in "${filePath}"` })
       } else {
-        console.error('Failed to discard changes:', res.error)
+        addToast({ variant: 'error', title: 'Discard Failed', message: res.error || 'Failed to discard changes' })
       }
-    } catch (err) {
-      console.error('Error discarding changes:', err)
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Discard Error', message: err.message || 'Error discarding changes' })
     }
   }
 

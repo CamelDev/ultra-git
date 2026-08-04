@@ -1,5 +1,27 @@
-import React, { useEffect, useState, useRef } from 'react'
-import { X, FileText, Copy, Check } from 'lucide-react'
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import {
+  X,
+  FileText,
+  Copy,
+  Check,
+  ChevronUp,
+  ChevronDown,
+  Plus,
+  Minus,
+  RotateCcw,
+  Trash2,
+  Layers,
+  AlertTriangle,
+  Loader2
+} from 'lucide-react'
+import {
+  buildHunksFromDiffItems,
+  buildHunkPatch,
+  buildSelectedLinesPatch,
+  DiffHunk
+} from '../../utils/patchBuilder'
+import { useRepoStore } from '../../store/useRepoStore'
+import { useToaster } from '../toaster/ToasterContext'
 
 interface DiffModalProps {
   isOpen: boolean
@@ -17,6 +39,7 @@ interface DiffModalProps {
 }
 
 interface DiffItem {
+  diffIndex?: number
   type: 'normal' | 'add' | 'delete'
   beforeLine?: string
   afterLine?: string
@@ -42,10 +65,8 @@ function computeInlineDiff(
   const m = a.length
   const n = b.length
 
-  // Build LCS DP table (cap size to avoid huge allocations)
   const MAX = 2000
   if (m > MAX || n > MAX) {
-    // Fallback: highlight entire lines
     return {
       oldSpans: [{ text: oldStr, highlight: true }],
       newSpans: [{ text: newStr, highlight: true }]
@@ -66,9 +87,6 @@ function computeInlineDiff(
     }
   }
 
-  // Similarity check: if the lines share less than 40% of their longer length,
-  // they are too different for meaningful char-level highlights — fall back to
-  // whole-line highlighting so we don't produce misleading partial marks.
   const lcsLen = dp[m][n]
   const similarity = lcsLen / Math.max(m, n, 1)
   if (similarity < 0.4) {
@@ -78,7 +96,6 @@ function computeInlineDiff(
     }
   }
 
-  // Back-track to find which chars are in LCS
   const oldInLcs = new Uint8Array(m)
   const newInLcs = new Uint8Array(n)
   let i = m,
@@ -96,13 +113,12 @@ function computeInlineDiff(
     }
   }
 
-  // Build spans by grouping consecutive chars with same highlight status
   const buildSpans = (chars: string[], inLcs: Uint8Array): CharSpan[] => {
     const spans: CharSpan[] = []
     let cur = ''
     let curHighlight = false
     for (let k = 0; k < chars.length; k++) {
-      const h = inLcs[k] === 0 // highlight when NOT in LCS
+      const h = inLcs[k] === 0
       if (k === 0) {
         cur = chars[k]
         curHighlight = h
@@ -149,12 +165,7 @@ function InlineContent({
   )
 }
 
-/**
- * A single visual row in the diff view.
- * Paired delete+add are collapsed into one row (old on left, new on right).
- */
 interface RenderRow {
-  /** 'normal' = unchanged, 'change' = paired del+add, 'delete' = unpaired del, 'add' = unpaired add */
   rowType: 'normal' | 'change' | 'delete' | 'add'
   beforeLine?: string
   afterLine?: string
@@ -162,12 +173,9 @@ interface RenderRow {
   afterNum?: number
   oldSpans?: CharSpan[]
   newSpans?: CharSpan[]
+  diffIndices: number[]
 }
 
-/**
- * Convert raw DiffItems into RenderRows.
- * Consecutive delete/add blocks are paired N:M, folding each pair into a single side-by-side row.
- */
 function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
   const rows: RenderRow[] = []
   let i = 0
@@ -181,19 +189,18 @@ function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
         beforeLine: item.beforeLine,
         afterLine: item.afterLine,
         beforeNum: item.beforeNum,
-        afterNum: item.afterNum
+        afterNum: item.afterNum,
+        diffIndices: item.diffIndex !== undefined ? [item.diffIndex] : []
       })
       i++
       continue
     }
 
     if (item.type === 'delete') {
-      // Collect all consecutive deletes
       const deletes: DiffItem[] = []
       while (i < diffItems.length && diffItems[i].type === 'delete') {
         deletes.push(diffItems[i++])
       }
-      // Collect all consecutive adds that immediately follow
       const adds: DiffItem[] = []
       while (i < diffItems.length && diffItems[i].type === 'add') {
         adds.push(diffItems[i++])
@@ -208,6 +215,9 @@ function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
             del.beforeLine ?? '',
             add.afterLine ?? ''
           )
+          const indices: number[] = []
+          if (del.diffIndex !== undefined) indices.push(del.diffIndex)
+          if (add.diffIndex !== undefined) indices.push(add.diffIndex)
           rows.push({
             rowType: 'change',
             beforeLine: del.beforeLine,
@@ -215,31 +225,34 @@ function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
             beforeNum: del.beforeNum,
             afterNum: add.afterNum,
             oldSpans,
-            newSpans
+            newSpans,
+            diffIndices: indices
           })
         } else if (del) {
           rows.push({
             rowType: 'delete',
             beforeLine: del.beforeLine,
-            beforeNum: del.beforeNum
+            beforeNum: del.beforeNum,
+            diffIndices: del.diffIndex !== undefined ? [del.diffIndex] : []
           })
-        } else {
+        } else if (add) {
           rows.push({
             rowType: 'add',
             afterLine: add.afterLine,
-            afterNum: add.afterNum
+            afterNum: add.afterNum,
+            diffIndices: add.diffIndex !== undefined ? [add.diffIndex] : []
           })
         }
       }
       continue
     }
 
-    // Standalone add (shouldn't happen after the delete handler above, but safety net)
     if (item.type === 'add') {
       rows.push({
         rowType: 'add',
         afterLine: item.afterLine,
-        afterNum: item.afterNum
+        afterNum: item.afterNum,
+        diffIndices: item.diffIndex !== undefined ? [item.diffIndex] : []
       })
       i++
     }
@@ -248,9 +261,11 @@ function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
   return rows
 }
 
-function computeDiff(beforeContent: string, afterContent: string): DiffItem[] {
-  const beforeLines = beforeContent === '' ? [] : beforeContent.split(/\r?\n/)
-  const afterLines = afterContent === '' ? [] : afterContent.split(/\r?\n/)
+function computeDiff(beforeContent: string = '', afterContent: string = ''): DiffItem[] {
+  const safeBefore = beforeContent || ''
+  const safeAfter = afterContent || ''
+  const beforeLines = safeBefore === '' ? [] : safeBefore.split(/\r?\n/)
+  const afterLines = safeAfter === '' ? [] : safeAfter.split(/\r?\n/)
 
   let prefixCount = 0
   while (
@@ -273,7 +288,6 @@ function computeDiff(beforeContent: string, afterContent: string): DiffItem[] {
   const midBefore = beforeLines.slice(prefixCount, beforeLines.length - suffixCount)
   const midAfter = afterLines.slice(prefixCount, afterLines.length - suffixCount)
 
-  // DP on the middle part
   const db: number[][] = Array(midBefore.length + 1)
     .fill(null)
     .map(() => Array(midAfter.length + 1).fill(0))
@@ -321,7 +335,6 @@ function computeDiff(beforeContent: string, afterContent: string): DiffItem[] {
   }
 
   const diff: DiffItem[] = []
-  // Add prefix
   for (let k = 0; k < prefixCount; k++) {
     diff.push({
       type: 'normal',
@@ -332,10 +345,8 @@ function computeDiff(beforeContent: string, afterContent: string): DiffItem[] {
     })
   }
 
-  // Add middle
   diff.push(...midDiff)
 
-  // Add suffix
   for (let k = 0; k < suffixCount; k++) {
     const idxBefore = beforeLines.length - suffixCount + k
     const idxAfter = afterLines.length - suffixCount + k
@@ -347,6 +358,11 @@ function computeDiff(beforeContent: string, afterContent: string): DiffItem[] {
       afterNum: idxAfter + 1
     })
   }
+
+  // Attach diffIndex to every item
+  diff.forEach((item, idx) => {
+    item.diffIndex = idx
+  })
 
   return diff
 }
@@ -365,11 +381,29 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   stashIndex = null,
   stashMessage = null
 }) => {
+  const { getActiveRepo, refreshRepo } = useRepoStore()
+  const { addToast } = useToaster()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [diffItems, setDiffItems] = useState<DiffItem[]>([])
   const [isBinary, setIsBinary] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
+
+  // Chunk navigation, view mode, and line selection state
+  const [viewMode, setViewMode] = useState<'chunks' | 'full'>('chunks')
+  const [activeChunkIndex, setActiveChunkIndex] = useState(0)
+  const [selectedLineIndices, setSelectedLineIndices] = useState<Set<number>>(new Set())
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
+
+  // Custom confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    confirmText: string
+    onConfirm: () => void
+  } | null>(null)
 
   // Stash details files states
   const [stashFiles, setStashFiles] = useState<any[]>([])
@@ -377,26 +411,377 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const [stashFilesError, setStashFilesError] = useState<string | null>(null)
   const [selectedStashFile, setSelectedStashFile] = useState<any | null>(null)
 
-  // 1. Close on ESC key press
+  // Build hunks from diffItems
+  const hunks: DiffHunk[] = useMemo(() => {
+    return buildHunksFromDiffItems(diffItems)
+  }, [diffItems])
+
+  // Map starting diffIndex of each hunk for Full view rendering
+  const hunkByStartDiffIdx = useMemo(() => {
+    const map = new Map<number, { hunk: DiffHunk; hunkIdx: number }>()
+    hunks.forEach((hunk, hunkIdx) => {
+      if (hunk.lines.length > 0) {
+        map.set(hunk.lines[0].indexInDiff, { hunk, hunkIdx })
+      }
+    })
+    return map
+  }, [hunks])
+
+  // Build visual rows and calculate selected row count
+  const renderRows = useMemo(() => buildRenderRows(diffItems), [diffItems])
+  const selectedRowCount = useMemo(
+    () => renderRows.filter((row) => row.diffIndices.some((idx) => selectedLineIndices.has(idx))).length,
+    [renderRows, selectedLineIndices]
+  )
+
+  // Scroll to targeted hunk element
+  const scrollToHunk = useCallback((hunkIdx: number) => {
+    const hunkEl = document.getElementById(`diff-hunk-${hunkIdx}`)
+    if (hunkEl) {
+      hunkEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
+
+  const handlePrevChunk = useCallback(() => {
+    if (hunks.length === 0) return
+    const prevIndex = Math.max(0, activeChunkIndex - 1)
+    setActiveChunkIndex(prevIndex)
+    scrollToHunk(prevIndex)
+  }, [hunks.length, activeChunkIndex, scrollToHunk])
+
+  const handleNextChunk = useCallback(() => {
+    if (hunks.length === 0) return
+    const nextIndex = Math.min(hunks.length - 1, activeChunkIndex + 1)
+    setActiveChunkIndex(nextIndex)
+    scrollToHunk(nextIndex)
+  }, [hunks.length, activeChunkIndex, scrollToHunk])
+
+  // Reload diff content
+  const loadDiffContent = useCallback(() => {
+    if (!isOpen) return
+
+    setLoading(true)
+    setError(null)
+
+    const targetFilePath = isStash ? selectedStashFile?.path : filePath
+    const targetOldPath = isStash ? selectedStashFile?.oldPath : oldPath
+    const targetStatus = isStash ? selectedStashFile?.status : status
+    const isUntracked = isStash ? selectedStashFile?.isUntracked : false
+
+    if (isStash && !selectedStashFile) {
+      setLoading(false)
+      setDiffItems([])
+      return
+    }
+
+    const fetchDiff = isStash
+      ? window.api.git.getStashFileDiff(repoPath, stashIndex!, targetFilePath, targetOldPath, targetStatus, isUntracked)
+      : isActiveChange
+      ? window.api.git.getActiveFileDiff(repoPath, targetFilePath, !!isStaged, targetOldPath)
+      : window.api.git.getCommitFileDiff(repoPath, commitHash!, targetFilePath, targetOldPath, targetStatus)
+
+    fetchDiff
+      .then((res) => {
+        if (res.success && res.data) {
+          if (res.data.isBinary) {
+            setIsBinary(true)
+            setDiffItems([])
+          } else {
+            setIsBinary(false)
+            const computed = computeDiff(res.data.before, res.data.after)
+            setDiffItems(computed)
+          }
+        } else {
+          setError(res.error || 'Failed to retrieve diff')
+        }
+        setLoading(false)
+      })
+      .catch((err) => {
+        setError(err.message || 'Error fetching diff')
+        setLoading(false)
+      })
+  }, [
+    isOpen,
+    filePath,
+    commitHash,
+    repoPath,
+    isActiveChange,
+    isStaged,
+    oldPath,
+    status,
+    isStash,
+    stashIndex,
+    selectedStashFile
+  ])
+
+  // Patch application handler
+  const handleApplyPatch = async (
+    patch: string,
+    options?: { cached?: boolean; reverse?: boolean },
+    successMsg?: string
+  ) => {
+    setActionLoading(true)
+    try {
+      const res = await window.api.git.applyPatch(repoPath, patch, options)
+      if (res.success) {
+        setSelectedLineIndices(new Set())
+        const activeRepo = getActiveRepo()
+        if (activeRepo) {
+          await refreshRepo(activeRepo.id)
+        }
+        addToast({ variant: 'success', title: 'Success', message: successMsg || 'Changes applied successfully' })
+        loadDiffContent()
+      } else {
+        addToast({ variant: 'error', title: 'Apply Failed', message: res.error || 'Failed to apply changes' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Apply Error', message: err.message || 'Error applying changes' })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // Hunk Staging / Unstaging / Discarding
+  const handleStageHunk = async (hunk: DiffHunk) => {
+    const patch = buildHunkPatch(filePath, hunk, 'stage')
+    await handleApplyPatch(patch, { cached: true }, 'Chunk staged successfully')
+  }
+
+  const handleUnstageHunk = async (hunk: DiffHunk) => {
+    const patch = buildHunkPatch(filePath, hunk, 'unstage')
+    await handleApplyPatch(patch, { cached: true, reverse: true }, 'Chunk unstaged successfully')
+  }
+
+  const handleDiscardHunk = (hunk: DiffHunk) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Discard Chunk',
+      message: `Are you sure you want to discard this chunk in "${filePath}"? This operation cannot be undone.`,
+      confirmText: 'Discard Chunk',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        setActionLoading(true)
+        try {
+          if (isStaged) {
+            const patch = buildHunkPatch(filePath, hunk, 'unstage')
+            const res1 = await window.api.git.applyPatch(repoPath, patch, { cached: true, reverse: true })
+            if (!res1.success) {
+              addToast({ variant: 'error', title: 'Discard Chunk Failed', message: `Failed to unstage chunk: ${res1.error}` })
+              return
+            }
+            const res2 = await window.api.git.applyPatch(repoPath, patch, { reverse: true })
+            if (!res2.success) {
+              addToast({ variant: 'error', title: 'Discard Chunk Failed', message: `Failed to discard chunk: ${res2.error}` })
+              return
+            }
+          } else {
+            const patch = buildHunkPatch(filePath, hunk, 'discard')
+            const res = await window.api.git.applyPatch(repoPath, patch, { reverse: true })
+            if (!res.success) {
+              addToast({ variant: 'error', title: 'Discard Chunk Failed', message: `Failed to discard chunk: ${res.error}` })
+              return
+            }
+          }
+          setSelectedLineIndices(new Set())
+          const activeRepo = getActiveRepo()
+          if (activeRepo) await refreshRepo(activeRepo.id)
+          addToast({ variant: 'success', title: 'Chunk Discarded', message: 'Chunk discarded successfully' })
+          loadDiffContent()
+        } catch (err: any) {
+          addToast({ variant: 'error', title: 'Discard Chunk Error', message: err.message || 'Error discarding chunk' })
+        } finally {
+          setActionLoading(false)
+        }
+      }
+    })
+  }
+
+  // Line Staging / Unstaging / Discarding
+  const handleStageSelectedLines = async () => {
+    if (selectedLineIndices.size === 0) return
+    for (const hunk of hunks) {
+      const hasSelected = hunk.lines.some((l) => selectedLineIndices.has(l.indexInDiff))
+      if (hasSelected) {
+        const patch = buildSelectedLinesPatch(filePath, hunk, selectedLineIndices, 'stage')
+        await handleApplyPatch(patch, { cached: true }, 'Selected lines staged')
+      }
+    }
+  }
+
+  const handleUnstageSelectedLines = async () => {
+    if (selectedLineIndices.size === 0) return
+    for (const hunk of hunks) {
+      const hasSelected = hunk.lines.some((l) => selectedLineIndices.has(l.indexInDiff))
+      if (hasSelected) {
+        const patch = buildSelectedLinesPatch(filePath, hunk, selectedLineIndices, 'unstage')
+        await handleApplyPatch(patch, { cached: true, reverse: true }, 'Selected lines unstaged')
+      }
+    }
+  }
+
+  const handleDiscardSelectedLines = () => {
+    if (selectedLineIndices.size === 0) return
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Discard Selected Lines',
+      message: `Are you sure you want to discard ${selectedRowCount} selected line(s) in "${filePath}"? This operation cannot be undone.`,
+      confirmText: 'Discard Lines',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        setActionLoading(true)
+        try {
+          for (const hunk of hunks) {
+            const hasSelected = hunk.lines.some((l) => selectedLineIndices.has(l.indexInDiff))
+            if (hasSelected) {
+              if (isStaged) {
+                const patch = buildSelectedLinesPatch(filePath, hunk, selectedLineIndices, 'unstage')
+                const res1 = await window.api.git.applyPatch(repoPath, patch, { cached: true, reverse: true })
+                if (!res1.success) {
+                  addToast({ variant: 'error', title: 'Discard Lines Failed', message: `Failed to unstage lines: ${res1.error}` })
+                  return
+                }
+                const res2 = await window.api.git.applyPatch(repoPath, patch, { reverse: true })
+                if (!res2.success) {
+                  addToast({ variant: 'error', title: 'Discard Lines Failed', message: `Failed to discard lines: ${res2.error}` })
+                  return
+                }
+              } else {
+                const patch = buildSelectedLinesPatch(filePath, hunk, selectedLineIndices, 'discard')
+                const res = await window.api.git.applyPatch(repoPath, patch, { reverse: true })
+                if (!res.success) {
+                  addToast({ variant: 'error', title: 'Discard Lines Failed', message: `Failed to discard lines: ${res.error}` })
+                  return
+                }
+              }
+            }
+          }
+          setSelectedLineIndices(new Set())
+          const activeRepo = getActiveRepo()
+          if (activeRepo) await refreshRepo(activeRepo.id)
+          addToast({ variant: 'success', title: 'Lines Discarded', message: 'Selected lines discarded' })
+          loadDiffContent()
+        } catch (err: any) {
+          addToast({ variant: 'error', title: 'Discard Lines Error', message: err.message || 'Error discarding lines' })
+        } finally {
+          setActionLoading(false)
+        }
+      }
+    })
+  }
+
+  // Handle line click selection
+  const handleRowClick = (indices: number[], e: React.MouseEvent) => {
+    if (!isActiveChange || indices.length === 0) return
+
+    const clickedIdx = indices[0]
+    const item = diffItems[clickedIdx]
+    if (!item || item.type === 'normal') return
+
+    const newSelected = new Set(selectedLineIndices)
+
+    if (e.shiftKey && lastClickedIndex !== null) {
+      const lastRowIdx = renderRows.findIndex((r) => r.diffIndices.includes(lastClickedIndex))
+      const currentRowIdx = renderRows.findIndex((r) => r.diffIndices.some((idx) => indices.includes(idx)))
+
+      if (lastRowIdx !== -1 && currentRowIdx !== -1) {
+        const start = Math.min(lastRowIdx, currentRowIdx)
+        const end = Math.max(lastRowIdx, currentRowIdx)
+        for (let r = start; r <= end; r++) {
+          const row = renderRows[r]
+          if (row.rowType !== 'normal') {
+            row.diffIndices.forEach((idx) => newSelected.add(idx))
+          }
+        }
+      } else {
+        const start = Math.min(lastClickedIndex, clickedIdx)
+        const end = Math.max(lastClickedIndex, clickedIdx)
+        for (let k = start; k <= end; k++) {
+          if (diffItems[k] && (diffItems[k].type === 'add' || diffItems[k].type === 'delete')) {
+            newSelected.add(k)
+          }
+        }
+      }
+    } else {
+      const isSelected = indices.some((idx) => newSelected.has(idx))
+      if (isSelected) {
+        indices.forEach((idx) => newSelected.delete(idx))
+      } else {
+        indices.forEach((idx) => newSelected.add(idx))
+      }
+    }
+
+    setSelectedLineIndices(newSelected)
+    setLastClickedIndex(clickedIdx)
+  }
+
+  // Keyboard navigation & shortcuts
   useEffect(() => {
     if (!isOpen) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose()
+        if (selectedLineIndices.size > 0) {
+          setSelectedLineIndices(new Set())
+        } else {
+          onClose()
+        }
+      } else if (e.altKey && e.key === 'ArrowUp') {
+        e.preventDefault()
+        handlePrevChunk()
+      } else if (e.altKey && e.key === 'ArrowDown') {
+        e.preventDefault()
+        handleNextChunk()
+      } else if (!e.ctrlKey && !e.metaKey && e.key === 'k') {
+        handlePrevChunk()
+      } else if (!e.ctrlKey && !e.metaKey && e.key === 'j') {
+        handleNextChunk()
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && isActiveChange) {
+        e.preventDefault()
+        if (selectedLineIndices.size > 0) {
+          handleStageSelectedLines()
+        } else if (hunks[activeChunkIndex]) {
+          handleStageHunk(hunks[activeChunkIndex])
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'u' && isActiveChange) {
+        e.preventDefault()
+        if (selectedLineIndices.size > 0) {
+          handleUnstageSelectedLines()
+        } else if (hunks[activeChunkIndex]) {
+          handleUnstageHunk(hunks[activeChunkIndex])
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isOpen, onClose])
+  }, [
+    isOpen,
+    onClose,
+    selectedLineIndices,
+    activeChunkIndex,
+    hunks,
+    isActiveChange,
+    handlePrevChunk,
+    handleNextChunk,
+    handleStageSelectedLines,
+    handleUnstageSelectedLines
+  ])
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedStashFile(null)
+      setStashFiles([])
+      setSelectedLineIndices(new Set())
+      setActiveChunkIndex(0)
+    }
+  }, [isOpen])
 
   // Load stash files list
   useEffect(() => {
     if (!isOpen || !isStash || stashIndex === null || stashIndex === undefined) {
       setStashFiles([])
-      setSelectedStashFile(null)
       return
     }
 
@@ -428,78 +813,21 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     }
   }, [isOpen, isStash, stashIndex, repoPath])
 
+  // Initial and reactive diff loading
   useEffect(() => {
-    if (!isOpen) return
-
-    let isMounted = true
-    setLoading(true)
-    setError(null)
-
-    const targetFilePath = isStash ? selectedStashFile?.path : filePath
-    const targetOldPath = isStash ? selectedStashFile?.oldPath : oldPath
-    const targetStatus = isStash ? selectedStashFile?.status : status
-    const isUntracked = isStash ? selectedStashFile?.isUntracked : false
-
-    if (isStash && !selectedStashFile) {
-      setLoading(false)
-      setDiffItems([])
-      return
+    if (isOpen) {
+      loadDiffContent()
     }
+  }, [isOpen, loadDiffContent])
 
-    const fetchDiff = isStash
-      ? window.api.git.getStashFileDiff(repoPath, stashIndex!, targetFilePath, targetOldPath, targetStatus, isUntracked)
-      : isActiveChange
-      ? window.api.git.getActiveFileDiff(repoPath, targetFilePath, !!isStaged, targetOldPath)
-      : window.api.git.getCommitFileDiff(repoPath, commitHash!, targetFilePath, targetOldPath, targetStatus)
-
-    fetchDiff
-      .then((res) => {
-        if (!isMounted) return
-        if (res.success && res.data) {
-          if (res.data.isBinary) {
-            setIsBinary(true)
-            setDiffItems([])
-          } else {
-            setIsBinary(false)
-            const computed = computeDiff(res.data.before, res.data.after)
-            setDiffItems(computed)
-          }
-        } else {
-          setError(res.error || 'Failed to retrieve diff')
-        }
-        setLoading(false)
-      })
-      .catch((err) => {
-        if (!isMounted) return
-        setError(err.message || 'Error fetching diff')
-        setLoading(false)
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [
-    isOpen,
-    filePath,
-    commitHash,
-    repoPath,
-    isActiveChange,
-    isStaged,
-    oldPath,
-    status,
-    isStash,
-    stashIndex,
-    selectedStashFile
-  ])
-
-  // 2. Scroll to the first diff position after loading
+  // Scroll to first change on load
   useEffect(() => {
     if (!loading && diffItems.length > 0) {
       const timer = setTimeout(() => {
         if (bodyRef.current) {
           const firstChange = bodyRef.current.querySelector(
-              '.diff-row.type-change, .diff-row.type-add, .diff-row.type-delete'
-            )
+            '.diff-row.type-change, .diff-row.type-add, .diff-row.type-delete'
+          )
           if (firstChange) {
             firstChange.scrollIntoView({ block: 'center', behavior: 'auto' })
           }
@@ -510,10 +838,13 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     return undefined
   }, [loading, diffItems])
 
-  const renderRows = buildRenderRows(diffItems)
-  const changeIndexes = renderRows
-    .map((row, idx) => ({ rowType: row.rowType, idx }))
-    .filter((r) => r.rowType !== 'normal')
+  const changeIndexes = useMemo(
+    () =>
+      renderRows
+        .map((row, idx) => ({ rowType: row.rowType, idx }))
+        .filter((r) => r.rowType !== 'normal'),
+    [renderRows]
+  )
 
   const [copiedSide, setCopiedSide] = useState<'left' | 'right' | null>(null)
 
@@ -603,7 +934,6 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     }
   }
 
-  // Overview ruler jump helper
   const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const clickY = e.clientY - rect.top
@@ -656,7 +986,59 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* View Mode Toggle (Chunks vs Full File) */}
+            {renderRows.length > 0 && !loading && !error && !isBinary && (
+              <div className="diff-view-toggle" data-testid="view-mode-toggle">
+                <button
+                  className={`diff-view-toggle-btn ${viewMode === 'chunks' ? 'active' : ''}`}
+                  onClick={() => setViewMode('chunks')}
+                  title="Show only changed chunks with context"
+                  data-testid="toggle-chunks-btn"
+                >
+                  <Layers size={13} />
+                  <span>Chunks</span>
+                </button>
+                <button
+                  className={`diff-view-toggle-btn ${viewMode === 'full' ? 'active' : ''}`}
+                  onClick={() => setViewMode('full')}
+                  title="Show entire file content with diff highlights"
+                  data-testid="toggle-full-btn"
+                >
+                  <FileText size={13} />
+                  <span>Full File</span>
+                </button>
+              </div>
+            )}
+
+            {/* Chunk Navigation Buttons */}
+            {hunks.length > 0 && (
+              <div className="diff-chunk-nav" data-testid="chunk-nav">
+                <button
+                  className="diff-chunk-btn"
+                  onClick={handlePrevChunk}
+                  disabled={activeChunkIndex === 0}
+                  title="Previous Chunk (Alt+Up or K)"
+                  data-testid="prev-chunk-btn"
+                >
+                  <ChevronUp size={14} />
+                </button>
+                <span className="diff-chunk-counter" data-testid="chunk-counter">
+                  Chunk {activeChunkIndex + 1} of {hunks.length}
+                </span>
+                <button
+                  className="diff-chunk-btn"
+                  onClick={handleNextChunk}
+                  disabled={activeChunkIndex >= hunks.length - 1}
+                  title="Next Chunk (Alt+Down or J)"
+                  data-testid="next-chunk-btn"
+                >
+                  <ChevronDown size={14} />
+                </button>
+              </div>
+            )}
+
             <button
               className="diff-copy-btn"
               data-testid="copy-left-btn"
@@ -680,6 +1062,9 @@ export const DiffModal: React.FC<DiffModalProps> = ({
             </button>
           </div>
         </div>
+
+
+
         <div className="diff-modal-body">
           {isStash && (
             <div
@@ -701,100 +1086,42 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                   color: 'var(--text-secondary)',
                   borderBottom: '1px solid var(--border)',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
+                  letterSpacing: '0.05em'
                 }}
               >
-                Stash Files
+                Stash Files ({stashFiles.length})
               </div>
-              <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+              <div style={{ flex: 1, overflow: 'auto' }}>
                 {stashFilesLoading ? (
-                  <div
-                    style={{
-                      padding: '16px',
-                      textAlign: 'center',
-                      color: 'var(--text-secondary)',
-                      fontSize: '12px'
-                    }}
-                  >
-                    Loading...
+                  <div style={{ padding: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Loading stash files...
                   </div>
                 ) : stashFilesError ? (
-                  <div
-                    style={{
-                      padding: '16px',
-                      textAlign: 'center',
-                      color: '#f87171',
-                      fontSize: '12px'
-                    }}
-                  >
+                  <div style={{ padding: '16px', fontSize: '12px', color: '#f87171' }}>
                     {stashFilesError}
-                  </div>
-                ) : stashFiles.length === 0 ? (
-                  <div
-                    style={{
-                      padding: '16px',
-                      textAlign: 'center',
-                      color: 'var(--text-secondary)',
-                      fontSize: '12px'
-                    }}
-                  >
-                    No files changed
                   </div>
                 ) : (
                   stashFiles.map((file) => {
-                    const isFileSelected = file.path === selectedStashFile?.path
+                    const isSelected = selectedStashFile?.path === file.path
                     return (
                       <div
                         key={file.path}
                         onClick={() => setSelectedStashFile(file)}
                         style={{
+                          padding: '8px 16px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          backgroundColor: isSelected ? 'var(--hover)' : 'transparent',
+                          color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
                           display: 'flex',
                           alignItems: 'center',
-                          padding: '6px 8px',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          backgroundColor: isFileSelected
-                            ? 'rgba(99, 102, 241, 0.15)'
-                            : 'transparent',
-                          transition: 'all 0.15s ease',
-                          marginBottom: '2px'
+                          gap: '8px',
+                          borderBottom: '1px solid rgba(255,255,255,0.03)'
                         }}
-                        className="stash-modal-file-item"
                       >
-                        <FileText
-                          size={13}
-                          style={{
-                            marginRight: '6px',
-                            color: isFileSelected
-                              ? 'var(--accent-light)'
-                              : 'var(--text-secondary)',
-                            flexShrink: 0
-                          }}
-                        />
-                        <span
-                          style={{
-                            fontSize: '12px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            flex: 1,
-                            color: isFileSelected ? 'var(--text-primary)' : 'var(--text-secondary)'
-                          }}
-                          data-tooltip={file.path}
-                        >
+                        <FileText size={14} style={{ flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {file.path}
-                        </span>
-                        <span
-                          className={`file-status status-${file.status.toLowerCase()}`}
-                          style={{
-                            fontSize: '9px',
-                            padding: '1px 4px',
-                            borderRadius: '3px',
-                            fontWeight: 700,
-                            flexShrink: 0
-                          }}
-                        >
-                          {file.status}
                         </span>
                       </div>
                     )
@@ -838,31 +1165,298 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                 Binary file (diff not available as text)
               </div>
             )}
+
             {!loading && !error && !isBinary && (
               <div className="diff-table">
-                {renderRows.map((row, idx) => (
-                  <div key={idx} className={`diff-row type-${row.rowType}`}>
-                    <div className={`diff-col left${row.rowType === 'add' ? ' empty-side' : ''}`}>
-                      <span className="diff-line-number">{row.beforeNum || ''}</span>
-                      {row.oldSpans ? (
-                        <InlineContent spans={row.oldSpans} type="delete" />
-                      ) : (
-                        <pre className="diff-line-content">{row.beforeLine ?? ''}</pre>
-                      )}
-                    </div>
-                    <div className={`diff-col right${row.rowType === 'delete' ? ' empty-side' : ''}`}>
-                      <span className="diff-line-number">{row.afterNum || ''}</span>
-                      {row.newSpans ? (
-                        <InlineContent spans={row.newSpans} type="add" />
-                      ) : (
-                        <pre className="diff-line-content">{row.afterLine ?? ''}</pre>
-                      )}
-                    </div>
+                {renderRows.length === 0 ? (
+                  <div
+                    data-testid="no-changes-placeholder"
+                    style={{
+                      padding: '60px',
+                      textAlign: 'center',
+                      color: 'var(--text-secondary)'
+                    }}
+                  >
+                    No changes to display for this file
                   </div>
-                ))}
+                ) : viewMode === 'chunks' && hunks.length > 0 ? (
+                  hunks.map((hunk, hunkIdx) => {
+                    const hunkIndices = new Set(hunk.lines.map((l) => l.indexInDiff))
+                    const hunkRows = renderRows.filter((row) =>
+                      row.diffIndices.some((idx) => hunkIndices.has(idx))
+                    )
+                    const rowsToRender = hunkRows.length > 0 ? hunkRows : renderRows
+
+                    return (
+                      <div key={`hunk-block-${hunkIdx}`}>
+                        {/* Hunk Header Bar */}
+                        <div
+                          id={`diff-hunk-${hunkIdx}`}
+                          className="diff-hunk-header"
+                          data-testid={`hunk-header-${hunkIdx}`}
+                        >
+                          <div className="diff-hunk-title">
+                            <Layers size={14} />
+                            <span>{hunk.header}</span>
+                            <span style={{ opacity: 0.6, fontSize: '11px' }}>
+                              (Chunk {hunkIdx + 1} of {hunks.length})
+                            </span>
+                          </div>
+
+                          {isActiveChange && (
+                            <div className="diff-hunk-actions">
+                              {!isStaged ? (
+                                <>
+                                  <button
+                                    className="diff-hunk-btn btn-stage"
+                                    onClick={() => handleStageHunk(hunk)}
+                                    disabled={actionLoading}
+                                    title="Stage this chunk"
+                                    data-testid={`stage-hunk-btn-${hunkIdx}`}
+                                  >
+                                    <Plus size={12} />
+                                    <span>Stage Chunk</span>
+                                  </button>
+                                  <button
+                                    className="diff-hunk-btn btn-discard"
+                                    onClick={() => handleDiscardHunk(hunk)}
+                                    disabled={actionLoading}
+                                    title="Discard changes in this chunk"
+                                    data-testid={`discard-hunk-btn-${hunkIdx}`}
+                                  >
+                                    <RotateCcw size={12} />
+                                    <span>Discard Chunk</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    className="diff-hunk-btn btn-unstage"
+                                    onClick={() => handleUnstageHunk(hunk)}
+                                    disabled={actionLoading}
+                                    title="Unstage this chunk"
+                                    data-testid={`unstage-hunk-btn-${hunkIdx}`}
+                                  >
+                                    <Minus size={12} />
+                                    <span>Unstage Chunk</span>
+                                  </button>
+                                  <button
+                                    className="diff-hunk-btn btn-discard"
+                                    onClick={() => handleDiscardHunk(hunk)}
+                                    disabled={actionLoading}
+                                    title="Discard staged changes in this chunk"
+                                    data-testid={`discard-hunk-btn-${hunkIdx}`}
+                                  >
+                                    <RotateCcw size={12} />
+                                    <span>Discard Chunk</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Hunk Rows */}
+                        {rowsToRender.map((row, rowIdx) => {
+                          const isRowSelected = row.diffIndices.some((idx) => selectedLineIndices.has(idx))
+
+                          return (
+                            <div
+                              key={`row-${hunkIdx}-${rowIdx}`}
+                              className={`diff-row type-${row.rowType}${isRowSelected ? ' line-selected' : ''}`}
+                              onClick={(e) => handleRowClick(row.diffIndices, e)}
+                            >
+                              <div className={`diff-col left${row.rowType === 'add' ? ' empty-side' : ''}`}>
+                                <span className="diff-line-number">{row.beforeNum || ''}</span>
+                                {row.oldSpans ? (
+                                  <InlineContent spans={row.oldSpans} type="delete" />
+                                ) : (
+                                  <pre className="diff-line-content">{row.beforeLine ?? ''}</pre>
+                                )}
+                              </div>
+                              <div className={`diff-col right${row.rowType === 'delete' ? ' empty-side' : ''}`}>
+                                <span className="diff-line-number">{row.afterNum || ''}</span>
+                                {row.newSpans ? (
+                                  <InlineContent spans={row.newSpans} type="add" />
+                                ) : (
+                                  <pre className="diff-line-content">{row.afterLine ?? ''}</pre>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })
+                ) : (
+                  renderRows.map((row, rowIdx) => {
+                    const matchingHunk = row.diffIndices
+                      .map((idx) => hunkByStartDiffIdx.get(idx))
+                      .find((item) => item !== undefined)
+                    const isRowSelected = row.diffIndices.some((idx) => selectedLineIndices.has(idx))
+
+                    return (
+                      <React.Fragment key={`full-row-${rowIdx}`}>
+                        {matchingHunk && (
+                          <div
+                            id={`diff-hunk-${matchingHunk.hunkIdx}`}
+                            className="diff-hunk-header"
+                            data-testid={`hunk-header-${matchingHunk.hunkIdx}`}
+                          >
+                            <div className="diff-hunk-title">
+                              <Layers size={14} />
+                              <span>{matchingHunk.hunk.header}</span>
+                              <span style={{ opacity: 0.6, fontSize: '11px' }}>
+                                (Chunk {matchingHunk.hunkIdx + 1} of {hunks.length})
+                              </span>
+                            </div>
+
+                            {isActiveChange && (
+                              <div className="diff-hunk-actions">
+                                {!isStaged ? (
+                                  <>
+                                    <button
+                                      className="diff-hunk-btn btn-stage"
+                                      onClick={() => handleStageHunk(matchingHunk.hunk)}
+                                      disabled={actionLoading}
+                                      title="Stage this chunk"
+                                      data-testid={`stage-hunk-btn-${matchingHunk.hunkIdx}`}
+                                    >
+                                      <Plus size={12} />
+                                      <span>Stage Chunk</span>
+                                    </button>
+                                    <button
+                                      className="diff-hunk-btn btn-discard"
+                                      onClick={() => handleDiscardHunk(matchingHunk.hunk)}
+                                      disabled={actionLoading}
+                                      title="Discard changes in this chunk"
+                                      data-testid={`discard-hunk-btn-${matchingHunk.hunkIdx}`}
+                                    >
+                                      <RotateCcw size={12} />
+                                      <span>Discard Chunk</span>
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      className="diff-hunk-btn btn-unstage"
+                                      onClick={() => handleUnstageHunk(matchingHunk.hunk)}
+                                      disabled={actionLoading}
+                                      title="Unstage this chunk"
+                                      data-testid={`unstage-hunk-btn-${matchingHunk.hunkIdx}`}
+                                    >
+                                      <Minus size={12} />
+                                      <span>Unstage Chunk</span>
+                                    </button>
+                                    <button
+                                      className="diff-hunk-btn btn-discard"
+                                      onClick={() => handleDiscardHunk(matchingHunk.hunk)}
+                                      disabled={actionLoading}
+                                      title="Discard staged changes in this chunk"
+                                      data-testid={`discard-hunk-btn-${matchingHunk.hunkIdx}`}
+                                    >
+                                      <RotateCcw size={12} />
+                                      <span>Discard Chunk</span>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div
+                          className={`diff-row type-${row.rowType}${isRowSelected ? ' line-selected' : ''}`}
+                          onClick={(e) => handleRowClick(row.diffIndices, e)}
+                        >
+                          <div className={`diff-col left${row.rowType === 'add' ? ' empty-side' : ''}`}>
+                            <span className="diff-line-number">{row.beforeNum || ''}</span>
+                            {row.oldSpans ? (
+                              <InlineContent spans={row.oldSpans} type="delete" />
+                            ) : (
+                              <pre className="diff-line-content">{row.beforeLine ?? ''}</pre>
+                            )}
+                          </div>
+                          <div className={`diff-col right${row.rowType === 'delete' ? ' empty-side' : ''}`}>
+                            <span className="diff-line-number">{row.afterNum || ''}</span>
+                            {row.newSpans ? (
+                              <InlineContent spans={row.newSpans} type="add" />
+                            ) : (
+                              <pre className="diff-line-content">{row.afterLine ?? ''}</pre>
+                            )}
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    )
+                  })
+                )}
               </div>
             )}
           </div>
+
+          {/* Floating Contextual Action Bar for Selected Lines */}
+          {isActiveChange && selectedRowCount > 0 && (
+            <div className="diff-floating-action-bar" data-testid="floating-action-bar">
+              <div className="diff-floating-badge">
+                <Layers size={14} style={{ color: 'var(--accent)' }} />
+                <span>{selectedRowCount} selected line(s)</span>
+              </div>
+
+              {!isStaged ? (
+                <>
+                  <button
+                    className="diff-hunk-btn btn-stage"
+                    onClick={handleStageSelectedLines}
+                    disabled={actionLoading}
+                    data-testid="stage-selected-btn"
+                  >
+                    <Plus size={12} />
+                    <span>Stage Selected Lines</span>
+                  </button>
+                  <button
+                    className="diff-hunk-btn btn-discard"
+                    onClick={handleDiscardSelectedLines}
+                    disabled={actionLoading}
+                    data-testid="discard-selected-btn"
+                  >
+                    <Trash2 size={12} />
+                    <span>Discard Selected Lines</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="diff-hunk-btn btn-unstage"
+                    onClick={handleUnstageSelectedLines}
+                    disabled={actionLoading}
+                    data-testid="unstage-selected-btn"
+                  >
+                    <Minus size={12} />
+                    <span>Unstage Selected Lines</span>
+                  </button>
+                  <button
+                    className="diff-hunk-btn btn-discard"
+                    onClick={handleDiscardSelectedLines}
+                    disabled={actionLoading}
+                    data-testid="discard-selected-btn"
+                  >
+                    <Trash2 size={12} />
+                    <span>Discard Selected Lines</span>
+                  </button>
+                </>
+              )}
+
+              <button
+                className="diff-hunk-btn"
+                onClick={() => setSelectedLineIndices(new Set())}
+                style={{ marginLeft: '4px' }}
+                data-testid="clear-selection-btn"
+              >
+                <span>Deselect All</span>
+              </button>
+            </div>
+          )}
+
           {!loading && !error && !isBinary && renderRows.length > 0 && (
             <div className="diff-overview-ruler" onClick={handleRulerClick}>
               {changeIndexes.map((change) => {
@@ -893,6 +1487,100 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Custom Non-Blocking Confirmation Dialog for Discard Actions */}
+      {confirmDialog && confirmDialog.isOpen && (
+        <div
+          className="modal-backdrop"
+          style={{
+            zIndex: 1200,
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={() => setConfirmDialog(null)}
+          data-testid="custom-confirm-dialog"
+        >
+          <div
+            className="modal-content"
+            style={{
+              width: '420px',
+              padding: '24px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ef4444',
+                  flexShrink: 0
+                }}
+              >
+                <AlertTriangle size={20} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                {confirmDialog.title}
+              </h3>
+            </div>
+
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {confirmDialog.message}
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                className="btn-secondary"
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer'
+                }}
+                onClick={() => setConfirmDialog(null)}
+                data-testid="cancel-discard-btn"
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-danger"
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  background: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+                onClick={confirmDialog.onConfirm}
+                data-testid="confirm-discard-btn"
+              >
+                {confirmDialog.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -797,6 +797,220 @@ body {
   transform: rotate(90deg);
 }
 
+/* View Mode Toggle Styles */
+.diff-view-toggle {
+  display: flex;
+  align-items: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.diff-view-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.diff-view-toggle-btn:hover:not(.active) {
+  color: var(--text-primary);
+  background-color: var(--hover);
+}
+
+.diff-view-toggle-btn.active {
+  background-color: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Chunk Navigation Styles */
+.diff-chunk-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+.diff-chunk-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.diff-chunk-btn:hover:not(:disabled) {
+  background-color: var(--hover);
+  color: var(--text-primary);
+}
+
+.diff-chunk-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.diff-chunk-counter {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 0 4px;
+  user-select: none;
+}
+
+/* Hunk Header Bar */
+.diff-hunk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background-color: rgba(59, 130, 246, 0.08);
+  border-top: 1px solid rgba(59, 130, 246, 0.2);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #60a5fa;
+  user-select: none;
+  scroll-margin-top: 40px;
+}
+
+.diff-hunk-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.diff-hunk-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diff-hunk-btn {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.diff-hunk-btn:hover {
+  background-color: var(--hover);
+  border-color: var(--accent);
+}
+
+.diff-hunk-btn.btn-stage {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+.diff-hunk-btn.btn-stage:hover {
+  background-color: rgba(52, 211, 153, 0.15);
+}
+
+.diff-hunk-btn.btn-unstage {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.diff-hunk-btn.btn-unstage:hover {
+  background-color: rgba(245, 158, 11, 0.15);
+}
+
+.diff-hunk-btn.btn-discard {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.diff-hunk-btn.btn-discard:hover {
+  background-color: rgba(248, 113, 113, 0.15);
+}
+
+/* Line Selection & Floating Action Bar */
+.diff-row {
+  cursor: pointer;
+}
+
+.diff-row.line-selected {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  outline: 1px solid rgba(59, 130, 246, 0.4);
+  z-index: 1;
+}
+
+.diff-line-select-gutter {
+  width: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.diff-floating-action-bar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 15px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.diff-floating-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .diff-copy-btn {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -896,7 +1110,8 @@ body {
   margin: 0;
   padding: 4px 6px;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: normal;
+  overflow-wrap: anywhere;
   flex: 1;
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
