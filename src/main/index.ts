@@ -659,9 +659,9 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:createTag', async (_, repoPath, tagName) => {
+  ipcMain.handle('git:createTag', async (_, repoPath, tagName, target) => {
     try {
-      await gitService.createTag(repoPath, tagName)
+      await gitService.createTag(repoPath, tagName, target)
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }

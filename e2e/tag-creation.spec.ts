@@ -335,4 +335,166 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await app.close()
     }
   })
+
+  test('should allow creating a tag on a specific commit via commit actions and display target commit info', async () => {
+    fs.writeFileSync(path.join(sandbox.dir, 'commit1.txt'), 'commit 1')
+    await sandbox.git.add('commit1.txt')
+    await sandbox.git.commit('First custom commit')
+
+    fs.writeFileSync(path.join(sandbox.dir, 'commit2.txt'), 'commit 2')
+    await sandbox.git.add('commit2.txt')
+    await sandbox.git.commit('Second custom commit')
+
+    const log = await sandbox.git.log()
+    const targetCommit = log.all.find((c) => c.message.includes('First custom commit'))!
+    expect(targetCommit).toBeDefined()
+
+    console.log('[Commit Tag Test] Launching Electron App...')
+    const { app, page } = await launchElectronApp()
+
+    try {
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      await addRepoViaUI(page)
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      console.log('[Commit Tag Test] Waiting for commit list...')
+      const commitList = page.locator('.commit-list')
+      await expect(commitList).toBeVisible()
+
+      console.log(`[Commit Tag Test] Selecting commit row for ${targetCommit.hash}...`)
+      const commitRow = commitList.locator('.commit-item', { hasText: 'First custom commit' })
+      await expect(commitRow).toBeVisible()
+      await commitRow.click()
+      await commitRow.hover()
+      await page.waitForTimeout(300)
+
+      const commitTagBtn = commitRow.locator('[data-testid^="commit-tag-btn-"]')
+      await expect(commitTagBtn).toBeVisible()
+      await commitTagBtn.click()
+      await page.waitForTimeout(300)
+
+      console.log('[Commit Tag Test] Verifying target commit info is displayed in tag dialog...')
+      const targetCommitInfo = page.locator('[data-testid="tag-target-commit-info"]')
+      await expect(targetCommitInfo).toBeVisible()
+      await expect(targetCommitInfo).toContainText(targetCommit.hash.substring(0, 8))
+      await expect(targetCommitInfo).toContainText('First custom commit')
+
+      const input = page.locator('[data-testid="new-tag-name-input"]')
+      await input.fill('v2.0.0')
+
+      const submitBtn = page.locator('[data-testid="create-tag-submit-btn"]')
+      await submitBtn.click()
+      await page.waitForTimeout(1000)
+
+      console.log('[Commit Tag Test] Verifying tag v2.0.0 exists in Git sandbox...')
+      const tags = await sandbox.git.tags()
+      expect(tags.all).toContain('v2.0.0')
+
+      console.log('[Commit Tag Test] Verified creating tag on specific commit successfully.')
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('should hide reset and squash buttons during branch preview, but allow tagging', async () => {
+    fs.writeFileSync(path.join(sandbox.dir, 'commit1.txt'), 'base')
+    await sandbox.git.add('commit1.txt')
+    await sandbox.git.commit('Base commit')
+
+    await sandbox.git.checkoutLocalBranch('feature-branch')
+    fs.writeFileSync(path.join(sandbox.dir, 'feature.txt'), 'feature')
+    await sandbox.git.add('feature.txt')
+    await sandbox.git.commit('Feature commit 1')
+
+    fs.writeFileSync(path.join(sandbox.dir, 'feature2.txt'), 'feature 2')
+    await sandbox.git.add('feature2.txt')
+    await sandbox.git.commit('Feature commit 2')
+
+    await sandbox.git.checkout('main')
+
+    const log = await sandbox.git.log(['feature-branch'])
+    const featureCommit = log.all.find((c) => c.message.includes('Feature commit 1'))!
+    expect(featureCommit).toBeDefined()
+
+    console.log('[Branch Preview Actions Test] Launching Electron App...')
+    const { app, page } = await launchElectronApp()
+
+    try {
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      await addRepoViaUI(page)
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      console.log('[Branch Preview Actions Test] Previewing feature-branch...')
+      const branchItem = page.locator('[data-testid="sidebar-branch-feature-branch"]')
+      await expect(branchItem).toBeVisible()
+      await branchItem.click({ position: { x: 10, y: 10 } })
+      await page.waitForTimeout(1000)
+
+      console.log('[Branch Preview Actions Test] Hovering over previewed commit row...')
+      const commitRow = page.locator('.commit-item', { hasText: 'Feature commit 1' })
+      await expect(commitRow).toBeVisible()
+      await commitRow.hover()
+      await page.waitForTimeout(300)
+
+      console.log('[Branch Preview Actions Test] Verifying reset and squash buttons are hidden...')
+      const resetBtn = commitRow.locator('[data-testid^="commit-reset-btn-"]')
+      const squashBtn = commitRow.locator('[data-testid^="commit-squash-btn-"]')
+      await expect(resetBtn).not.toBeVisible()
+      await expect(squashBtn).not.toBeVisible()
+
+      console.log('[Branch Preview Actions Test] Verifying tag button IS visible...')
+      const tagBtn = commitRow.locator('[data-testid^="commit-tag-btn-"]')
+      await expect(tagBtn).toBeVisible()
+
+      console.log('[Branch Preview Actions Test] Creating tag on previewed branch commit...')
+      await tagBtn.click()
+      await page.waitForTimeout(300)
+
+      const input = page.locator('[data-testid="new-tag-name-input"]')
+      await input.fill('preview-tag-1')
+
+      const submitBtn = page.locator('[data-testid="create-tag-submit-btn"]')
+      await submitBtn.click()
+      await page.waitForTimeout(1000)
+
+      console.log('[Branch Preview Actions Test] Verifying tag preview-tag-1 in sandbox...')
+      const tags = await sandbox.git.tags()
+      expect(tags.all).toContain('preview-tag-1')
+
+      console.log('[Branch Preview Actions Test] Verified preview action constraints successfully.')
+    } finally {
+      await app.close()
+    }
+  })
 })
+

@@ -39,7 +39,7 @@ declare global {
         removeWorktree: (repoPath: string, targetPath: string) => Promise<IpcResponse<void>>;
         getTags: (repoPath: string) => Promise<IpcResponse<string[]>>;
         getUnpushedTags: (repoPath: string) => Promise<IpcResponse<string[]>>;
-        createTag: (repoPath: string, tagName: string) => Promise<IpcResponse<void>>;
+        createTag: (repoPath: string, tagName: string, target?: string) => Promise<IpcResponse<void>>;
         pushTags: (repoPath: string, remote?: string) => Promise<IpcResponse<void>>;
         deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) => Promise<IpcResponse<void>>;
       },

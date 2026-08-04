@@ -1471,9 +1471,13 @@ export const gitService = {
     }
   },
 
-  createTag: async (repoPath: string, tagName: string): Promise<void> => {
+  createTag: async (repoPath: string, tagName: string, target?: string): Promise<void> => {
     const git = getGitInstance(repoPath);
-    await git.addTag(tagName);
+    if (target) {
+      await git.tag([tagName, target]);
+    } else {
+      await git.addTag(tagName);
+    }
   },
 
   pushTags: async (repoPath: string, remote?: string): Promise<void> => {

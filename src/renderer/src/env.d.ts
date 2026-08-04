@@ -92,7 +92,7 @@ declare global {
         resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) => Promise<{ success: boolean; error?: string }>;
         getMergeStatus: (repoPath: string) => Promise<{ success: boolean; data?: { isMerge: boolean; isRebase: boolean; isCherryPick?: boolean; inProgress: boolean }; error?: string }>;
         getTags: (repoPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>;
-        createTag: (repoPath: string, tagName: string) => Promise<{ success: boolean; error?: string }>;
+        createTag: (repoPath: string, tagName: string, target?: string) => Promise<{ success: boolean; error?: string }>;
         pushTags: (repoPath: string, remote?: string) => Promise<{ success: boolean; error?: string }>;
         deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) => Promise<{ success: boolean; error?: string }>;
         getWorktrees: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ path: string; branch: string; hash: string }>; error?: string }>;

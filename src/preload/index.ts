@@ -72,7 +72,8 @@ const api = {
     getMergeStatus: (repoPath: string) => ipcRenderer.invoke('git:getMergeStatus', repoPath),
     getTags: (repoPath: string) => ipcRenderer.invoke('git:getTags', repoPath),
     getUnpushedTags: (repoPath: string) => ipcRenderer.invoke('git:getUnpushedTags', repoPath),
-    createTag: (repoPath: string, tagName: string) => ipcRenderer.invoke('git:createTag', repoPath, tagName),
+    createTag: (repoPath: string, tagName: string, target?: string) =>
+      ipcRenderer.invoke('git:createTag', repoPath, tagName, target),
     pushTags: (repoPath: string, remote?: string) => ipcRenderer.invoke('git:pushTags', repoPath, remote),
     deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) =>
       ipcRenderer.invoke('git:deleteTag', repoPath, tagName, deleteRemote, remote),

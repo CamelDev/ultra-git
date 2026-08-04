@@ -117,7 +117,8 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
     const name = newTagName.trim()
     if (!name || !activeRepo) return
     try {
-      const res = await window.api.git.createTag(activeRepo.path, name)
+      const targetCommit = activeRepo.commits?.[0]
+      const res = await window.api.git.createTag(activeRepo.path, name, targetCommit?.hash)
       if (res.success) {
         setIsTagModalOpen(false)
         setNewTagName('')
@@ -451,6 +452,35 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                 Create a new local tag at the latest commit of <strong>{activeRepo?.branch}</strong> (HEAD).
               </div>
+              {activeRepo?.commits?.[0] && (
+                <div 
+                  style={{ 
+                    backgroundColor: 'var(--bg-secondary)', 
+                    border: '1px solid var(--border)', 
+                    borderRadius: '6px', 
+                    padding: '10px 12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}
+                  data-testid="tag-target-commit-info"
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent)' }}>TAGGING COMMIT</span>
+                    <span style={{ fontSize: '11px', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                      {activeRepo.commits[0].hash.substring(0, 8)}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {activeRepo.commits[0].message}
+                  </div>
+                  {activeRepo.commits[0].author_name && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      By {activeRepo.commits[0].author_name} &bull; {new Date(activeRepo.commits[0].date).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              )}
               <input
                 type="text"
                 placeholder="Tag name (e.g. v1.0.0)..."
