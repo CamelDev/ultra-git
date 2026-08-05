@@ -138,6 +138,15 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const [amusingMessageIndex, setAmusingMessageIndex] = useState(0)
   const [worktreePathToDelete, setWorktreeToDeletePath] = useState<string | null>(null)
 
+  const [checkoutRemoteTarget, setCheckoutRemoteTarget] = useState<{
+    remoteBranchName: string
+    localName: string
+    localExists: boolean
+  } | null>(null)
+  const [popStashIndex, setPopStashIndex] = useState<number | null>(null)
+  const [deleteStashIndex, setDeleteStashIndex] = useState<number | null>(null)
+  const [tagToDelete, setTagToDelete] = useState<string | null>(null)
+
   const openWorktreeModal = () => {
     setBaseBranch(activeRepo?.branch || 'main')
     setNewWorktreeBranch('')
@@ -330,72 +339,16 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     return () => clearInterval(interval);
   }, [deletingWorktreePath]);
 
-  const handlePopStash = async (e: React.MouseEvent, index: number) => {
+  const handlePopStash = (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
     if (!activeRepo) return
-
-    const confirmRes = await window.api.app.showMessageBox({
-      type: 'question',
-      title: 'Pop Stash',
-      message: 'Are you sure you want to pop this stash back into your working directory?',
-      buttons: ['Cancel', 'Pop'],
-      defaultId: 1,
-      cancelId: 0
-    })
-
-    if (!confirmRes.success || confirmRes.response !== 1) {
-      return
-    }
-
-    setPoppingIndex(index)
-    setConflictWarning(false)
-    try {
-      const res = await window.api.git.stashPop(activeRepo.path, index)
-      if (res.success) {
-        if (res.data?.hadConflicts) {
-          setConflictWarning(true)
-        }
-        await refreshRepo(activeRepo.id)
-      } else {
-        console.error('Failed to pop stash:', res.error)
-      }
-    } catch (err) {
-      console.error('Error popping stash:', err)
-    } finally {
-      setPoppingIndex(null)
-    }
+    setPopStashIndex(index)
   }
 
-  const handleDeleteStash = async (e: React.MouseEvent, index: number) => {
+  const handleDeleteStash = (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
     if (!activeRepo) return
-
-    const confirmRes = await window.api.app.showMessageBox({
-      type: 'warning',
-      title: 'Delete Stash',
-      message: 'Are you sure you want to delete this stash? This action cannot be undone.',
-      buttons: ['Cancel', 'Delete'],
-      defaultId: 1,
-      cancelId: 0
-    })
-
-    if (!confirmRes.success || confirmRes.response !== 1) {
-      return
-    }
-
-    setDeletingIndex(index)
-    try {
-      const res = await window.api.git.stashDrop(activeRepo.path, index)
-      if (res.success) {
-        await refreshRepo(activeRepo.id)
-      } else {
-        console.error('Failed to delete stash:', res.error)
-      }
-    } catch (err) {
-      console.error('Error deleting stash:', err)
-    } finally {
-      setDeletingIndex(null)
-    }
+    setDeleteStashIndex(index)
   }
 
   const handleShowStashDetails = (e: React.MouseEvent, index: number, message: string) => {
@@ -534,7 +487,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     }
   }
 
-  const handleCheckoutRemoteBranch = async (remoteBranchName: string) => {
+  const handleCheckoutRemoteBranch = (remoteBranchName: string) => {
     if (!activeRepo) return;
 
     // Extract local name (e.g. "origin/feature/abc" -> "feature/abc")
@@ -548,50 +501,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       return name === localName;
     });
 
-    const confirmRes = await window.api.app.showMessageBox({
-      type: 'question',
-      title: 'Checkout Remote Branch',
-      message: localExists
-        ? `Local branch "${localName}" already exists. Do you want to checkout the existing local branch?`
-        : `Do you want to checkout remote branch "${remoteBranchName}"?\n\nThis will create and checkout a local tracking branch named "${localName}".`,
-      buttons: ['Cancel', 'Checkout'],
-      defaultId: 1,
-      cancelId: 0
+    setCheckoutRemoteTarget({
+      remoteBranchName,
+      localName,
+      localExists
     });
-
-    if (!confirmRes.success || confirmRes.response !== 1) {
-      return;
-    }
-
-    if (localExists) {
-      await handleCheckoutBranch(localName);
-      return;
-    }
-
-    try {
-      const res = await window.api.git.createBranch(activeRepo.path, localName, remoteBranchName);
-      if (res.success) {
-        if (previewBranch === remoteBranchName || previewBranch === localName) {
-          clearBranchPreview()
-        }
-        await refreshRepo(activeRepo.id);
-      } else {
-        await window.api.app.showMessageBox({
-          type: 'error',
-          title: 'Checkout Failed',
-          message: `Failed to checkout remote branch: ${res.error || 'Unknown error'}`,
-          buttons: ['OK']
-        });
-      }
-    } catch (err: any) {
-      console.error('Error checking out remote branch:', err);
-      await window.api.app.showMessageBox({
-        type: 'error',
-        title: 'Checkout Error',
-        message: `An unexpected error occurred: ${err.message || err}`,
-        buttons: ['OK']
-      });
-    }
   }
 
   const openMergeModal = (e: React.MouseEvent, sourceBranch: string) => {
@@ -671,47 +585,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     setIsPushTagsConfirmOpen(true)
   }
 
-  const handleDeleteTagClick = async (e: React.MouseEvent, tagName: string) => {
+  const handleDeleteTagClick = (e: React.MouseEvent, tagName: string) => {
     e.stopPropagation()
     if (!activeRepo) return
-
-    const confirmRes = await window.api.app.showMessageBox({
-      type: 'question',
-      title: 'Delete Tag',
-      message: `Are you sure you want to delete tag '${tagName}'?`,
-      buttons: ['Cancel', 'Delete Tag'],
-      defaultId: 1,
-      cancelId: 0,
-      checkboxLabel: 'Delete this tag from remote (origin) as well',
-      checkboxChecked: false
-    })
-
-    if (!confirmRes.success || confirmRes.response !== 1) {
-      return
-    }
-
-    const deleteRemote = confirmRes.checkboxChecked || false
-
-    try {
-      const res = await window.api.git.deleteTag(activeRepo.path, tagName, deleteRemote)
-      if (res.success) {
-        await refreshRepo(activeRepo.id)
-      } else {
-        console.error('Failed to delete tag:', res.error)
-        await window.api.app.showMessageBox({
-          type: 'error',
-          title: 'Error',
-          message: `Failed to delete tag: ${res.error}`
-        })
-      }
-    } catch (err: any) {
-      console.error('Error deleting tag:', err)
-      await window.api.app.showMessageBox({
-        type: 'error',
-        title: 'Error',
-        message: `Error deleting tag: ${err.message || err}`
-      })
-    }
+    setTagToDelete(tagName)
   }
 
   const handleCopyWorktreePath = async (e: React.MouseEvent, path: string) => {
@@ -1934,8 +1811,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               if (res.success) {
                 await refreshRepo(activeRepo!.id)
               } else {
-                await window.api.app.showMessageBox({
-                  type: 'error',
+                addToast({
+                  variant: 'error',
                   title: 'Error',
                   message: `Failed to remove worktree: ${res.error}`
                 })
@@ -1950,6 +1827,227 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           }
         }}
         onCancel={() => setWorktreeToDeletePath(null)}
+      />
+
+      {/* Checkout Remote Branch confirmation dialog (in-app custom window) */}
+      <AppDialog
+        isOpen={checkoutRemoteTarget !== null}
+        title="Checkout Remote Branch"
+        message={
+          checkoutRemoteTarget?.localExists
+            ? `Local branch "${checkoutRemoteTarget.localName}" already exists. Do you want to checkout the existing local branch?`
+            : `Do you want to checkout remote branch "${checkoutRemoteTarget?.remoteBranchName}"?\n\nThis will create and checkout a local tracking branch named "${checkoutRemoteTarget?.localName}".`
+        }
+        variant="info"
+        testId="checkout-remote-dialog"
+        actions={[
+          {
+            label: 'Cancel',
+            value: 'cancel',
+            variant: 'secondary'
+          },
+          {
+            label: 'Checkout',
+            value: 'checkout',
+            variant: 'primary',
+            setsBusy: true
+          }
+        ]}
+        onResolve={async (value) => {
+          if (value === 'checkout' && checkoutRemoteTarget && activeRepo) {
+            const target = checkoutRemoteTarget
+            setCheckoutRemoteTarget(null)
+            if (target.localExists) {
+              await handleCheckoutBranch(target.localName)
+            } else {
+              try {
+                const res = await window.api.git.createBranch(activeRepo.path, target.localName, target.remoteBranchName)
+                if (res.success) {
+                  if (previewBranch === target.remoteBranchName || previewBranch === target.localName) {
+                    clearBranchPreview()
+                  }
+                  await refreshRepo(activeRepo.id)
+                  addToast({
+                    variant: 'success',
+                    title: 'Branch Checked Out',
+                    message: `Created and checked out local branch '${target.localName}'`
+                  })
+                } else {
+                  addToast({
+                    variant: 'error',
+                    title: 'Checkout Failed',
+                    message: `Failed to checkout remote branch: ${res.error || 'Unknown error'}`
+                  })
+                }
+              } catch (err: any) {
+                console.error('Error checking out remote branch:', err)
+                addToast({
+                  variant: 'error',
+                  title: 'Checkout Error',
+                  message: `An unexpected error occurred: ${err.message || err}`
+                })
+              }
+            }
+          } else {
+            setCheckoutRemoteTarget(null)
+          }
+        }}
+        onCancel={() => setCheckoutRemoteTarget(null)}
+      />
+
+      {/* Pop Stash confirmation dialog */}
+      <AppDialog
+        isOpen={popStashIndex !== null}
+        title="Pop Stash"
+        message="Are you sure you want to pop this stash back into your working directory?"
+        variant="info"
+        testId="pop-stash-dialog"
+        actions={[
+          { label: 'Cancel', value: 'cancel', variant: 'secondary' },
+          { label: 'Pop', value: 'pop', variant: 'primary', setsBusy: true }
+        ]}
+        onResolve={async (value) => {
+          if (value === 'pop' && popStashIndex !== null && activeRepo) {
+            const index = popStashIndex
+            setPopStashIndex(null)
+            setPoppingIndex(index)
+            setConflictWarning(false)
+            try {
+              const res = await window.api.git.stashPop(activeRepo.path, index)
+              if (res.success) {
+                if (res.data?.hadConflicts) {
+                  setConflictWarning(true)
+                }
+                await refreshRepo(activeRepo.id)
+                addToast({
+                  variant: 'success',
+                  title: 'Stash Popped',
+                  message: 'Stash popped into working directory.'
+                })
+              } else {
+                addToast({
+                  variant: 'error',
+                  title: 'Pop Stash Failed',
+                  message: res.error || 'Failed to pop stash'
+                })
+              }
+            } catch (err: any) {
+              console.error('Error popping stash:', err)
+              addToast({
+                variant: 'error',
+                title: 'Pop Stash Error',
+                message: err.message || 'Error popping stash'
+              })
+            } finally {
+              setPoppingIndex(null)
+            }
+          } else {
+            setPopStashIndex(null)
+          }
+        }}
+        onCancel={() => setPopStashIndex(null)}
+      />
+
+      {/* Delete Stash confirmation dialog */}
+      <AppDialog
+        isOpen={deleteStashIndex !== null}
+        title="Delete Stash"
+        message="Are you sure you want to delete this stash? This action cannot be undone."
+        variant="warning"
+        icon={<Trash2 size={16} />}
+        testId="delete-stash-dialog"
+        actions={[
+          { label: 'Cancel', value: 'cancel', variant: 'secondary' },
+          { label: 'Delete', value: 'delete', variant: 'danger', setsBusy: true }
+        ]}
+        onResolve={async (value) => {
+          if (value === 'delete' && deleteStashIndex !== null && activeRepo) {
+            const index = deleteStashIndex
+            setDeleteStashIndex(null)
+            setDeletingIndex(index)
+            try {
+              const res = await window.api.git.stashDrop(activeRepo.path, index)
+              if (res.success) {
+                await refreshRepo(activeRepo.id)
+                addToast({
+                  variant: 'success',
+                  title: 'Stash Deleted',
+                  message: 'Stash deleted successfully.'
+                })
+              } else {
+                addToast({
+                  variant: 'error',
+                  title: 'Delete Stash Failed',
+                  message: res.error || 'Failed to delete stash'
+                })
+              }
+            } catch (err: any) {
+              console.error('Error deleting stash:', err)
+              addToast({
+                variant: 'error',
+                title: 'Delete Stash Error',
+                message: err.message || 'Error deleting stash'
+              })
+            } finally {
+              setDeletingIndex(null)
+            }
+          } else {
+            setDeleteStashIndex(null)
+          }
+        }}
+        onCancel={() => setDeleteStashIndex(null)}
+      />
+
+      {/* Delete Tag confirmation dialog */}
+      <AppDialog
+        isOpen={tagToDelete !== null}
+        title="Delete Tag"
+        message={`Are you sure you want to delete tag '${tagToDelete}'?`}
+        variant="warning"
+        icon={<Trash2 size={16} />}
+        testId="delete-tag-confirm-dialog"
+        checkbox={{
+          label: 'Delete this tag from remote (origin) as well',
+          initialChecked: false
+        }}
+        actions={[
+          { label: 'Cancel', value: 'cancel', variant: 'secondary' },
+          { label: 'Delete Tag', value: 'confirm', variant: 'danger', setsBusy: true }
+        ]}
+        onResolve={async (value, checkboxChecked) => {
+          if (value === 'confirm' && tagToDelete && activeRepo) {
+            const tagName = tagToDelete
+            setTagToDelete(null)
+            const deleteRemote = checkboxChecked || false
+            try {
+              const res = await window.api.git.deleteTag(activeRepo.path, tagName, deleteRemote)
+              if (res.success) {
+                await refreshRepo(activeRepo.id)
+                addToast({
+                  variant: 'success',
+                  title: 'Tag Deleted',
+                  message: `Tag '${tagName}' deleted successfully.`
+                })
+              } else {
+                addToast({
+                  variant: 'error',
+                  title: 'Delete Tag Failed',
+                  message: `Failed to delete tag: ${res.error}`
+                })
+              }
+            } catch (err: any) {
+              console.error('Error deleting tag:', err)
+              addToast({
+                variant: 'error',
+                title: 'Delete Tag Error',
+                message: `Error deleting tag: ${err.message || err}`
+              })
+            }
+          } else {
+            setTagToDelete(null)
+          }
+        }}
+        onCancel={() => setTagToDelete(null)}
       />
     </div>
   )

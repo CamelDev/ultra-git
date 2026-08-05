@@ -170,21 +170,18 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await page.waitForTimeout(500)
       await expect(successToast).not.toBeVisible()
 
-      console.log('21. Mocking dialog:showMessageBox for deleting tag (still uses native dialog)...')
-      await app.evaluate(async ({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async () => {
-          return { success: true, response: 1, checkboxChecked: false }
-        })
-      })
-
-      console.log('22. Verifying delete button on tag is visible (hovering first) and clicking it...')
+      console.log('21. Hovering and clicking delete button on tag...')
       const tagItemHover = page.locator('[data-testid="sidebar-tag-v1.0.0"]')
       await tagItemHover.hover()
       
       const deleteTagBtn = page.locator('[data-testid="delete-tag-btn-v1.0.0"]')
       await expect(deleteTagBtn).toBeVisible()
       await deleteTagBtn.click()
+
+      console.log('22. Confirming tag deletion in custom in-app dialog...')
+      const confirmDeleteBtn = page.locator('[data-testid="delete-tag-confirm-dialog-action-confirm"]')
+      await expect(confirmDeleteBtn).toBeVisible()
+      await confirmDeleteBtn.click()
       await page.waitForTimeout(1000)
 
       console.log('23. Verifying tag v1.0.0 is removed from the sidebar...')

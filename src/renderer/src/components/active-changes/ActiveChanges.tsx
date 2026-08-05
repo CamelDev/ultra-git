@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
-import { FileText, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw } from 'lucide-react'
+import { FileText, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { useToaster } from '../toaster/ToasterContext'
 import { DiffModal } from '../details/DiffModal'
+import { AppDialog } from '../dialogs/AppDialog'
 
 export const ActiveChanges: React.FC = () => {
   const { getActiveRepo, refreshRepo, identities } = useRepoStore()
@@ -15,6 +16,8 @@ export const ActiveChanges: React.FC = () => {
     status: string
     isStaged: boolean
   } | null>(null)
+
+  const [discardTarget, setDiscardTarget] = useState<{ filePath: string; isStaged: boolean } | null>(null)
 
   if (!activeRepo || !activeRepo.status || !activeRepo.status.files) {
     return null
@@ -58,31 +61,8 @@ export const ActiveChanges: React.FC = () => {
     }
   }
 
-  const handleDiscardChanges = async (filePath: string, isStaged: boolean) => {
-    try {
-      const confirmRes = await window.api.app.showMessageBox({
-        type: 'question',
-        title: 'Discard Changes',
-        message: `Are you sure you want to discard changes in "${filePath}"? This operation cannot be undone.`,
-        buttons: ['Cancel', 'Discard'],
-        defaultId: 1,
-        cancelId: 0
-      })
-
-      if (!confirmRes.success || confirmRes.response !== 1) {
-        return
-      }
-
-      const res = await window.api.git.discardChanges(activeRepo.path, filePath, isStaged)
-      if (res.success) {
-        await refreshRepo(activeRepo.id)
-        addToast({ variant: 'success', title: 'Changes Discarded', message: `Discarded changes in "${filePath}"` })
-      } else {
-        addToast({ variant: 'error', title: 'Discard Failed', message: res.error || 'Failed to discard changes' })
-      }
-    } catch (err: any) {
-      addToast({ variant: 'error', title: 'Discard Error', message: err.message || 'Error discarding changes' })
-    }
+  const handleDiscardChanges = (filePath: string, isStaged: boolean) => {
+    setDiscardTarget({ filePath, isStaged })
   }
 
   const getStatusClass = (status: string) => {
@@ -281,6 +261,40 @@ export const ActiveChanges: React.FC = () => {
           isStaged={selectedFileForDiff.isStaged}
         />
       )}
+
+      {/* Discard Changes confirmation dialog */}
+      <AppDialog
+        isOpen={discardTarget !== null}
+        title="Discard Changes"
+        message={`Are you sure you want to discard changes in "${discardTarget?.filePath}"? This operation cannot be undone.`}
+        variant="warning"
+        icon={<Trash2 size={16} />}
+        testId="discard-changes-dialog"
+        actions={[
+          { label: 'Cancel', value: 'cancel', variant: 'secondary' },
+          { label: 'Discard', value: 'discard', variant: 'danger', setsBusy: true }
+        ]}
+        onResolve={async (val) => {
+          if (val === 'discard' && discardTarget) {
+            const { filePath, isStaged } = discardTarget
+            setDiscardTarget(null)
+            try {
+              const res = await window.api.git.discardChanges(activeRepo.path, filePath, isStaged)
+              if (res.success) {
+                await refreshRepo(activeRepo.id)
+                addToast({ variant: 'success', title: 'Changes Discarded', message: `Discarded changes in "${filePath}"` })
+              } else {
+                addToast({ variant: 'error', title: 'Discard Failed', message: res.error || 'Failed to discard changes' })
+              }
+            } catch (err: any) {
+              addToast({ variant: 'error', title: 'Discard Error', message: err.message || 'Error discarding changes' })
+            }
+          } else {
+            setDiscardTarget(null)
+          }
+        }}
+        onCancel={() => setDiscardTarget(null)}
+      />
     </div>
   )
 }

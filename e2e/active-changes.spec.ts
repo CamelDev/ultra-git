@@ -342,16 +342,6 @@ test.describe('Active Changes Panel', () => {
       await expect(unstagedItems).toHaveCount(2)
 
       // --- 1. Discard cancellation test ---
-      // We will mock showMessageBox to return response: 0 (Cancel)
-      await app.evaluate(async ({ ipcMain }) => {
-        (global as any).showMessageBoxOptions = null
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
-          (global as any).showMessageBoxOptions = options
-          return { success: true, response: 0 } // Cancel
-        })
-      })
-
       // Find the untracked file item and hover
       const untrackedItem = unstagedItems.filter({ hasText: 'untracked-reset.txt' })
       await expect(untrackedItem).toBeVisible()
@@ -359,29 +349,25 @@ test.describe('Active Changes Panel', () => {
       // Click discard/reset button
       const discardBtnCancel = untrackedItem.locator('.reset-btn')
       await discardBtnCancel.click()
+
+      // Custom dialog appears
+      const dialogCancelBtn = page.locator('[data-testid="discard-changes-dialog-action-cancel"]')
+      await expect(dialogCancelBtn).toBeVisible()
+      await dialogCancelBtn.click()
       await page.waitForTimeout(500)
 
-      // Verify showMessageBox was called with Cancel, and file is still there
-      let dialogOptions = await app.evaluate(() => (global as any).showMessageBoxOptions)
-      expect(dialogOptions).not.toBeNull()
-      expect(dialogOptions.title).toBe('Discard Changes')
-      expect(dialogOptions.message).toContain('untracked-reset.txt')
+      // Verify file is still there
       await expect(unstagedItems).toHaveCount(2)
       expect(fs.existsSync(untrackedPath)).toBe(true)
 
       // --- 2. Discard confirmation test (Untracked file) ---
-      // Mock showMessageBox to return response: 1 (Discard)
-      await app.evaluate(async ({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
-          (global as any).showMessageBoxOptions = options
-          return { success: true, response: 1 } // Discard
-        })
-      })
-
-      // Click discard/reset button again (this time confirming)
+      // Click discard/reset button again and confirm in custom dialog
       const discardBtnConfirm = untrackedItem.locator('.reset-btn')
       await discardBtnConfirm.click()
+
+      const dialogConfirmBtn = page.locator('[data-testid="discard-changes-dialog-action-discard"]')
+      await expect(dialogConfirmBtn).toBeVisible()
+      await dialogConfirmBtn.click()
       await page.waitForTimeout(1000)
 
       // Verify file is deleted from filesystem and removed from UI list
@@ -394,6 +380,10 @@ test.describe('Active Changes Panel', () => {
       
       const discardReadmeBtn = readmeItem.locator('.reset-btn')
       await discardReadmeBtn.click()
+
+      const dialogConfirmBtn2 = page.locator('[data-testid="discard-changes-dialog-action-discard"]')
+      await expect(dialogConfirmBtn2).toBeVisible()
+      await dialogConfirmBtn2.click()
       await page.waitForTimeout(1000)
 
       // Active changes panel should disappear because no files left modified/unstaged/staged

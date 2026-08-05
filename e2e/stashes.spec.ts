@@ -133,50 +133,35 @@ test.describe('Git Stashes Improvements', () => {
       await expect(deleteBtn).toBeVisible({ timeout: 3000 })
       console.log('Action buttons visible again after modal close.');
 
-      console.log('16. Mocking dialog:showMessageBox to Cancel (0)...');
-      await app.evaluate(async ({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async () => {
-          return { success: true, response: 0 }
-        })
-      })
-      console.log('dialog:showMessageBox mocked.');
-
-      console.log('17. Testing Delete Cancel...');
-      // Ensure buttons are visible by hovering
+      console.log('16. Testing Delete Cancel...');
       await stashItem.hover()
       await page.waitForTimeout(200)
       await deleteBtn.click()
-      // Dialog should be handled by mock, wait for stash item to still be visible
+      const deleteCancelBtn = page.locator('[data-testid="delete-stash-dialog-action-cancel"]')
+      await expect(deleteCancelBtn).toBeVisible()
+      await deleteCancelBtn.click()
       await page.waitForTimeout(300)
       await expect(stashItem).toBeVisible({ timeout: 3000 })
       console.log('Delete Cancel verified.');
 
-      console.log('18. Testing Pop Cancel...');
-      // Ensure buttons are visible by hovering
+      console.log('17. Testing Pop Cancel...');
       await stashItem.hover()
       await page.waitForTimeout(200)
       await popBtn.click()
-      // Dialog should be handled by mock, wait for stash item to still be visible
+      const popCancelBtn = page.locator('[data-testid="pop-stash-dialog-action-cancel"]')
+      await expect(popCancelBtn).toBeVisible()
+      await popCancelBtn.click()
       await page.waitForTimeout(300)
       await expect(stashItem).toBeVisible({ timeout: 3000 })
       console.log('Pop Cancel verified.');
 
-      console.log('19. Mocking dialog:showMessageBox to Confirm (1)...');
-      await app.evaluate(async ({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async () => {
-          return { success: true, response: 1 }
-        })
-      })
-      console.log('dialog:showMessageBox mocked to confirm.');
-
-      console.log('20. Testing Delete Confirm...');
-      // Ensure buttons are visible by hovering
+      console.log('18. Testing Delete Confirm...');
       await stashItem.hover()
       await page.waitForTimeout(200)
       await deleteBtn.click()
-      // Dialog should be handled by mock, wait for stash item to be removed
+      const deleteConfirmBtn = page.locator('[data-testid="delete-stash-dialog-action-delete"]')
+      await expect(deleteConfirmBtn).toBeVisible()
+      await deleteConfirmBtn.click()
       await page.waitForTimeout(500)
       await expect(stashItem).not.toBeVisible({ timeout: 5000 })
       console.log('Delete Confirm verified. Stash is gone.');
@@ -242,16 +227,11 @@ test.describe('Git Stashes Improvements', () => {
       const popBtn = page.locator('[data-testid="stash-pop-btn-0"]')
       await expect(popBtn).toBeVisible({ timeout: 3000 })
 
-      console.log('[Stash Conflict Test] 11. Mocking showMessageBox to Confirm Pop...');
-      await app.evaluate(async ({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox')
-        ipcMain.handle('dialog:showMessageBox', async () => {
-          return { success: true, response: 1 } // Confirm index 1
-        })
-      })
-
-      console.log('[Stash Conflict Test] 12. Clicking Pop button...');
+      console.log('[Stash Conflict Test] 11. Clicking Pop button and confirming in dialog...');
       await popBtn.click()
+      const popConfirmBtn = page.locator('[data-testid="pop-stash-dialog-action-pop"]')
+      await expect(popConfirmBtn).toBeVisible()
+      await popConfirmBtn.click()
       // Wait for the pop operation to complete and conflict banner to appear
       await page.waitForTimeout(1000)
       const conflictBanner = page.locator('[data-testid="stash-conflict-banner"]')

@@ -981,15 +981,15 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
           return
         }
 
-        await window.api.app.showMessageBox({
-          type: 'error',
+        addToast({
+          variant: 'error',
           title: force ? 'Force Push Failed' : 'Push Failed',
           message: res.error || 'Failed to push to remote repository.'
         })
       }
     } catch (err: any) {
-      await window.api.app.showMessageBox({
-        type: 'error',
+      addToast({
+        variant: 'error',
         title: 'Error',
         message: err.message || 'An unexpected error occurred during push.'
       })

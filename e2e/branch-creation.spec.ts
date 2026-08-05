@@ -417,20 +417,16 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       const remoteBranchItem = page.locator('[data-testid="sidebar-remote-branch-origin/feature-remote"]');
       await expect(remoteBranchItem).toBeVisible();
 
-      console.log('8. Mocking dialog:showMessageBox to automatically confirm checkout (response: 1)...');
-      await app.evaluate(async ({ ipcMain }) => {
-        ipcMain.removeHandler('dialog:showMessageBox');
-        ipcMain.handle('dialog:showMessageBox', async (_, options) => {
-          console.log('[MAIN] showMessageBox prompt options:', JSON.stringify(options));
-          return { success: true, response: 1 }; // Confirm Checkout (1)
-        });
-      });
-
-      console.log('9. Clicking remote branch checkout hover button...');
+      console.log('8. Clicking remote branch checkout hover button...');
       await remoteBranchItem.hover();
       const checkoutBtn = page.locator('[data-testid="checkout-remote-btn-origin/feature-remote"]');
       await expect(checkoutBtn).toBeVisible();
       await checkoutBtn.click();
+
+      console.log('9. Confirming checkout in custom in-app dialog...');
+      const dialogCheckoutBtn = page.locator('[data-testid="checkout-remote-dialog-action-checkout"]');
+      await expect(dialogCheckoutBtn).toBeVisible();
+      await dialogCheckoutBtn.click();
       await page.waitForTimeout(1500);
 
       console.log('10. Verifying local branch feature-remote is checked out in UI...');
@@ -457,11 +453,15 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await page.waitForTimeout(1000);
       await expect(activeBranch).toContainText('main'); // should still be main
 
-      // Click remote branch hover button again. Since local 'feature-remote' already exists, it should trigger direct checkout of local branch.
+      // Click remote branch hover button again. Since local 'feature-remote' already exists, it should trigger direct checkout of local branch via custom dialog.
       console.log('13. Clicking remote branch hover button again to checkout existing local branch...');
       await remoteBranchItem.hover();
       await expect(checkoutBtn).toBeVisible();
       await checkoutBtn.click();
+
+      const dialogCheckoutBtn2 = page.locator('[data-testid="checkout-remote-dialog-action-checkout"]');
+      await expect(dialogCheckoutBtn2).toBeVisible();
+      await dialogCheckoutBtn2.click();
       await page.waitForTimeout(1500);
       await expect(activeBranch).toContainText('feature-remote');
 

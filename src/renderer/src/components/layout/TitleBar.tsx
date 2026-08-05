@@ -5,6 +5,7 @@ import { useRepoStore, Repository } from '../../store/useRepoStore'
 import logoIcon from '../../assets/icon.png'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 import { AboutModal } from './AboutModal'
+import { AppDialog } from '../dialogs/AppDialog'
 import { useTheme } from '../../hooks/useTheme'
 
 const PRESET_COLORS = [
@@ -47,6 +48,7 @@ const TitleBar: React.FC = () => {
   const [editingName, setEditingName] = useState<string>('')
   const [colorPickerTabId, setColorPickerTabId] = useState<string | null>(null)
   const [colorPickerPos, setColorPickerPos] = useState<{ top: number; left: number } | null>(null)
+  const [missingRepoPath, setMissingRepoPath] = useState<string | null>(null)
   
   const cogRef = useRef<SVGSVGElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -145,9 +147,23 @@ const TitleBar: React.FC = () => {
     setIsAddRepoDropdownOpen(prev => !prev)
   }
 
+  const handleOpenFolderDialog = async () => {
+    try {
+      console.log('TitleBar: Calling window.api.app.openDirectory()')
+      const res = await window.api.app.openDirectory()
+      console.log('TitleBar: OpenDirectory response:', res)
+      if (!res.canceled && res.path) {
+        setIsAddRepoDropdownOpen(false)
+        await addRepo(res.path)
+      }
+    } catch (e) {
+      console.error('TitleBar: Failed to open repository directory:', e)
+    }
+  }
+
   const handleOpenRepoFromDropdown = async () => {
     setIsAddRepoDropdownOpen(false)
-    await handleAddRepo()
+    await handleOpenFolderDialog()
   }
 
   const handleSelectRecentRepo = async (repoPath: string) => {
@@ -157,11 +173,7 @@ const TitleBar: React.FC = () => {
         setIsAddRepoDropdownOpen(false)
         await addRepo(repoPath)
       } else {
-        await window.api.app.showMessageBox({
-          type: 'error',
-          title: 'Repository Not Found',
-          message: `The directory no longer exists on disk:\n${repoPath}`
-        })
+        setMissingRepoPath(repoPath)
         removeRecentRepo(repoPath)
       }
     } catch (e) {
@@ -515,6 +527,14 @@ const TitleBar: React.FC = () => {
       <AboutModal 
         isOpen={aboutModalOpen}
         onClose={() => setAboutModalOpen(false)}
+      />
+      <AppDialog
+        isOpen={missingRepoPath !== null}
+        title="Repository Not Found"
+        message={`The directory no longer exists on disk:\n${missingRepoPath}`}
+        variant="error"
+        testId="missing-repo-dialog"
+        onCancel={() => setMissingRepoPath(null)}
       />
     </div>
   )
