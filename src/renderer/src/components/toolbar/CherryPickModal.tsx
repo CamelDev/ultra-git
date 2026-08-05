@@ -1,6 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { X, FileText, Copy, Check, AlertTriangle, GitCommit, GitBranch } from 'lucide-react'
 
+interface WorktreeItem {
+  path: string
+  branch: string
+  hash: string
+}
+
 interface CherryPickModalProps {
   isOpen: boolean
   onClose: () => void
@@ -9,6 +15,7 @@ interface CherryPickModalProps {
     local: Array<{ name: string; ahead: number; behind: number } | string>
     remote: string[]
   } | null
+  worktrees?: WorktreeItem[]
   currentBranch: string
   onCherryPickInitiated: (conflictedFiles: Array<{ path: string; status: string }>, isCherryPick: boolean) => void
   onSuccess: () => void
@@ -268,6 +275,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
   onClose,
   repoPath,
   branches,
+  worktrees = [],
   currentBranch,
   onCherryPickInitiated,
   onSuccess
@@ -295,17 +303,20 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
 
   // 1. Reset/populate initial branch
   useEffect(() => {
-    if (!isOpen || !branches) return
+    if (!isOpen) return
 
-    const localNames = (branches.local || []).map((b) => (typeof b === 'string' ? b : b.name))
-    const remoteNames = branches.remote || []
-    const all = [...localNames, ...remoteNames]
+    const localNames = (branches?.local || []).map((b) => (typeof b === 'string' ? b : b.name))
+    const remoteNames = branches?.remote || []
+    const wtRefs = (worktrees || []).map((wt) =>
+      wt.branch && wt.branch !== '(detached HEAD)' ? wt.branch : wt.hash
+    )
+    const all = [...wtRefs, ...localNames, ...remoteNames].filter(Boolean)
 
-    // Select the first branch that is not the current branch
+    // Select the first branch/ref that is not the current branch
     const defaultBranch = all.find((b) => b !== currentBranch) || all[0] || ''
     setSelectedBranch(defaultBranch)
     setCherryPickError(null)
-  }, [isOpen, branches, currentBranch])
+  }, [isOpen, branches, worktrees, currentBranch])
 
   // 2. Fetch commits when selected branch changes
   useEffect(() => {
@@ -665,12 +676,36 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
               }}
               data-testid="cherry-pick-branch-select"
             >
+              {worktrees && worktrees.length > 0 && (
+                <optgroup label="Worktrees">
+                  {worktrees.map((wt) => {
+                    const folder = wt.path.split(/[/\\]/).filter(Boolean).pop() || wt.path
+                    const value = wt.branch && wt.branch !== '(detached HEAD)' ? wt.branch : wt.hash
+                    const isDetached = !wt.branch || wt.branch === '(detached HEAD)'
+                    const label = isDetached
+                      ? `Detached HEAD @ ${wt.hash.substring(0, 7)} [${folder}]`
+                      : `${wt.branch} [Worktree: ${folder}]`
+                    return (
+                      <option key={wt.path} value={value}>
+                        {label}
+                      </option>
+                    )
+                  })}
+                </optgroup>
+              )}
               <optgroup label="Local Branches">
-                {localNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
+                {localNames.map((name) => {
+                  const matchingWt = worktrees?.find((wt) => wt.branch === name)
+                  const folder = matchingWt
+                    ? matchingWt.path.split(/[/\\]/).filter(Boolean).pop() || matchingWt.path
+                    : null
+                  const label = matchingWt ? `${name} (Worktree: ${folder})` : name
+                  return (
+                    <option key={name} value={name}>
+                      {label}
+                    </option>
+                  )
+                })}
               </optgroup>
               {remoteNames.length > 0 && (
                 <optgroup label="Remote Branches">

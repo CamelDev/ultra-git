@@ -557,6 +557,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
           onClose={() => setIsCherryPickModalOpen(false)}
           repoPath={activeRepo.path}
           branches={activeRepo.branches || null}
+          worktrees={activeRepo.worktrees || []}
           currentBranch={activeRepo.branch}
           onCherryPickInitiated={(conflictedFiles) => {
             if (onMergeConflicts) {

@@ -164,4 +164,74 @@ test.describe('Cherry Pick Feature', () => {
       await app.close()
     }
   })
+
+  test('should allow cherry picking a commit from another worktree', async () => {
+    console.log('1. Setting up a second worktree...')
+    const wtDir = path.join(__dirname, '../../test-results', `wt-${Date.now()}`)
+    await sandbox.git.raw(['worktree', 'add', '-b', 'wt-branch', wtDir])
+
+    // Create a commit inside the worktree directory
+    const wtFile = path.join(wtDir, 'worktree-file.txt')
+    fs.writeFileSync(wtFile, 'Worktree commit content\n')
+    const wtGit = (await import('simple-git')).default(wtDir)
+    await wtGit.addConfig('user.name', 'Test User', false, 'local')
+    await wtGit.addConfig('user.email', 'test@example.com', false, 'local')
+    await wtGit.add('worktree-file.txt')
+    await wtGit.commit('Commit inside worktree')
+
+    console.log('2. Launching Electron app...')
+    const { app, page } = await launchElectronApp()
+
+    try {
+      console.log('3. Registering sandbox repo in app...')
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      await addRepoViaUI(page)
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      console.log('4. Clicking Cherry pick button...')
+      const cherryPickBtn = page.locator('[data-testid="cherry-pick-btn"]')
+      await cherryPickBtn.click()
+
+      console.log('5. Verifying Worktrees optgroup and options are present...')
+      const branchSelect = page.locator('[data-testid="cherry-pick-branch-select"]')
+      await expect(branchSelect).toBeVisible()
+
+      // Select wt-branch
+      await branchSelect.selectOption({ label: 'wt-branch [Worktree: ' + path.basename(wtDir) + ']' })
+      await page.waitForTimeout(300)
+
+      console.log('6. Verifying worktree file list in modal...')
+      const fileItem = page.locator('[data-testid="cherry-pick-file-worktree-file.txt"]')
+      await expect(fileItem).toBeVisible()
+
+      console.log('7. Clicking Cherry Pick action button...')
+      const actionBtn = page.locator('[data-testid="cherry-pick-action-btn"]')
+      await actionBtn.click()
+
+      console.log('8. Verifying worktree commit has been cherry-picked into main...')
+      await page.waitForTimeout(1000)
+      const fileExists = fs.existsSync(path.join(sandbox.dir, 'worktree-file.txt'))
+      expect(fileExists).toBe(true)
+
+      const fileContent = fs.readFileSync(path.join(sandbox.dir, 'worktree-file.txt'), 'utf8')
+      expect(fileContent).toContain('Worktree commit content')
+      console.log('Worktree cherry-pick successful!')
+    } finally {
+      await app.close()
+      // Cleanup worktree
+      try {
+        await sandbox.git.raw(['worktree', 'remove', '--force', wtDir])
+      } catch {}
+    }
+  })
 })
