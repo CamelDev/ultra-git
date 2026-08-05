@@ -86,7 +86,7 @@ interface RepoState {
   setRepoIdentity: (repoId: string, identityId: string | undefined) => Promise<void>;
 }
 
-const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '');
+const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '').replace(/^\/private\/var\//, '/var/');
 
 const saveToLocalStorage = (repositories: Repository[], activeId: string | null) => {
   try {

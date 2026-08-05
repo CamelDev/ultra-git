@@ -407,7 +407,25 @@ test.describe('Active Changes Panel', () => {
     const { app, page } = await launchElectronApp()
 
     try {
-      await addRepoViaUI(page, sandbox.dir)
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      // Mock openDirectory dialog to load sandbox repo
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, sandbox.dir)
+
+      await addRepoViaUI(page)
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
 
       const panel = page.locator('[data-testid="active-changes-panel"]')
       await expect(panel).toBeVisible()

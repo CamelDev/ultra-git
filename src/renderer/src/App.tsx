@@ -264,10 +264,12 @@ function App() {
       .finally(() => setIsInitialized(true))
   }, [initializeRepos])
 
-  // Auto-refresh when files change in the repository
+const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '').replace(/^\/private\/var\//, '/var/');
+
+// Auto-refresh when files change in the repository
   useEffect(() => {
     const unsubscribe = window.api.git.onRepoChanged((repoPath) => {
-      if (activeRepo && activeRepo.path === repoPath) {
+      if (activeRepo && normalizePath(activeRepo.path) === normalizePath(repoPath)) {
         refreshRepo(activeRepo.id).catch((err) =>
           console.error('Failed to refresh repo on filesystem change', err)
         )

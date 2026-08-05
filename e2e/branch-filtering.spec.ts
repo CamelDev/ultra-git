@@ -71,7 +71,7 @@ test.describe('Branch Filtering in Sidebar', () => {
       const localSection = page.locator('.sidebar-section:has-text("Local")')
       const remoteSection = page.locator('.sidebar-section:has-text("Remote")')
       const localCount = localSection.locator('.sidebar-header > span')
-      const remoteCount = remoteSection.locator('.sidebar-header > span')
+      const remoteCount = remoteSection.locator('.sidebar-header span').last()
 
       // The app's branch list is loaded via a single point-in-time read when the
       // repo is added/refreshed. On busy Windows machines (e.g. antivirus briefly
