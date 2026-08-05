@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag, RefreshCw, Search } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { getAuthorColor } from '../../utils/authorColor'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 import { AppDialog, AppDialogAction } from '../dialogs/AppDialog'
 import { useToaster } from '../toaster/ToasterContext'
@@ -1757,7 +1758,27 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   </>
                 )}
               </div>
-              <div className="commit-author" style={{ width: `${authorWidth}px`, paddingLeft: '12px' }}>{c.author_name}</div>
+              <div className="commit-author" style={{ width: `${authorWidth}px`, paddingLeft: '12px', display: 'flex', alignItems: 'center' }}>
+                <span 
+                  className="author-badge" 
+                  style={{
+                    ...getAuthorColor(c.author_name, c.author_email),
+                    display: 'inline-block',
+                    maxWidth: '100%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 500
+                  }}
+                  title={c.author_email ? `${c.author_name} <${c.author_email}>` : c.author_name}
+                  data-testid="commit-author-badge"
+                >
+                  {c.author_name}
+                </span>
+              </div>
               <div className="commit-date" style={{ width: `${dateWidth}px` }}>
                 {new Date(c.date).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
               </div>

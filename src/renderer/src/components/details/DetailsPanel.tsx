@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { FileText, Copy, Check } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { getAuthorColor } from '../../utils/authorColor'
 import { DiffModal } from './DiffModal'
 
 type CopiedField = 'sha' | 'message' | 'author'
@@ -121,7 +122,19 @@ const DetailsPanel: React.FC = () => {
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '3px' }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px', alignItems: 'center' }}>
-                  <span>by {commit.author_name}</span>
+                  <span>by</span>
+                  <span
+                    className="author-badge"
+                    style={{
+                      ...getAuthorColor(commit.author_name, commit.author_email),
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 500
+                    }}
+                  >
+                    {commit.author_name}
+                  </span>
                   <CopyButton
                     copied={copiedField === 'author'}
                     onClick={() => handleCopy(commit.author_email ? `${commit.author_name} <${commit.author_email}>` : commit.author_name, 'author')}

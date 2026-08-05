@@ -637,6 +637,23 @@ body {
   white-space: nowrap;
 }
 
+/* Author Badge Theme Styles */
+.author-badge {
+  --author-bg: hsla(var(--author-hue), 50%, 35%, 0.22);
+  --author-border: hsla(var(--author-hue), 50%, 50%, 0.35);
+  --author-text: hsl(var(--author-hue), 75%, 82%);
+  background-color: var(--author-bg);
+  border-color: var(--author-border);
+  color: var(--author-text);
+  border: 1px solid var(--author-border);
+}
+
+:root.light-theme .author-badge {
+  --author-bg: hsla(var(--author-hue), 85%, 91%, 0.95);
+  --author-border: hsla(var(--author-hue), 65%, 72%, 0.7);
+  --author-text: hsl(var(--author-hue), 85%, 24%);
+}
+
 .commit-date {
   flex-shrink: 0;
   color: var(--text-secondary);

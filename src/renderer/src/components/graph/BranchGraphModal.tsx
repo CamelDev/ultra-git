@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react'
 import { X, GitBranch, Globe, Search, Tag } from 'lucide-react'
+import { getAuthorColor } from '../../utils/authorColor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -659,7 +660,23 @@ const BranchGraphModal: React.FC<BranchGraphModalProps> = ({
 
                       {/* Meta */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingRight: '16px', flexShrink: 0 }}>
-                        <span style={{ fontSize: '10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', width: '90px', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis' }}>{commit.author_name || commit.author || ''}</span>
+                        <span 
+                          className="author-badge"
+                          style={{
+                            ...getAuthorColor(commit.author_name || commit.author),
+                            fontSize: '10px',
+                            whiteSpace: 'nowrap',
+                            maxWidth: '100px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            fontWeight: 500
+                          }}
+                          title={commit.author_name || commit.author || ''}
+                        >
+                          {commit.author_name || commit.author || ''}
+                        </span>
                         <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace", opacity: 0.5, whiteSpace: 'nowrap', width: '56px', textAlign: 'center' }}>{commit.hash.substring(0, 7)}</span>
                         {commit.date && <span style={{ fontSize: '10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', opacity: 0.6, width: '58px', textAlign: 'right' }}>{formatDate(commit.date)}</span>}
                       </div>
