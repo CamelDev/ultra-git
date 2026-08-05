@@ -105,11 +105,18 @@ test.describe('Git Worktrees Integration', () => {
       await expect(extraWtItem).toContainText('wt-sandbox-');
       await expect(extraWtItem).toContainText('feature/wt-test');
 
-      // REQUIREMENT 2: "do not switch to another reop tab when worktree is selected - load it and show as normal branch in the same tab from the repo"
-      // Click on the worktree item to switch to it
+      // REQUIREMENT 2: "do not switch to another repo tab when worktree is selected - preview branch on single click, switch on checkout button click"
+      // 2a. Single click on the worktree item previews branch commits without changing active branch
       await extraWtItem.click({ position: { x: 10, y: 10 } });
+      await page.waitForTimeout(300);
 
-      // Wait a moment for state update and refresh
+      // Verify worktree item enters preview state, active branch stays main branch
+      await expect(extraWtItem).toHaveClass(/branch-previewed/);
+      await expect(sidebarActiveBranch).toContainText(defaultBranch);
+
+      // 2b. Click the explicit Checkout button to actually switch to the worktree
+      const checkoutWtBtn = page.locator('[data-testid="checkout-worktree-btn-feature/wt-test"]');
+      await checkoutWtBtn.click();
       await page.waitForTimeout(500);
 
       // Verify we DID NOT open a new tab (tab count stays at 2)
@@ -133,8 +140,13 @@ test.describe('Git Worktrees Integration', () => {
       const commitBranchBtn = page.locator('[data-testid^="commit-branch-btn-"]').first();
       await expect(commitBranchBtn).toBeDisabled();
 
-      // REQUIREMENT 2 CONTINUED: Switch back to main repository from worktree using worktree list
-      await parentWtItem.click({ position: { x: 10, y: 10 } });
+      // REQUIREMENT 2 CONTINUED: Switch back to main repository from worktree using checkout button or click
+      const checkoutParentBtn = page.locator('[data-testid="checkout-worktree-btn-' + defaultBranch + '"]');
+      if (await checkoutParentBtn.isVisible()) {
+        await checkoutParentBtn.click();
+      } else {
+        await parentWtItem.dblclick({ position: { x: 10, y: 10 } });
+      }
       await page.waitForTimeout(500);
 
       // Verify active branch changed back to the default branch
@@ -209,8 +221,13 @@ test.describe('Git Worktrees Integration', () => {
       await expect(newWtItem).toContainText('wt2-sandbox-');
       await expect(newWtItem).toContainText('feature/wt-from-base');
 
-      // Click to switch to the new worktree
-      await newWtItem.click({ position: { x: 10, y: 10 } });
+      // Click checkout button or double-click to switch to the new worktree
+      const checkoutNewWtBtn = page.locator('[data-testid="checkout-worktree-btn-feature/wt-from-base"]');
+      if (await checkoutNewWtBtn.isVisible()) {
+        await checkoutNewWtBtn.click();
+      } else {
+        await newWtItem.dblclick({ position: { x: 10, y: 10 } });
+      }
       await page.waitForTimeout(500);
 
       // Verify new worktree is active
@@ -251,7 +268,12 @@ test.describe('Git Worktrees Integration', () => {
       await expect(worktreeSection).toBeVisible();
       
       const extraWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-test' });
-      await extraWtItem.click({ position: { x: 10, y: 10 } });
+      const checkoutWtBtn = page.locator('[data-testid="checkout-worktree-btn-feature/wt-test"]');
+      if (await checkoutWtBtn.isVisible()) {
+        await checkoutWtBtn.click();
+      } else {
+        await extraWtItem.dblclick({ position: { x: 10, y: 10 } });
+      }
       await page.waitForTimeout(500);
 
       // Verify worktree is active (active class on worktree item)
@@ -328,7 +350,12 @@ test.describe('Git Worktrees Integration', () => {
       console.log('[Worktree Rebase Test] 5. Switching active worktree to feature/wt-test...');
       const worktreeSection = page.locator('.sidebar-section:has-text("Worktree")');
       const extraWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-test' });
-      await extraWtItem.click({ position: { x: 10, y: 10 } });
+      const checkoutWtBtn = page.locator('[data-testid="checkout-worktree-btn-feature/wt-test"]');
+      if (await checkoutWtBtn.isVisible()) {
+        await checkoutWtBtn.click();
+      } else {
+        await extraWtItem.dblclick({ position: { x: 10, y: 10 } });
+      }
       await page.waitForTimeout(500);
 
       // Verify worktree is active

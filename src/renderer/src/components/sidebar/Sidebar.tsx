@@ -1181,14 +1181,33 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               filteredWorktrees.map((wt, index) => {
                 const isActiveRepo = normalizePath(wt.path) === normalizePath(activeRepo?.path ?? '');
                 const isMainWorktree = normalizePath(wt.path) === normalizePath(mainWtPath ?? '');
+                const isPreviewed = previewBranch === wt.branch;
                 const shortPath = wt.path.split(/[/\\]/).pop();
                 return (
                   <div
                     key={wt.path}
-                    className={`sidebar-item ${isActiveRepo ? 'active' : ''}`}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: isActiveRepo ? 'default' : 'pointer' }}
+                    className={`sidebar-item ${isActiveRepo ? 'active' : ''} ${isPreviewed ? 'branch-previewed' : ''}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      backgroundColor: isPreviewed ? 'rgba(99, 102, 241, 0.1)' : undefined
+                    }}
                     onClick={() => {
-                      if (!isActiveRepo) handleSwitchWorktree(wt.path);
+                      if (isActiveRepo) {
+                        clearBranchPreview();
+                      } else if (previewBranch === wt.branch) {
+                        clearBranchPreview();
+                      } else {
+                        loadBranchCommits(wt.branch);
+                      }
+                    }}
+                    onDoubleClick={() => {
+                      if (!isActiveRepo) {
+                        if (previewBranch === wt.branch) clearBranchPreview();
+                        handleSwitchWorktree(wt.path);
+                      }
                     }}
                     data-tooltip={wt.path}
                     data-testid="sidebar-worktree-item"
@@ -1200,6 +1219,19 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                     <div className="tag-actions" style={{ marginLeft: 'auto', gap: '4px', flexShrink: 0 }}>
                       {!isActiveRepo && (
                         <>
+                          <button
+                            className="stash-action-btn checkout"
+                            style={{ padding: 0, height: "24px", width: "48px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (previewBranch === wt.branch) clearBranchPreview();
+                              handleSwitchWorktree(wt.path);
+                            }}
+                            data-tooltip={`Checkout worktree (${wt.branch})`}
+                            data-testid={`checkout-worktree-btn-${wt.branch}`}
+                          >
+                            <LogIn size={12} />
+                          </button>
                           <button
                             className="stash-action-btn"
                             style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}

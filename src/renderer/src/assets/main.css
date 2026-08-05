@@ -1765,7 +1765,8 @@ body {
 }
 
 .sidebar-item:hover .tag-actions,
-.sidebar-item.active .tag-actions {
+.sidebar-item.active .tag-actions,
+.sidebar-item.branch-previewed .tag-actions {
   display: flex;
 }
 
