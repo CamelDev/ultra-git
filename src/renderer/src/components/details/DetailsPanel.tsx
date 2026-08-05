@@ -236,6 +236,12 @@ const DetailsPanel: React.FC = () => {
           status={selectedFileForDiff.status}
           commitHash={selectedCommitHash}
           repoPath={activeRepo.path}
+          files={files.map((f) => ({
+            path: f.path,
+            oldPath: f.oldPath,
+            status: f.status
+          }))}
+          initialFileIndex={Math.max(0, files.findIndex((f) => f.path === selectedFileForDiff.path))}
         />
       )}
     </div>

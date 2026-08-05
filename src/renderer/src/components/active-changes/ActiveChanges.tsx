@@ -259,6 +259,25 @@ export const ActiveChanges: React.FC = () => {
           repoPath={activeRepo.path}
           isActiveChange={true}
           isStaged={selectedFileForDiff.isStaged}
+          files={
+            selectedFileForDiff.isStaged
+              ? stagedFiles.map((f) => ({
+                  path: f.path,
+                  oldPath: getRenamedOldPath(f.path),
+                  status: f.index,
+                  isStaged: true
+                }))
+              : unstagedFiles.map((f) => ({
+                  path: f.path,
+                  status: f.working_dir === ' ' && f.index === '?' ? '?' : f.working_dir,
+                  isStaged: false
+                }))
+          }
+          initialFileIndex={
+            selectedFileForDiff.isStaged
+              ? Math.max(0, stagedFiles.findIndex((f) => f.path === selectedFileForDiff.path))
+              : Math.max(0, unstagedFiles.findIndex((f) => f.path === selectedFileForDiff.path))
+          }
         />
       )}
 

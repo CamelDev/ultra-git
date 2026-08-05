@@ -397,4 +397,85 @@ test.describe('Active Changes Panel', () => {
       await app.close()
     }
   })
+
+  test('should support navigating between files in diff modal using buttons and keyboard shortcuts', async () => {
+    // Modify multiple files to create exactly 3 unstaged changes
+    fs.writeFileSync(path.join(sandbox.dir, 'file1.txt'), 'Content 1 modified\n')
+    fs.writeFileSync(path.join(sandbox.dir, 'file2.txt'), 'Content 2 modified\n')
+    fs.writeFileSync(path.join(sandbox.dir, 'file3.txt'), 'Content 3 modified\n')
+
+    const { app, page } = await launchElectronApp()
+
+    try {
+      await addRepoViaUI(page, sandbox.dir)
+
+      const panel = page.locator('[data-testid="active-changes-panel"]')
+      await expect(panel).toBeVisible()
+
+      const unstagedColumn = panel.locator('.unstaged-column')
+      const unstagedItems = unstagedColumn.locator('.file-item')
+      const initialCount = await unstagedItems.count()
+      expect(initialCount).toBeGreaterThanOrEqual(3)
+
+      // Click the first file to open DiffModal
+      await unstagedItems.first().click()
+      await page.waitForTimeout(500)
+
+      const diffModal = page.locator('.diff-modal-overlay')
+      await expect(diffModal).toBeVisible()
+
+      // Verify file navigation bar
+      const fileNav = diffModal.locator('[data-testid="file-nav"]')
+      await expect(fileNav).toBeVisible()
+
+      const counter = fileNav.locator('[data-testid="file-counter"]')
+      await expect(counter).toHaveText(`File 1 of ${initialCount}`)
+
+      const prevBtn = fileNav.locator('[data-testid="prev-file-btn"]')
+      const nextBtn = fileNav.locator('[data-testid="next-file-btn"]')
+
+      await expect(prevBtn).toBeDisabled()
+      await expect(nextBtn).toBeEnabled()
+
+      // Click next button to go to 2nd file
+      await nextBtn.click()
+      await page.waitForTimeout(300)
+      await expect(counter).toHaveText(`File 2 of ${initialCount}`)
+      await expect(prevBtn).toBeEnabled()
+      await expect(nextBtn).toBeEnabled()
+
+      // Use 'D' key shortcut to go to 3rd file
+      await page.keyboard.press('d')
+      await page.waitForTimeout(300)
+      await expect(counter).toHaveText(`File 3 of ${initialCount}`)
+
+      // Use 'A' key shortcut to go back to 2nd file
+      await page.keyboard.press('a')
+      await page.waitForTimeout(300)
+      await expect(counter).toHaveText(`File 2 of ${initialCount}`)
+
+      // Click prev button to go back to 1st file
+      await prevBtn.click()
+      await page.waitForTimeout(300)
+      await expect(counter).toHaveText(`File 1 of ${initialCount}`)
+      await expect(prevBtn).toBeDisabled()
+
+      // Click Stage File button in modal
+      const stageFileModalBtn = diffModal.getByTestId('stage-file-modal-btn')
+      await expect(stageFileModalBtn).toBeVisible()
+      await stageFileModalBtn.click()
+      await page.waitForTimeout(500)
+
+      // Counter should now reflect initialCount - 1 since 1 file was moved to staged
+      await expect(counter).toHaveText(`File 1 of ${initialCount - 1}`)
+
+      // Close diff modal
+      const closeBtn = diffModal.locator('.diff-modal-close')
+      await closeBtn.click()
+      await expect(diffModal).not.toBeVisible()
+
+    } finally {
+      await app.close()
+    }
+  })
 })

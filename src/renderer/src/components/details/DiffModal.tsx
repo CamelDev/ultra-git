@@ -6,6 +6,8 @@ import {
   Check,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   Minus,
   RotateCcw,
@@ -23,6 +25,14 @@ import {
 import { useRepoStore } from '../../store/useRepoStore'
 import { useToaster } from '../toaster/ToasterContext'
 
+export interface DiffFileItem {
+  path: string
+  oldPath?: string
+  status: string
+  isStaged?: boolean
+  isUntracked?: boolean
+}
+
 interface DiffModalProps {
   isOpen: boolean
   onClose: () => void
@@ -36,6 +46,8 @@ interface DiffModalProps {
   isStash?: boolean
   stashIndex?: number | null
   stashMessage?: string | null
+  files?: DiffFileItem[]
+  initialFileIndex?: number
 }
 
 interface DiffItem {
@@ -379,7 +391,9 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   isStaged,
   isStash = false,
   stashIndex = null,
-  stashMessage = null
+  stashMessage = null,
+  files,
+  initialFileIndex
 }) => {
   const { getActiveRepo, refreshRepo } = useRepoStore()
   const { addToast } = useToaster()
@@ -388,6 +402,9 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const [diffItems, setDiffItems] = useState<DiffItem[]>([])
   const [isBinary, setIsBinary] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
+
+  // File navigation state
+  const [currentFileIndex, setCurrentFileIndex] = useState<number>(initialFileIndex || 0)
 
   // Chunk navigation, view mode, and line selection state
   const [viewMode, setViewMode] = useState<'chunks' | 'full'>('chunks')
@@ -410,6 +427,85 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const [stashFilesLoading, setStashFilesLoading] = useState(false)
   const [stashFilesError, setStashFilesError] = useState<string | null>(null)
   const [selectedStashFile, setSelectedStashFile] = useState<any | null>(null)
+
+  // Sync currentFileIndex when modal opens or initialFileIndex/files/filePath changes
+  useEffect(() => {
+    if (isOpen) {
+      if (files && files.length > 0) {
+        if (initialFileIndex !== undefined && initialFileIndex >= 0 && initialFileIndex < files.length) {
+          setCurrentFileIndex(initialFileIndex)
+        } else {
+          const foundIdx = files.findIndex((f) => f.path === filePath)
+          setCurrentFileIndex(foundIdx >= 0 ? foundIdx : 0)
+        }
+      } else {
+        setCurrentFileIndex(0)
+      }
+    }
+  }, [isOpen, filePath, initialFileIndex, files])
+
+  // Active file derived properties
+  const activeFile = useMemo(() => {
+    if (files && files.length > 0) {
+      const clampedIdx = Math.max(0, Math.min(currentFileIndex, files.length - 1))
+      return files[clampedIdx]
+    }
+    return null
+  }, [files, currentFileIndex])
+
+  const currentFilePath = isStash ? selectedStashFile?.path || 'No file selected' : activeFile?.path || filePath
+  const currentOldPath = isStash ? selectedStashFile?.oldPath : activeFile?.oldPath ?? oldPath
+  const currentStatus = isStash ? selectedStashFile?.status : activeFile?.status ?? status
+  const currentIsStaged = activeFile?.isStaged ?? isStaged
+  const currentIsUntracked = activeFile?.isUntracked ?? false
+
+  const totalFiles = isStash ? stashFiles.length : files && files.length > 0 ? files.length : 1
+  const fileIndex = isStash
+    ? stashFiles.findIndex((f) => f.path === selectedStashFile?.path)
+    : files && files.length > 0
+    ? Math.max(0, Math.min(currentFileIndex, files.length - 1))
+    : 0
+
+  // File navigation handlers
+  const handlePrevFile = useCallback(() => {
+    if (isStash) {
+      if (!stashFiles || stashFiles.length <= 1) return
+      const curIdx = stashFiles.findIndex((f) => f.path === selectedStashFile?.path)
+      if (curIdx > 0) {
+        setSelectedStashFile(stashFiles[curIdx - 1])
+        setSelectedLineIndices(new Set())
+        setActiveChunkIndex(0)
+        setLastClickedIndex(null)
+      }
+    } else if (files && files.length > 1) {
+      if (currentFileIndex > 0) {
+        setCurrentFileIndex((prev) => prev - 1)
+        setSelectedLineIndices(new Set())
+        setActiveChunkIndex(0)
+        setLastClickedIndex(null)
+      }
+    }
+  }, [isStash, stashFiles, selectedStashFile, files, currentFileIndex])
+
+  const handleNextFile = useCallback(() => {
+    if (isStash) {
+      if (!stashFiles || stashFiles.length <= 1) return
+      const curIdx = stashFiles.findIndex((f) => f.path === selectedStashFile?.path)
+      if (curIdx !== -1 && curIdx < stashFiles.length - 1) {
+        setSelectedStashFile(stashFiles[curIdx + 1])
+        setSelectedLineIndices(new Set())
+        setActiveChunkIndex(0)
+        setLastClickedIndex(null)
+      }
+    } else if (files && files.length > 1) {
+      if (currentFileIndex < files.length - 1) {
+        setCurrentFileIndex((prev) => prev + 1)
+        setSelectedLineIndices(new Set())
+        setActiveChunkIndex(0)
+        setLastClickedIndex(null)
+      }
+    }
+  }, [isStash, stashFiles, selectedStashFile, files, currentFileIndex])
 
   // Build hunks from diffItems
   const hunks: DiffHunk[] = useMemo(() => {
@@ -456,6 +552,47 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     scrollToHunk(nextIndex)
   }, [hunks.length, activeChunkIndex, scrollToHunk])
 
+  // Entire File Staging & Unstaging Handlers
+  const handleStageEntireFile = async () => {
+    if (!currentFilePath) return
+    setActionLoading(true)
+    try {
+      const res = await window.api.git.add(repoPath, currentFilePath)
+      if (res.success) {
+        setSelectedLineIndices(new Set())
+        addToast({ variant: 'success', title: 'File Staged', message: `Staged "${currentFilePath}"` })
+        const activeRepo = getActiveRepo()
+        if (activeRepo) await refreshRepo(activeRepo.id)
+      } else {
+        addToast({ variant: 'error', title: 'Stage Failed', message: res.error || 'Failed to stage file' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Stage Error', message: err.message || 'Error staging file' })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleUnstageEntireFile = async () => {
+    if (!currentFilePath) return
+    setActionLoading(true)
+    try {
+      const res = await window.api.git.reset(repoPath, currentFilePath)
+      if (res.success) {
+        setSelectedLineIndices(new Set())
+        addToast({ variant: 'success', title: 'File Unstaged', message: `Unstaged "${currentFilePath}"` })
+        const activeRepo = getActiveRepo()
+        if (activeRepo) await refreshRepo(activeRepo.id)
+      } else {
+        addToast({ variant: 'error', title: 'Unstage Failed', message: res.error || 'Failed to unstage file' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Unstage Error', message: err.message || 'Error unstaging file' })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   // Reload diff content
   const loadDiffContent = useCallback(() => {
     if (!isOpen) return
@@ -463,12 +600,19 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     setLoading(true)
     setError(null)
 
-    const targetFilePath = isStash ? selectedStashFile?.path : filePath
-    const targetOldPath = isStash ? selectedStashFile?.oldPath : oldPath
-    const targetStatus = isStash ? selectedStashFile?.status : status
-    const isUntracked = isStash ? selectedStashFile?.isUntracked : false
+    const targetFilePath = currentFilePath
+    const targetOldPath = currentOldPath
+    const targetStatus = currentStatus
+    const targetIsStaged = currentIsStaged
+    const isUntracked = currentIsUntracked
 
     if (isStash && !selectedStashFile) {
+      setLoading(false)
+      setDiffItems([])
+      return
+    }
+
+    if (!targetFilePath || targetFilePath === 'No file selected') {
       setLoading(false)
       setDiffItems([])
       return
@@ -477,7 +621,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     const fetchDiff = isStash
       ? window.api.git.getStashFileDiff(repoPath, stashIndex!, targetFilePath, targetOldPath, targetStatus, isUntracked)
       : isActiveChange
-      ? window.api.git.getActiveFileDiff(repoPath, targetFilePath, !!isStaged, targetOldPath)
+      ? window.api.git.getActiveFileDiff(repoPath, targetFilePath, !!targetIsStaged, targetOldPath)
       : window.api.git.getCommitFileDiff(repoPath, commitHash!, targetFilePath, targetOldPath, targetStatus)
 
     fetchDiff
@@ -502,13 +646,14 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       })
   }, [
     isOpen,
-    filePath,
+    currentFilePath,
+    currentOldPath,
+    currentStatus,
+    currentIsStaged,
+    currentIsUntracked,
     commitHash,
     repoPath,
     isActiveChange,
-    isStaged,
-    oldPath,
-    status,
     isStash,
     stashIndex,
     selectedStashFile
@@ -543,12 +688,12 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
   // Hunk Staging / Unstaging / Discarding
   const handleStageHunk = async (hunk: DiffHunk) => {
-    const patch = buildHunkPatch(filePath, hunk, 'stage')
+    const patch = buildHunkPatch(currentFilePath, hunk, 'stage')
     await handleApplyPatch(patch, { cached: true }, 'Chunk staged successfully')
   }
 
   const handleUnstageHunk = async (hunk: DiffHunk) => {
-    const patch = buildHunkPatch(filePath, hunk, 'unstage')
+    const patch = buildHunkPatch(currentFilePath, hunk, 'unstage')
     await handleApplyPatch(patch, { cached: true, reverse: true }, 'Chunk unstaged successfully')
   }
 
@@ -556,14 +701,14 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     setConfirmDialog({
       isOpen: true,
       title: 'Discard Chunk',
-      message: `Are you sure you want to discard this chunk in "${filePath}"? This operation cannot be undone.`,
+      message: `Are you sure you want to discard this chunk in "${currentFilePath}"? This operation cannot be undone.`,
       confirmText: 'Discard Chunk',
       onConfirm: async () => {
         setConfirmDialog(null)
         setActionLoading(true)
         try {
-          if (isStaged) {
-            const patch = buildHunkPatch(filePath, hunk, 'unstage')
+          if (currentIsStaged) {
+            const patch = buildHunkPatch(currentFilePath, hunk, 'unstage')
             const res1 = await window.api.git.applyPatch(repoPath, patch, { cached: true, reverse: true })
             if (!res1.success) {
               addToast({ variant: 'error', title: 'Discard Chunk Failed', message: `Failed to unstage chunk: ${res1.error}` })
@@ -575,7 +720,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               return
             }
           } else {
-            const patch = buildHunkPatch(filePath, hunk, 'discard')
+            const patch = buildHunkPatch(currentFilePath, hunk, 'discard')
             const res = await window.api.git.applyPatch(repoPath, patch, { reverse: true })
             if (!res.success) {
               addToast({ variant: 'error', title: 'Discard Chunk Failed', message: `Failed to discard chunk: ${res.error}` })
@@ -602,7 +747,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     for (const hunk of hunks) {
       const hasSelected = hunk.lines.some((l) => selectedLineIndices.has(l.indexInDiff))
       if (hasSelected) {
-        const patch = buildSelectedLinesPatch(filePath, hunk, selectedLineIndices, 'stage')
+        const patch = buildSelectedLinesPatch(currentFilePath, hunk, selectedLineIndices, 'stage')
         await handleApplyPatch(patch, { cached: true }, 'Selected lines staged')
       }
     }
@@ -613,7 +758,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     for (const hunk of hunks) {
       const hasSelected = hunk.lines.some((l) => selectedLineIndices.has(l.indexInDiff))
       if (hasSelected) {
-        const patch = buildSelectedLinesPatch(filePath, hunk, selectedLineIndices, 'unstage')
+        const patch = buildSelectedLinesPatch(currentFilePath, hunk, selectedLineIndices, 'unstage')
         await handleApplyPatch(patch, { cached: true, reverse: true }, 'Selected lines unstaged')
       }
     }
@@ -624,7 +769,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     setConfirmDialog({
       isOpen: true,
       title: 'Discard Selected Lines',
-      message: `Are you sure you want to discard ${selectedRowCount} selected line(s) in "${filePath}"? This operation cannot be undone.`,
+      message: `Are you sure you want to discard ${selectedRowCount} selected line(s) in "${currentFilePath}"? This operation cannot be undone.`,
       confirmText: 'Discard Lines',
       onConfirm: async () => {
         setConfirmDialog(null)
@@ -633,8 +778,8 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           for (const hunk of hunks) {
             const hasSelected = hunk.lines.some((l) => selectedLineIndices.has(l.indexInDiff))
             if (hasSelected) {
-              if (isStaged) {
-                const patch = buildSelectedLinesPatch(filePath, hunk, selectedLineIndices, 'unstage')
+              if (currentIsStaged) {
+                const patch = buildSelectedLinesPatch(currentFilePath, hunk, selectedLineIndices, 'unstage')
                 const res1 = await window.api.git.applyPatch(repoPath, patch, { cached: true, reverse: true })
                 if (!res1.success) {
                   addToast({ variant: 'error', title: 'Discard Lines Failed', message: `Failed to unstage lines: ${res1.error}` })
@@ -646,7 +791,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                   return
                 }
               } else {
-                const patch = buildSelectedLinesPatch(filePath, hunk, selectedLineIndices, 'discard')
+                const patch = buildSelectedLinesPatch(currentFilePath, hunk, selectedLineIndices, 'discard')
                 const res = await window.api.git.applyPatch(repoPath, patch, { reverse: true })
                 if (!res.success) {
                   addToast({ variant: 'error', title: 'Discard Lines Failed', message: `Failed to discard lines: ${res.error}` })
@@ -725,16 +870,32 @@ export const DiffModal: React.FC<DiffModalProps> = ({
         } else {
           onClose()
         }
-      } else if (e.altKey && e.key === 'ArrowUp') {
+      } else if (
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        (e.key.toLowerCase() === 'a' || e.key === 'ArrowLeft')
+      ) {
+        if ((isStash && stashFiles.length > 1) || (files && files.length > 1)) {
+          e.preventDefault()
+          handlePrevFile()
+        }
+      } else if (
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        (e.key.toLowerCase() === 'd' || e.key === 'ArrowRight')
+      ) {
+        if ((isStash && stashFiles.length > 1) || (files && files.length > 1)) {
+          e.preventDefault()
+          handleNextFile()
+        }
+      } else if (
+        (e.altKey && e.key === 'ArrowUp') ||
+        (!e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'w')
+      ) {
         e.preventDefault()
         handlePrevChunk()
-      } else if (e.altKey && e.key === 'ArrowDown') {
-        e.preventDefault()
-        handleNextChunk()
-      } else if (!e.ctrlKey && !e.metaKey && e.key === 'k') {
-        handlePrevChunk()
-      } else if (!e.ctrlKey && !e.metaKey && e.key === 'j') {
-        handleNextChunk()
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && isActiveChange) {
         e.preventDefault()
         if (selectedLineIndices.size > 0) {
@@ -742,6 +903,12 @@ export const DiffModal: React.FC<DiffModalProps> = ({
         } else if (hunks[activeChunkIndex]) {
           handleStageHunk(hunks[activeChunkIndex])
         }
+      } else if (
+        (e.altKey && e.key === 'ArrowDown') ||
+        (!e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 's')
+      ) {
+        e.preventDefault()
+        handleNextChunk()
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'u' && isActiveChange) {
         e.preventDefault()
         if (selectedLineIndices.size > 0) {
@@ -762,6 +929,11 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     activeChunkIndex,
     hunks,
     isActiveChange,
+    isStash,
+    stashFiles,
+    files,
+    handlePrevFile,
+    handleNextFile,
     handlePrevChunk,
     handleNextChunk,
     handleStageSelectedLines,
@@ -777,6 +949,13 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       setActiveChunkIndex(0)
     }
   }, [isOpen])
+
+  // Close modal when viewing active changes and all files in section have been staged/unstaged
+  useEffect(() => {
+    if (isOpen && isActiveChange && !isStash && files && files.length === 0) {
+      onClose()
+    }
+  }, [isOpen, isActiveChange, isStash, files, onClose])
 
   // Load stash files list
   useEffect(() => {
@@ -850,9 +1029,10 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
   const handleCopyLeft = () => {
     const leftLines = renderRows
-      .filter((r) => r.beforeLine !== undefined)
-      .map((r) => r.beforeLine)
+      .map((row) => (row.rowType !== 'add' ? row.beforeLine || '' : null))
+      .filter((line) => line !== null)
       .join('\n')
+
     navigator.clipboard.writeText(leftLines)
     setCopiedSide('left')
     setTimeout(() => setCopiedSide(null), 2000)
@@ -860,40 +1040,29 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
   const handleCopyRight = () => {
     const rightLines = renderRows
-      .filter((r) => r.afterLine !== undefined)
-      .map((r) => r.afterLine)
+      .map((row) => (row.rowType !== 'delete' ? row.afterLine || '' : null))
+      .filter((line) => line !== null)
       .join('\n')
+
     navigator.clipboard.writeText(rightLines)
     setCopiedSide('right')
     setTimeout(() => setCopiedSide(null), 2000)
   }
 
-  const handleCopy = (e: React.ClipboardEvent<HTMLDivElement>) => {
+  const handleCopy = (e: React.ClipboardEvent) => {
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed) return
 
-    const range = selection.getRangeAt(0)
-    const container = range.commonAncestorContainer
-    const targetElement =
-      container.nodeType === Node.TEXT_NODE ? container.parentElement : (container as HTMLElement)
-    if (!targetElement) return
+    const diffTable = bodyRef.current?.querySelector('.diff-table')
+    if (!diffTable || !diffTable.contains(selection.anchorNode)) return
 
-    const diffTable = targetElement.closest('.diff-table')
-    if (!diffTable) return
+    const anchorEl = selection.anchorNode?.nodeType === Node.ELEMENT_NODE
+      ? (selection.anchorNode as HTMLElement)
+      : selection.anchorNode?.parentElement
 
-    const anchorNode = selection.anchorNode
-    const anchorEl = anchorNode
-      ? anchorNode.nodeType === Node.TEXT_NODE
-        ? anchorNode.parentElement
-        : (anchorNode as HTMLElement)
-      : null
-
-    const focusNode = selection.focusNode
-    const focusEl = focusNode
-      ? focusNode.nodeType === Node.TEXT_NODE
-        ? focusNode.parentElement
-        : (focusNode as HTMLElement)
-      : null
+    const focusEl = selection.focusNode?.nodeType === Node.ELEMENT_NODE
+      ? (selection.focusNode as HTMLElement)
+      : selection.focusNode?.parentElement
 
     const anchorLeft = anchorEl?.closest('.diff-col.left')
     const anchorRight = anchorEl?.closest('.diff-col.right')
@@ -946,120 +1115,188 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
   if (!isOpen) return null
 
-  const currentFilePath = isStash ? selectedStashFile?.path || 'No file selected' : filePath
-  const currentOldPath = isStash ? selectedStashFile?.oldPath : oldPath
-  const currentStatus = isStash ? selectedStashFile?.status : status
-
   return (
     <div className="diff-modal-overlay" onClick={onClose}>
       <div className="diff-modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="diff-modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <FileText size={18} style={{ color: 'var(--accent-light)' }} />
-            <div>
-              <div style={{ fontWeight: 600, fontSize: '15px', wordBreak: 'break-all' }}>{currentFilePath}</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                {currentStatus === 'R' ? `Renamed from ${currentOldPath} | ` : ''}
-                {isStash ? (
-                  <span>
-                    Stash details:{' '}
-                    <code
-                      style={{
-                        fontFamily: 'JetBrains Mono, monospace',
-                        backgroundColor: 'var(--bg-tertiary)',
-                        padding: '1px 4px',
-                        borderRadius: '3px'
-                      }}
-                    >
-                      stash@{stashIndex}
-                    </code>{' '}
-                    {stashMessage ? `— "${stashMessage}"` : ''}
+        <div className="diff-modal-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
+          {/* Top Row: Context Badge + Navigation & Action Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {currentStatus === 'R' ? `Renamed from ${currentOldPath} | ` : ''}
+              {isStash ? (
+                <span>
+                  Stash details:{' '}
+                  <code
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      backgroundColor: 'var(--bg-tertiary)',
+                      padding: '1px 4px',
+                      borderRadius: '3px'
+                    }}
+                  >
+                    stash@{stashIndex}
+                  </code>{' '}
+                  {stashMessage ? `— "${stashMessage}"` : ''}
+                </span>
+              ) : isActiveChange ? (
+                <span
+                  style={{
+                    backgroundColor: 'var(--bg-tertiary)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontWeight: 600,
+                    fontSize: '11px',
+                    color: currentIsStaged ? '#34d399' : '#f59e0b'
+                  }}
+                >
+                  {currentIsStaged ? 'Staged changes' : 'Unstaged changes'}
+                </span>
+              ) : (
+                <span>
+                  Commit:{' '}
+                  <span style={{ fontFamily: 'monospace' }}>{commitHash?.substring(0, 8)}</span>
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* File Navigation Controls */}
+              {totalFiles > 1 && (
+                <div className="diff-file-nav" data-testid="file-nav">
+                  <button
+                    className="diff-file-btn"
+                    onClick={handlePrevFile}
+                    disabled={fileIndex <= 0}
+                    data-tooltip="Previous File (A or Left Arrow)"
+                    data-testid="prev-file-btn"
+                  >
+                    <ChevronLeft size={14} />
+                    <span>Prev</span>
+                  </button>
+                  <span className="diff-file-counter" data-testid="file-counter">
+                    File {fileIndex + 1} of {totalFiles}
                   </span>
-                ) : isActiveChange ? (
-                  <span>{isStaged ? 'Staged changes' : 'Unstaged changes'}</span>
+                  <button
+                    className="diff-file-btn"
+                    onClick={handleNextFile}
+                    disabled={fileIndex >= totalFiles - 1}
+                    data-tooltip="Next File (D or Right Arrow)"
+                    data-testid="next-file-btn"
+                  >
+                    <span>Next</span>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+
+              {/* View Mode Toggle (Chunks vs Full File) */}
+              {renderRows.length > 0 && !loading && !error && !isBinary && (
+                <div className="diff-view-toggle" data-testid="view-mode-toggle">
+                  <button
+                    className={`diff-view-toggle-btn ${viewMode === 'chunks' ? 'active' : ''}`}
+                    onClick={() => setViewMode('chunks')}
+                    data-tooltip="Show only changed chunks with context"
+                    data-testid="toggle-chunks-btn"
+                  >
+                    <Layers size={13} />
+                    <span>Chunks</span>
+                  </button>
+                  <button
+                    className={`diff-view-toggle-btn ${viewMode === 'full' ? 'active' : ''}`}
+                    onClick={() => setViewMode('full')}
+                    data-tooltip="Show entire file content with diff highlights"
+                    data-testid="toggle-full-btn"
+                  >
+                    <FileText size={13} />
+                    <span>Full File</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Chunk Navigation Buttons */}
+              {hunks.length > 0 && (
+                <div className="diff-chunk-nav" data-testid="chunk-nav">
+                  <button
+                    className="diff-chunk-btn"
+                    onClick={handlePrevChunk}
+                    disabled={activeChunkIndex === 0}
+                    data-tooltip="Previous Chunk (W or Alt+Up)"
+                    data-testid="prev-chunk-btn"
+                  >
+                    <ChevronUp size={14} />
+                  </button>
+                  <span className="diff-chunk-counter" data-testid="chunk-counter">
+                    Chunk {activeChunkIndex + 1} of {hunks.length}
+                  </span>
+                  <button
+                    className="diff-chunk-btn"
+                    onClick={handleNextChunk}
+                    disabled={activeChunkIndex >= hunks.length - 1}
+                    data-tooltip="Next Chunk (S or Alt+Down)"
+                    data-testid="next-chunk-btn"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+              )}
+
+              {/* Entire File Stage / Unstage Button */}
+              {isActiveChange && !isStash && (
+                !currentIsStaged ? (
+                  <button
+                    className="diff-file-action-btn stage-file-btn"
+                    onClick={handleStageEntireFile}
+                    disabled={actionLoading}
+                    data-tooltip="Stage this entire file"
+                    data-testid="stage-file-modal-btn"
+                  >
+                    <Plus size={13} />
+                    <span>Stage File</span>
+                  </button>
                 ) : (
-                  <>
-                    Commit:{' '}
-                    <span style={{ fontFamily: 'monospace' }}>{commitHash?.substring(0, 8)}</span>
-                  </>
-                )}
-              </div>
+                  <button
+                    className="diff-file-action-btn unstage-file-btn"
+                    onClick={handleUnstageEntireFile}
+                    disabled={actionLoading}
+                    data-tooltip="Unstage this entire file"
+                    data-testid="unstage-file-modal-btn"
+                  >
+                    <Minus size={13} />
+                    <span>Unstage File</span>
+                  </button>
+                )
+              )}
+
+              <button
+                className="diff-copy-btn"
+                data-testid="copy-left-btn"
+                onClick={handleCopyLeft}
+                data-tooltip="Copy Old (Left) File Content"
+              >
+                {copiedSide === 'left' ? <Check size={14} style={{ color: '#34d399' }} /> : <Copy size={14} />}
+                <span>{copiedSide === 'left' ? 'Copied Old!' : 'Copy Old'}</span>
+              </button>
+              <button
+                className="diff-copy-btn"
+                data-testid="copy-right-btn"
+                onClick={handleCopyRight}
+                data-tooltip="Copy New (Right) File Content"
+              >
+                {copiedSide === 'right' ? <Check size={14} style={{ color: '#34d399' }} /> : <Copy size={14} />}
+                <span>{copiedSide === 'right' ? 'Copied New!' : 'Copy New'}</span>
+              </button>
+              <button className="diff-modal-close" onClick={onClose} data-tooltip="Close modal (Escape)">
+                <X size={18} />
+              </button>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* View Mode Toggle (Chunks vs Full File) */}
-            {renderRows.length > 0 && !loading && !error && !isBinary && (
-              <div className="diff-view-toggle" data-testid="view-mode-toggle">
-                <button
-                  className={`diff-view-toggle-btn ${viewMode === 'chunks' ? 'active' : ''}`}
-                  onClick={() => setViewMode('chunks')}
-                  title="Show only changed chunks with context"
-                  data-testid="toggle-chunks-btn"
-                >
-                  <Layers size={13} />
-                  <span>Chunks</span>
-                </button>
-                <button
-                  className={`diff-view-toggle-btn ${viewMode === 'full' ? 'active' : ''}`}
-                  onClick={() => setViewMode('full')}
-                  title="Show entire file content with diff highlights"
-                  data-testid="toggle-full-btn"
-                >
-                  <FileText size={13} />
-                  <span>Full File</span>
-                </button>
-              </div>
-            )}
-
-            {/* Chunk Navigation Buttons */}
-            {hunks.length > 0 && (
-              <div className="diff-chunk-nav" data-testid="chunk-nav">
-                <button
-                  className="diff-chunk-btn"
-                  onClick={handlePrevChunk}
-                  disabled={activeChunkIndex === 0}
-                  title="Previous Chunk (Alt+Up or K)"
-                  data-testid="prev-chunk-btn"
-                >
-                  <ChevronUp size={14} />
-                </button>
-                <span className="diff-chunk-counter" data-testid="chunk-counter">
-                  Chunk {activeChunkIndex + 1} of {hunks.length}
-                </span>
-                <button
-                  className="diff-chunk-btn"
-                  onClick={handleNextChunk}
-                  disabled={activeChunkIndex >= hunks.length - 1}
-                  title="Next Chunk (Alt+Down or J)"
-                  data-testid="next-chunk-btn"
-                >
-                  <ChevronDown size={14} />
-                </button>
-              </div>
-            )}
-
-            <button
-              className="diff-copy-btn"
-              data-testid="copy-left-btn"
-              onClick={handleCopyLeft}
-              title="Copy Old (Left) File Content"
-            >
-              {copiedSide === 'left' ? <Check size={14} style={{ color: '#34d399' }} /> : <Copy size={14} />}
-              <span>{copiedSide === 'left' ? 'Copied Old!' : 'Copy Old'}</span>
-            </button>
-            <button
-              className="diff-copy-btn"
-              data-testid="copy-right-btn"
-              onClick={handleCopyRight}
-              title="Copy New (Right) File Content"
-            >
-              {copiedSide === 'right' ? <Check size={14} style={{ color: '#34d399' }} /> : <Copy size={14} />}
-              <span>{copiedSide === 'right' ? 'Copied New!' : 'Copy New'}</span>
-            </button>
-            <button className="diff-modal-close" onClick={onClose} title="Close">
-              <X size={18} />
-            </button>
+          {/* Bottom Row: File Icon + File Path */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '2px' }}>
+            <FileText size={16} style={{ color: 'var(--accent-light)', flexShrink: 0 }} />
+            <div style={{ fontWeight: 600, fontSize: '14px', wordBreak: 'break-all', fontFamily: 'JetBrains Mono, monospace' }}>
+              {currentFilePath}
+            </div>
           </div>
         </div>
 
