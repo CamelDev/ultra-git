@@ -111,6 +111,43 @@ function getGitInstance(repoPath: string): SimpleGit {
   return gitInstances.get(repoPath)!;
 }
 
+/**
+ * Helper to check if an error is an index.lock collision from Git.
+ */
+export function isIndexLockError(err: any): boolean {
+  if (!err) return false;
+  const message = typeof err === 'string' ? err : (err.message || String(err));
+  return (
+    message.includes("index.lock': File exists") ||
+    (message.includes('Unable to create') && message.includes('index.lock'))
+  );
+}
+
+/**
+ * Retries a Git operation if it fails due to an index.lock contention error.
+ */
+export async function withGitLockRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  initialDelayMs = 250
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      attempt++;
+      if (attempt <= maxRetries && isIndexLockError(err)) {
+        const delay = initialDelayMs * Math.pow(2, attempt - 1);
+        console.warn(`[gitService] index.lock collision encountered. Retrying attempt ${attempt}/${maxRetries} after ${delay}ms...`);
+        await new Promise((res) => setTimeout(res, delay));
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
 export const gitService = {
   status: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
@@ -565,20 +602,55 @@ export const gitService = {
     return { success: true };
   },
 
+  checkIndexLock: async (repoPath: string) => {
+    const lockPath = join(repoPath, '.git', 'index.lock');
+    try {
+      if (fs.existsSync(lockPath)) {
+        const stats = fs.statSync(lockPath);
+        return {
+          exists: true,
+          lockPath,
+          mtimeMs: stats.mtimeMs,
+          ageSeconds: (Date.now() - stats.mtimeMs) / 1000
+        };
+      }
+    } catch (err) {
+      console.warn('Failed to check index.lock stats:', err);
+    }
+    return { exists: false, lockPath };
+  },
+
+  removeIndexLock: async (repoPath: string) => {
+    const lockPath = join(repoPath, '.git', 'index.lock');
+    try {
+      if (fs.existsSync(lockPath)) {
+        fs.unlinkSync(lockPath);
+        console.log(`[gitService.removeIndexLock] Successfully removed ${lockPath}`);
+        return { success: true };
+      }
+      return { success: true, message: 'Lock file did not exist' };
+    } catch (err: any) {
+      console.error(`[gitService.removeIndexLock] Failed to remove ${lockPath}:`, err);
+      return { success: false, error: err.message || String(err) };
+    }
+  },
+
   checkout: async (repoPath: string, branchName: string) => {
     const git = getGitInstance(repoPath);
-    return await git.checkout(branchName);
+    return await withGitLockRetry(() => git.checkout(branchName));
   },
 
   createBranch: async (repoPath: string, branchName: string, startPoint?: string) => {
     console.log('[gitService.createBranch] called with:', { repoPath, branchName, startPoint });
     const git = getGitInstance(repoPath);
-    if (startPoint) {
-      console.log(`[gitService.createBranch] Creating branch ${branchName} from startPoint: ${startPoint}`);
-      return await git.checkoutBranch(branchName, startPoint);
-    }
-    console.log(`[gitService.createBranch] Creating branch ${branchName} from HEAD`);
-    return await git.checkoutLocalBranch(branchName);
+    return await withGitLockRetry(() => {
+      if (startPoint) {
+        console.log(`[gitService.createBranch] Creating branch ${branchName} from startPoint: ${startPoint}`);
+        return git.checkoutBranch(branchName, startPoint);
+      }
+      console.log(`[gitService.createBranch] Creating branch ${branchName} from HEAD`);
+      return git.checkoutLocalBranch(branchName);
+    });
   },
 
   deleteBranch: async (repoPath: string, branchName: string, force?: boolean) => {

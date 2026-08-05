@@ -60,6 +60,8 @@ declare global {
         renameBranch: (repoPath: string, oldName: string, newName: string) => Promise<{ success: boolean; error?: string }>;
         getBranches: (repoPath: string) => Promise<{ success: boolean; data?: { current: string; local: Array<{ name: string; ahead: number; behind: number }>; remote: string[] }; error?: string }>;
         checkout: (repoPath: string, branchName: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+        checkIndexLock: (repoPath: string) => Promise<{ success: boolean; data?: { exists: boolean; lockPath: string; ageSeconds?: number }; error?: string }>;
+        removeIndexLock: (repoPath: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         getCommitFiles: (repoPath: string, commitHash: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         add: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>;

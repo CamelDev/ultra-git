@@ -460,6 +460,51 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     return { success: true }
   }
 
+  const handleGitCheckoutError = async (repoPath: string, errorMsg: string, retryAction: () => Promise<void>) => {
+    const isLockError =
+      errorMsg.includes("index.lock': File exists") ||
+      (errorMsg.includes('Unable to create') && errorMsg.includes('index.lock'));
+
+    if (isLockError) {
+      const dialogRes = await window.api.app.showMessageBox({
+        type: 'warning',
+        title: 'Git Lock File Detected',
+        message:
+          `Unable to checkout branch because '.git/index.lock' exists.\n\n` +
+          `Another Git command may be running, or a previous command crashed. Would you like to force remove the lock file and retry?`,
+        buttons: ['Cancel', 'Retry', 'Force Remove Lock & Retry'],
+        defaultId: 2,
+        cancelId: 0
+      });
+
+      if (dialogRes.success && dialogRes.response === 1) {
+        await retryAction();
+        return;
+      } else if (dialogRes.success && dialogRes.response === 2) {
+        const removeRes = await window.api.git.removeIndexLock(repoPath);
+        if (removeRes.success) {
+          await retryAction();
+        } else {
+          await window.api.app.showMessageBox({
+            type: 'error',
+            title: 'Failed to Remove Lock File',
+            message: `Could not delete '.git/index.lock': ${removeRes.error || 'Unknown error'}`,
+            buttons: ['OK']
+          });
+        }
+        return;
+      }
+      return;
+    }
+
+    await window.api.app.showMessageBox({
+      type: 'error',
+      title: 'Checkout Failed',
+      message: `Failed to checkout branch: ${errorMsg}`,
+      buttons: ['OK']
+    });
+  };
+
   const handleCheckoutBranch = async (branchName: string) => {
     if (!activeRepo || branchName === branch) return
 
@@ -480,10 +525,12 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       } else {
         autoExpandRef.current = false;
         console.error('Failed to checkout branch:', res.error)
+        await handleGitCheckoutError(activeRepo.path, res.error || 'Unknown error', () => handleCheckoutBranch(branchName));
       }
-    } catch (err) {
+    } catch (err: any) {
       autoExpandRef.current = false;
       console.error('Error checking out branch:', err)
+      await handleGitCheckoutError(activeRepo.path, err.message || String(err), () => handleCheckoutBranch(branchName));
     }
   }
 

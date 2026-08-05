@@ -149,6 +149,24 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:checkIndexLock', async (_, repoPath) => {
+    try {
+      const data = await gitService.checkIndexLock(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:removeIndexLock', async (_, repoPath) => {
+    try {
+      const data = await gitService.removeIndexLock(repoPath)
+      return { success: data.success, error: data.error, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:checkout', async (_, repoPath, branchName) => {
     try {
       const data = await gitService.checkout(repoPath, branchName)
