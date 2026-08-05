@@ -40,11 +40,31 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const isCurrentRepoWorktree = mainWtPath ? normalizePath(activeRepo.path) !== normalizePath(mainWtPath) : false;
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const [isFetching, setIsFetching] = useState(false)
   const [isPulling, setIsPulling] = useState(false)
   const [isPushing, setIsPushing] = useState(false)
   const [showPushDropdown, setShowPushDropdown] = useState(false)
   const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const handleFetch = async () => {
+    if (!activeRepo || isFetching || isPulling || isPushing) return
+
+    setIsFetching(true)
+    try {
+      const res = await window.api.git.fetch(activeRepo.path)
+      if (res && !res.success) {
+        addToast({ title: 'Fetch Failed', message: res.error || 'Failed to fetch from remote repository', type: 'error' })
+      } else {
+        await refreshRepo(activeRepo.id)
+        addToast({ title: 'Fetch Successful', message: 'Remote tracking branches have been updated.', type: 'success' })
+      }
+    } catch (err: any) {
+      addToast({ title: 'Fetch Error', message: err.message || 'An error occurred during fetch', type: 'error' })
+    } finally {
+      setIsFetching(false)
+    }
+  }
 
   const [isRemoteModalOpen, setIsRemoteModalOpen] = useState(false)
   const [remoteName, setRemoteName] = useState('origin')
@@ -1016,8 +1036,32 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         >
           <button
             className="btn-secondary"
+            onClick={handleFetch}
+            disabled={isFetching || isPulling || isPushing}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: (isFetching || isPulling || isPushing) ? 0.6 : 1,
+              cursor: (isFetching || isPulling || isPushing) ? 'not-allowed' : 'pointer',
+              padding: '6px 12px',
+              fontSize: '12px',
+              fontWeight: 600,
+              backgroundColor: 'rgba(139, 92, 246, 0.15)',
+              border: '1px solid rgba(139, 92, 246, 0.4)',
+              color: '#a78bfa'
+            }}
+            data-testid="fetch-btn"
+            data-tooltip="Fetch updates and remote branches from remote repository"
+          >
+            <RefreshCw size={14} className={isFetching ? 'spin-animation' : ''} style={{ color: '#a78bfa' }} />
+            <span>{isFetching ? 'Fetching...' : 'Fetch'}</span>
+          </button>
+
+          <button
+            className="btn-secondary"
             onClick={handlePull}
-            disabled={isPulling || isPushing}
+            disabled={isFetching || isPulling || isPushing}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -1057,13 +1101,13 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
             <button
               className="btn-secondary"
               onClick={() => handlePush(false)}
-              disabled={isPulling || isPushing}
+              disabled={isFetching || isPulling || isPushing}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                opacity: (isPulling || isPushing) ? 0.6 : 1,
-                cursor: (isPulling || isPushing) ? 'not-allowed' : 'pointer',
+                opacity: (isFetching || isPulling || isPushing) ? 0.6 : 1,
+                cursor: (isFetching || isPulling || isPushing) ? 'not-allowed' : 'pointer',
                 padding: '6px 12px',
                 fontSize: '12px',
                 fontWeight: 600,

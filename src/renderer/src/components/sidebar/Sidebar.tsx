@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, ChevronRight, ChevronDown, Search, LogIn, HardDrive } from "lucide-react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, ChevronRight, ChevronDown, Search, LogIn, HardDrive, RefreshCw } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
@@ -146,6 +146,26 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const [popStashIndex, setPopStashIndex] = useState<number | null>(null)
   const [deleteStashIndex, setDeleteStashIndex] = useState<number | null>(null)
   const [tagToDelete, setTagToDelete] = useState<string | null>(null)
+  const [isFetchingRemote, setIsFetchingRemote] = useState(false)
+
+  const handleFetchRemoteBranches = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!activeRepo || isFetchingRemote) return
+    setIsFetchingRemote(true)
+    try {
+      const res = await window.api.git.fetch(activeRepo.path)
+      if (res && !res.success) {
+        addToast({ title: 'Fetch Failed', message: res.error || 'Failed to fetch remote branches', type: 'error' })
+      } else {
+        await refreshRepo(activeRepo.id)
+        addToast({ title: 'Fetched Remote Branches', message: 'Remote references are up to date.', type: 'success' })
+      }
+    } catch (err: any) {
+      addToast({ title: 'Fetch Error', message: err.message || 'An error occurred while fetching', type: 'error' })
+    } finally {
+      setIsFetchingRemote(false)
+    }
+  }
 
   const openWorktreeModal = () => {
     setBaseBranch(activeRepo?.branch || 'main')
@@ -1270,7 +1290,19 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               )}
               <span>Remote</span>
             </div>
-            <span>{filterText ? `${filteredRemoteBranches.length}/${remoteBranches.length}` : remoteBranches.length}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+              <span>{filterText ? `${filteredRemoteBranches.length}/${remoteBranches.length}` : remoteBranches.length}</span>
+              <button
+                className="stash-action-btn"
+                style={{ padding: 2, height: 20, width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                onClick={handleFetchRemoteBranches}
+                disabled={isFetchingRemote}
+                data-tooltip="Fetch remote branches"
+                data-testid="fetch-remote-branches-btn"
+              >
+                <RefreshCw size={12} className={isFetchingRemote ? 'spin-animation' : ''} />
+              </button>
+            </div>
           </div>
           {!isRemoteBranchesCollapsed && (
             filteredRemoteBranches.length === 0 ? (
