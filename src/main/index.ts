@@ -7,6 +7,7 @@ import iconWin from '../../resources/icon-win.png?asset'
 import { fixPath } from './env'
 import { gitService } from './git'
 import { watchDirectory, stopWatching } from './watcher'
+import { registerUpdateHandlers, scheduleUpdateChecks } from './update'
 
 // Fix the PATH on macOS and Linux before spawning child processes
 fixPath()
@@ -775,7 +776,13 @@ app.whenReady().then(() => {
     }
   })
 
+  // Update checker IPC handlers
+  registerUpdateHandlers(() => mainWindow)
+
   createWindow()
+
+  // Schedule update checks (runs only when packaged; dev/test: no ping)
+  scheduleUpdateChecks(() => mainWindow)
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

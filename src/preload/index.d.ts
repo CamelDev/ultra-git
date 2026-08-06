@@ -7,6 +7,19 @@ export type IpcResponse<T = any> = {
   error?: string;
 };
 
+export interface UpdateInfo {
+  latest: string;
+  url: string;
+  publishedAt: string | null;
+  notes: string;
+}
+
+export interface UpdateSettings {
+  enabled: boolean;
+  skippedVersion: string | null;
+  lastCheckedAt: string | null;
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI
@@ -52,6 +65,13 @@ declare global {
         showMessageBox: (options: any) => Promise<{ success: boolean, response?: number, checkboxChecked?: boolean, error?: string }>;
         isTesting: boolean;
         disableDefaultTab: boolean;
+      },
+      updates: {
+        check: () => Promise<{ success: boolean; current?: string; update?: UpdateInfo | null; error?: string }>;
+        skipVersion: (version: string) => Promise<{ success: boolean; error?: string }>;
+        setEnabled: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
+        getSettings: () => Promise<{ success: boolean; data?: UpdateSettings; error?: string }>;
+        onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
       }
     }
   }

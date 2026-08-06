@@ -1,5 +1,5 @@
 import React from 'react'
-import { X, Github, Heart, Info, ExternalLink } from 'lucide-react'
+import { X, Github, Heart, Info, ExternalLink, RefreshCw } from 'lucide-react'
 import './AboutModal.css'
 import logoIcon from '../../assets/icon.png'
 import pkg from '../../../../../package.json'
@@ -7,9 +7,10 @@ import pkg from '../../../../../package.json'
 interface AboutModalProps {
   isOpen: boolean
   onClose: () => void
+  onCheckForUpdates?: () => void
 }
 
-export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
+export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onCheckForUpdates }) => {
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -56,7 +57,16 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             </div>
             <h2 className="about-app-name">UltraGIT</h2>
             <p className="about-version">Version {pkg.version}</p>
-            <div className="about-badge">Stable Release</div>
+            {onCheckForUpdates && (
+              <button
+                className="about-check-updates"
+                onClick={onCheckForUpdates}
+                data-testid="about-check-updates-btn"
+              >
+                <RefreshCw size={13} /> Check for updates
+              </button>
+            )}
+         
           </div>
 
           <div className="about-description">

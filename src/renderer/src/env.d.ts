@@ -42,6 +42,20 @@ declare global {
     detail?: string
   }
 
+  // Update checker types (mirrors src/main/update.ts — keep in sync)
+  interface UpdateInfo {
+    latest: string
+    url: string
+    publishedAt: string | null
+    notes: string
+  }
+
+  interface UpdateSettings {
+    enabled: boolean
+    skippedVersion: string | null
+    lastCheckedAt: string | null
+  }
+
   interface Window {
     electron: ElectronAPI
     api: {
@@ -123,6 +137,13 @@ declare global {
         }) => Promise<{ success: boolean; response?: number; checkboxChecked?: boolean; error?: string }>;
         isTesting: boolean;
         disableDefaultTab: boolean;
+      };
+      updates: {
+        check: () => Promise<{ success: boolean; current?: string; update?: UpdateInfo | null; error?: string }>;
+        skipVersion: (version: string) => Promise<{ success: boolean; error?: string }>;
+        setEnabled: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
+        getSettings: () => Promise<{ success: boolean; data?: UpdateSettings; error?: string }>;
+        onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
       };
     }
   }

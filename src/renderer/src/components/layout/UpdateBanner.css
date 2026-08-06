@@ -1,0 +1,118 @@
+.update-banner {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2500; /* above toaster (bottom-right stack) and conflict resolver (2000) */
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  max-width: 420px;
+  width: calc(100vw - 40px);
+  backdrop-filter: blur(12px);
+  animation: updateBannerSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes updateBannerSlideIn {
+  from { transform: translateY(24px) scale(0.95); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.update-banner__icon {
+  flex-shrink: 0;
+  color: var(--accent);
+  margin-top: 1px;
+}
+
+.update-banner__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.update-banner__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.update-banner__title strong {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.update-banner__current {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.update-banner__notes {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+.update-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.update-banner__btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.update-banner__btn:hover {
+  border-color: var(--text-secondary);
+  background: var(--bg-secondary);
+}
+
+.update-banner__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.update-banner__btn--primary:hover {
+  filter: brightness(1.1);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.update-banner__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.update-banner__close:hover {
+  color: var(--text-primary);
+}

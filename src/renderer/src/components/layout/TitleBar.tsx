@@ -5,8 +5,11 @@ import { useRepoStore, Repository } from '../../store/useRepoStore'
 import logoIcon from '../../assets/icon.png'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 import { AboutModal } from './AboutModal'
+import { UpdateBanner } from './UpdateBanner'
 import { AppDialog } from '../dialogs/AppDialog'
 import { useTheme } from '../../hooks/useTheme'
+import { useToaster } from '../toaster/ToasterContext'
+import pkg from '../../../../../package.json'
 
 const PRESET_COLORS = [
   '#ef4444', // Red
@@ -33,9 +36,12 @@ const TitleBar: React.FC = () => {
     removeRecentRepo
   } = useRepoStore()
   const { theme, setTheme } = useTheme()
+  const { addToast } = useToaster()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
   const [aboutModalOpen, setAboutModalOpen] = useState(false)
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
+  const [updatesEnabled, setUpdatesEnabled] = useState(true)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
   
@@ -89,6 +95,51 @@ const TitleBar: React.FC = () => {
   const handleResetLayout = () => {
     window.dispatchEvent(new Event('reset-layout'))
     setIsSettingsOpen(false)
+  }
+
+  // ===== Update notifications =====
+  useEffect(() => {
+    if (!window.api?.updates?.onUpdateAvailable) return
+    return window.api.updates.onUpdateAvailable((info) => setUpdateInfo(info))
+  }, [])
+
+  useEffect(() => {
+    window.api?.updates?.getSettings().then(res => {
+      if (res.success && res.data) setUpdatesEnabled(res.data.enabled)
+    }).catch(() => { /* preload not ready */ })
+  }, [])
+
+  const handleUpdateDownload = (url: string) => {
+    window.open(url, '_blank')
+    setUpdateInfo(null)
+  }
+
+  const handleUpdateSkip = async (version: string) => {
+    await window.api.updates.skipVersion(version).catch(() => null)
+    setUpdateInfo(null)
+  }
+
+  const handleUpdateDismiss = () => {
+    setUpdateInfo(null)
+  }
+
+  const handleToggleUpdatesEnabled = async () => {
+    const newValue = !updatesEnabled
+    setUpdatesEnabled(newValue)
+    await window.api.updates.setEnabled(newValue).catch(() => null)
+  }
+
+  const handleManualUpdateCheck = async () => {
+    if (!window.api?.updates) return
+    const res = await window.api.updates.check()
+    if (res.success && res.update) {
+      // Show the banner only — no redundant toast alongside it.
+      setUpdateInfo(res.update)
+    } else if (res.success) {
+      addToast({ variant: 'success', title: `You're up to date (${res.current})` })
+    } else {
+      addToast({ variant: 'error', title: res.error || 'Update check failed' })
+    }
   }
 
   const handleToggleSettings = () => {
@@ -455,6 +506,43 @@ const TitleBar: React.FC = () => {
             </div>
           </div>
           <div className="settings-dropdown-row">
+            <span className="settings-dropdown-label">Updates</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                className="updates-toggle"
+                onClick={handleToggleUpdatesEnabled}
+                data-testid="updates-toggle-btn"
+                data-tooltip="Automatically check for updates on startup"
+                style={{
+                  width: '34px',
+                  height: '18px',
+                  borderRadius: '10px',
+                  background: updatesEnabled ? 'var(--accent)' : 'var(--bg-secondary)',
+                  border: '1px solid var(--border)',
+                  position: 'relative',
+                  transition: 'all 0.2s ease',
+                  padding: 0,
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+              >
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  background: 'white',
+                  position: 'absolute',
+                  top: '2px',
+                  left: updatesEnabled ? '18px' : '2px',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                }} />
+              </button>
+              <span style={{ fontSize: '11px', color: updatesEnabled ? 'var(--accent-light)' : 'var(--text-secondary)', fontWeight: 600 }}>
+                {updatesEnabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+          </div>
+          <div className="settings-dropdown-row">
             <span className="settings-dropdown-label">About</span>
             <button 
               className="settings-dropdown-btn"
@@ -527,7 +615,17 @@ const TitleBar: React.FC = () => {
       <AboutModal 
         isOpen={aboutModalOpen}
         onClose={() => setAboutModalOpen(false)}
+        onCheckForUpdates={handleManualUpdateCheck}
       />
+      {updateInfo && (
+        <UpdateBanner
+          info={updateInfo}
+          currentVersion={pkg.version}
+          onDownload={handleUpdateDownload}
+          onSkip={handleUpdateSkip}
+          onDismiss={handleUpdateDismiss}
+        />
+      )}
       <AppDialog
         isOpen={missingRepoPath !== null}
         title="Repository Not Found"

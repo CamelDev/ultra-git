@@ -96,6 +96,19 @@ const api = {
     showMessageBox: (options: any) => ipcRenderer.invoke('dialog:showMessageBox', options),
     isTesting: process.env.ULTRA_GIT_TESTING === 'true',
     disableDefaultTab: process.env.ULTRA_GIT_DISABLE_DEFAULT_TAB === 'true'
+  },
+  updates: {
+    check: () => ipcRenderer.invoke('update:check'),
+    skipVersion: (version: string) => ipcRenderer.invoke('update:skipVersion', version),
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke('update:setEnabled', enabled),
+    getSettings: () => ipcRenderer.invoke('update:getSettings'),
+    onUpdateAvailable: (callback: (info: any) => void) => {
+      const listener = (_event: any, info: any) => callback(info)
+      ipcRenderer.on('update:available', listener)
+      return () => {
+        ipcRenderer.off('update:available', listener)
+      }
+    }
   }
 }
 
