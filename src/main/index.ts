@@ -14,6 +14,37 @@ fixPath()
 
 let mainWindow: BrowserWindow | null = null
 
+// Single instance lock — a second launch of UltraGIT focuses the already
+// running instance instead of opening a duplicate window.
+// The `--no-lock` flag bypasses the lock (used by the E2E suite to run
+// multiple isolated app instances in parallel/sequence).
+const skipLock = process.argv.includes('--no-lock')
+const gotTheLock = skipLock ? true : app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  // Another UltraGIT instance is already running — quit immediately.
+  // The running instance will receive the 'second-instance' event below
+  // and restore/focus its own window instead.
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    // A second instance was launched while this one is running.
+    // Restore/focus the existing window, or recreate one if it was closed
+    // (macOS keeps the app alive after the last window is closed).
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      if (!mainWindow.isVisible()) mainWindow.show()
+      // On macOS, also bring a hidden app (Cmd+H) back to the foreground.
+      if (process.platform === 'darwin') {
+        app.focus({ steal: true })
+      }
+      mainWindow.focus()
+    } else if (app.isReady()) {
+      createWindow()
+    }
+  })
+}
+
 function createWindow(): void {
   // Create the browser window.
   mainWindow = new BrowserWindow({
@@ -58,6 +89,10 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  // Second instance — app.quit() is already in progress, so don't register
+  // IPC handlers or create a window here.
+  if (!gotTheLock) return
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron.ultra-git')
 

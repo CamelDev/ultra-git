@@ -51,8 +51,11 @@ export async function launchElectronApp(options: LaunchOptions = {}): Promise<La
     env.ULTRA_GIT_DISABLE_DEFAULT_TAB = 'true';
   }
   
+  // NOTE: `--no-lock` bypasses the single-instance lock so multiple isolated
+  // app instances can run within the E2E suite. The single-instance behavior
+  // itself is covered by e2e/single-instance.spec.ts (which omits this flag).
   const app = await electron.launch({
-    args: [mainPath, '--no-sandbox', `--user-data-dir=${currentUserDataDir}`],
+    args: [mainPath, '--no-sandbox', `--user-data-dir=${currentUserDataDir}`, '--no-lock'],
     env
   });
 
