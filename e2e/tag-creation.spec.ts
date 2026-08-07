@@ -493,5 +493,96 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await app.close()
     }
   })
+
+  test('should push tags via the Push dropdown menu in the toolbar', async () => {
+    // 1. Create a local tag so the repository has tags to push
+    await sandbox.git.addTag('v9.9.9')
+
+    console.log('[Push Tags Dropdown Test] 2. Launching Electron App...')
+    const { app, page } = await launchElectronApp()
+
+    try {
+      console.log('[Push Tags Dropdown Test] 3. Clearing localStorage...')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      console.log('[Push Tags Dropdown Test] 4. Mocking dialog:openDirectory...')
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      console.log('[Push Tags Dropdown Test] 5. Clicking to add repository...')
+      await addRepoViaUI(page)
+
+      console.log('[Push Tags Dropdown Test] 6. Switching to sandbox repository tab...')
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1000)
+
+      console.log('[Push Tags Dropdown Test] 7. Mocking git:pushTags to succeed...')
+      await app.evaluate(async ({ ipcMain }) => {
+        ipcMain.removeHandler('git:pushTags')
+        ipcMain.handle('git:pushTags', async () => {
+          return { success: true }
+        })
+      })
+
+      console.log('[Push Tags Dropdown Test] 8. Opening the Push dropdown menu...')
+      const pushDropdownBtn = page.locator('[data-testid="push-dropdown-btn"]')
+      await expect(pushDropdownBtn).toBeVisible()
+      await pushDropdownBtn.click()
+      await page.waitForTimeout(300)
+
+      console.log('[Push Tags Dropdown Test] 9. Verifying the "Push Tags" menu item is listed...')
+      const pushDropdownMenu = page.locator('[data-testid="push-dropdown-menu"]')
+      await expect(pushDropdownMenu).toBeVisible()
+      const pushTagsOption = page.locator('[data-testid="push-tags-option"]')
+      await expect(pushTagsOption).toBeVisible()
+      await expect(pushTagsOption).toContainText('Push Tags')
+
+      console.log('[Push Tags Dropdown Test] 10. Clicking "Push Tags" menu item...')
+      await pushTagsOption.click()
+      await page.waitForTimeout(300)
+
+      console.log('[Push Tags Dropdown Test] 11. Verifying dropdown closed and confirmation dialog is visible...')
+      await expect(pushDropdownMenu).not.toBeVisible()
+      const pushTagsConfirmDialog = page.locator('[data-testid="push-tags-confirm-dialog"]')
+      await expect(pushTagsConfirmDialog).toBeVisible()
+      await expect(pushTagsConfirmDialog).toContainText('Are you sure you want to push all local tags')
+
+      console.log('[Push Tags Dropdown Test] 12. Cancelling the confirmation dialog...')
+      const cancelBtn = page.locator('[data-testid="push-tags-confirm-dialog-action-cancel"]')
+      await expect(cancelBtn).toBeVisible()
+      await cancelBtn.click()
+      await page.waitForTimeout(300)
+      await expect(pushTagsConfirmDialog).not.toBeVisible()
+
+      console.log('[Push Tags Dropdown Test] 13. Re-opening the dropdown and confirming the push...')
+      await pushDropdownBtn.click()
+      await page.waitForTimeout(300)
+      await page.locator('[data-testid="push-tags-option"]').click()
+      await page.waitForTimeout(300)
+      const pushTagsConfirmBtn = page.locator('[data-testid="push-tags-confirm-dialog-action-confirm"]')
+      await expect(pushTagsConfirmBtn).toBeVisible()
+      await pushTagsConfirmBtn.click()
+      await page.waitForTimeout(500)
+
+      console.log('[Push Tags Dropdown Test] 14. Verifying success toast notification...')
+      const successToast = page.locator('[data-testid="toast"][data-variant="success"]')
+      await expect(successToast).toBeVisible()
+      await expect(successToast).toContainText('Tags Pushed')
+      await expect(successToast).toContainText('All local tags have been successfully pushed')
+
+      console.log('[Push Tags Dropdown Test] Push tags dropdown flow E2E verified successfully.')
+    } finally {
+      await app.close()
+    }
+  })
 })
 

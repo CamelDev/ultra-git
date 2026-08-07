@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag, RefreshCw, Search } from 'lucide-react'
+import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag, RefreshCw, Search, Upload } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { getAuthorColor } from '../../utils/authorColor'
 import { IdentitiesModal } from '../details/IdentitiesModal'
@@ -46,6 +46,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const [isPushing, setIsPushing] = useState(false)
   const [showPushDropdown, setShowPushDropdown] = useState(false)
   const [showPullDropdown, setShowPullDropdown] = useState(false)
+  const [isPushTagsConfirmOpen, setIsPushTagsConfirmOpen] = useState(false)
   const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const pullDropdownRef = useRef<HTMLDivElement>(null)
@@ -57,13 +58,13 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     try {
       const res = await window.api.git.fetch(activeRepo.path)
       if (res && !res.success) {
-        addToast({ title: 'Fetch Failed', message: res.error || 'Failed to fetch from remote repository', type: 'error' })
+        addToast({ variant: 'error', title: 'Fetch Failed', message: res.error || 'Failed to fetch from remote repository' })
       } else {
         await refreshRepo(activeRepo.id)
-        addToast({ title: 'Fetch Successful', message: 'Remote tracking branches have been updated.', type: 'success' })
+        addToast({ variant: 'success', title: 'Fetch Successful', message: 'Remote tracking branches have been updated.' })
       }
     } catch (err: any) {
-      addToast({ title: 'Fetch Error', message: err.message || 'An error occurred during fetch', type: 'error' })
+      addToast({ variant: 'error', title: 'Fetch Error', message: err.message || 'An error occurred during fetch' })
     } finally {
       setIsFetching(false)
     }
@@ -1035,6 +1036,36 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     }
   }
 
+  /** Pushes all local tags to the remote (origin). Invoked after the user confirms via the in-app dialog. */
+  const performPushTags = async () => {
+    if (!activeRepo) return
+    try {
+      const res = await window.api.git.pushTags(activeRepo.path)
+      if (res.success) {
+        addToast({
+          variant: 'success',
+          title: 'Tags Pushed',
+          message: 'All local tags have been successfully pushed to the remote repository.'
+        })
+        await refreshRepo(activeRepo.id)
+      } else {
+        console.error('Failed to push tags:', res.error)
+        addToast({
+          variant: 'error',
+          title: 'Push Failed',
+          message: `Failed to push tags: ${res.error}`
+        })
+      }
+    } catch (err: any) {
+      console.error('Error pushing tags:', err)
+      addToast({
+        variant: 'error',
+        title: 'Push Failed',
+        message: `Error pushing tags: ${err.message || err}`
+      })
+    }
+  }
+
   return (
     <div className="git-log-panel" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       {activeRepo && (
@@ -1318,6 +1349,28 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   data-tooltip="Force push commits to tracking remote branch (overwrite remote history)"
                 >
                   Force Push
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPushDropdown(false)
+                    setIsPushTagsConfirmOpen(true)
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'none',
+                    border: 'none',
+                    color: '#ec4899',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    width: '100%'
+                  }}
+                  className="dropdown-item-hover"
+                  data-testid="push-tags-option"
+                  data-tooltip="Push all local tags to remote (origin)"
+                >
+                  Push Tags
                 </button>
                 <button
                   onClick={async () => {
@@ -3120,6 +3173,36 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
           else setPullResultDialog((prev) => ({ ...prev, isOpen: false }))
         }}
         testId="pull-result-dialog"
+      />
+
+      {/* Tag push confirmation dialog (in-app, replaces native confirm) — same UX as the sidebar Tags pane */}
+      <AppDialog
+        isOpen={isPushTagsConfirmOpen}
+        title="Push Tags"
+        message="Are you sure you want to push all local tags to the remote (origin)?"
+        variant="info"
+        icon={<Upload size={16} />}
+        testId="push-tags-confirm-dialog"
+        actions={[
+          {
+            label: 'Cancel',
+            value: 'cancel',
+            variant: 'secondary'
+          },
+          {
+            label: 'Push Tags',
+            value: 'confirm',
+            variant: 'primary',
+            icon: <Upload size={13} />
+          }
+        ]}
+        onResolve={(value) => {
+          setIsPushTagsConfirmOpen(false)
+          if (value === 'confirm') {
+            performPushTags()
+          }
+        }}
+        onCancel={() => setIsPushTagsConfirmOpen(false)}
       />
     </div>
   )
