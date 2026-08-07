@@ -25,6 +25,7 @@ export interface Repository {
   name: string;
   customName?: string;
   customColor?: string;
+  autoFetch?: boolean;
   branch: string;
   status: any;
   commits: any[];
@@ -73,6 +74,7 @@ interface RepoState {
   clearBranchPreview: () => void;
   setRepoCustomName: (repoId: string, customName: string | undefined) => void;
   setRepoTabColor: (repoId: string, customColor: string | undefined) => void;
+  setRepoAutoFetch: (repoId: string, autoFetch: boolean) => void;
   addRecentRepo: (path: string, name?: string) => void;
   removeRecentRepo: (path: string) => void;
   
@@ -106,7 +108,7 @@ const saveToLocalStorage = (repositories: Repository[], activeId: string | null)
   }
 };
 
-const getRepoCustomizations = (): Record<string, { customName?: string; customColor?: string }> => {
+const getRepoCustomizations = (): Record<string, { customName?: string; customColor?: string; autoFetch?: boolean }> => {
   if (typeof localStorage === 'undefined') return {};
   try {
     return JSON.parse(localStorage.getItem('repo-tab-customizations') || '{}');
@@ -115,7 +117,7 @@ const getRepoCustomizations = (): Record<string, { customName?: string; customCo
   }
 };
 
-const saveRepoCustomizations = (customizations: Record<string, { customName?: string; customColor?: string }>) => {
+const saveRepoCustomizations = (customizations: Record<string, { customName?: string; customColor?: string; autoFetch?: boolean }>) => {
   if (typeof localStorage === 'undefined') return;
   try {
     localStorage.setItem('repo-tab-customizations', JSON.stringify(customizations));
@@ -251,6 +253,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       name,
       customName: customData.customName,
       customColor: customData.customColor,
+      autoFetch: customData.autoFetch !== false,
       branch: 'main',
       status: null,
       commits: [],
@@ -389,6 +392,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         name,
         customName: customData.customName,
         customColor: customData.customColor,
+        autoFetch: customData.autoFetch !== false,
         branch: 'main',
         status: null,
         commits: [],
@@ -810,10 +814,29 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       customizations[normalized].customColor = customColor;
     } else {
       delete customizations[normalized].customColor;
-      if (!customizations[normalized].customName) {
+      if (!customizations[normalized].customName && customizations[normalized].autoFetch === undefined) {
         delete customizations[normalized];
       }
     }
+    saveRepoCustomizations(customizations);
+  },
+
+  setRepoAutoFetch: (repoId: string, autoFetch: boolean) => {
+    const { repositories } = get();
+    const repo = repositories.find(r => r.id === repoId);
+    if (!repo) return;
+
+    const updatedRepos = repositories.map(r =>
+      r.id === repoId ? { ...r, autoFetch } : r
+    );
+    set({ repositories: updatedRepos });
+
+    const normalized = normalizePath(repo.path);
+    const customizations = getRepoCustomizations();
+    if (!customizations[normalized]) {
+      customizations[normalized] = {};
+    }
+    customizations[normalized].autoFetch = autoFetch;
     saveRepoCustomizations(customizations);
   },
 

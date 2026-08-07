@@ -241,24 +241,30 @@ describe('useRepoStore', () => {
     expect(state.previewCommits).toEqual([]);
   });
 
-  it('should set custom repo name and color and persist to localStorage', async () => {
-    const { addRepo, setRepoCustomName, setRepoTabColor } = useRepoStore.getState();
+  it('should set custom repo name, color, and autoFetch and persist to localStorage', async () => {
+    const { addRepo, setRepoCustomName, setRepoTabColor, setRepoAutoFetch } = useRepoStore.getState();
     await addRepo('/test-custom-repo');
     const id = useRepoStore.getState().activeId!;
 
+    let repo = useRepoStore.getState().repositories.find(r => r.id === id);
+    expect(repo?.autoFetch).toBe(true);
+
     setRepoCustomName(id, 'My Custom Project');
     setRepoTabColor(id, '#ef4444');
+    setRepoAutoFetch(id, false);
 
     const state = useRepoStore.getState();
-    const repo = state.repositories.find(r => r.id === id);
+    repo = state.repositories.find(r => r.id === id);
     expect(repo?.customName).toBe('My Custom Project');
     expect(repo?.customColor).toBe('#ef4444');
+    expect(repo?.autoFetch).toBe(false);
 
     // Verify localStorage persistence
     const savedCustomizations = JSON.parse(localStore['repo-tab-customizations']);
     expect(savedCustomizations['/test-custom-repo']).toEqual({
       customName: 'My Custom Project',
-      customColor: '#ef4444'
+      customColor: '#ef4444',
+      autoFetch: false
     });
   });
 

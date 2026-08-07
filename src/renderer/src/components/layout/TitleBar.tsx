@@ -32,6 +32,7 @@ const TitleBar: React.FC = () => {
     reorderRepos,
     setRepoCustomName,
     setRepoTabColor,
+    setRepoAutoFetch,
     recentRepos,
     removeRecentRepo
   } = useRepoStore()
@@ -50,15 +51,14 @@ const TitleBar: React.FC = () => {
   const [addRepoDropdownPos, setAddRepoDropdownPos] = useState<{ top: number; left: number } | null>(null)
 
   // Customization states
-  const [editingTabId, setEditingTabId] = useState<string | null>(null)
+  const [tabSettingsTabId, setTabSettingsTabId] = useState<string | null>(null)
+  const [tabSettingsPos, setTabSettingsPos] = useState<{ top: number; left: number } | null>(null)
   const [editingName, setEditingName] = useState<string>('')
-  const [colorPickerTabId, setColorPickerTabId] = useState<string | null>(null)
-  const [colorPickerPos, setColorPickerPos] = useState<{ top: number; left: number } | null>(null)
   const [missingRepoPath, setMissingRepoPath] = useState<string | null>(null)
   
   const cogRef = useRef<SVGSVGElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const colorPickerRef = useRef<HTMLDivElement>(null)
+  const tabSettingsRef = useRef<HTMLDivElement>(null)
   const addRepoBtnRef = useRef<HTMLDivElement>(null)
   const addRepoDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -150,27 +150,19 @@ const TitleBar: React.FC = () => {
     setIsSettingsOpen(prev => !prev)
   }
 
-  const handleStartEditName = (e: React.MouseEvent, tab: Repository) => {
+  const handleToggleTabSettings = (e: React.MouseEvent, tab: Repository) => {
     e.stopPropagation()
-    setEditingTabId(tab.id)
-    setEditingName(tab.customName || tab.name)
-  }
-
-  const handleSaveEditName = (tabId: string) => {
-    setRepoCustomName(tabId, editingName)
-    setEditingTabId(null)
-  }
-
-  const handleToggleColorPicker = (e: React.MouseEvent, tab: Repository) => {
-    e.stopPropagation()
-    if (colorPickerTabId === tab.id) {
-      setColorPickerTabId(null)
+    if (tabSettingsTabId === tab.id) {
+      setTabSettingsTabId(null)
       return
     }
     const rect = e.currentTarget.getBoundingClientRect()
-    setColorPickerPos({ top: rect.bottom + 6, left: rect.left })
-    setColorPickerTabId(tab.id)
+    setTabSettingsPos({ top: rect.bottom + 6, left: Math.min(rect.left, window.innerWidth - 220) })
+    setEditingName(tab.customName || tab.name)
+    setTabSettingsTabId(tab.id)
   }
+
+
 
   // Handle outside clicks to close settings dropdown
   useEffect(() => {
@@ -254,20 +246,20 @@ const TitleBar: React.FC = () => {
     }
   }, [isAddRepoDropdownOpen])
 
-  // Handle outside clicks to close color picker popover
+  // Handle outside clicks to close tab settings popover
   useEffect(() => {
-    if (!colorPickerTabId) return
+    if (!tabSettingsTabId) return
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node
-      if (colorPickerRef.current && !colorPickerRef.current.contains(target)) {
-        setColorPickerTabId(null)
+      if (tabSettingsRef.current && !tabSettingsRef.current.contains(target)) {
+        setTabSettingsTabId(null)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [colorPickerTabId])
+  }, [tabSettingsTabId])
 
   const isMac = navigator.userAgent.includes('Mac')
   const isWindows = navigator.userAgent.includes('Win')
@@ -310,7 +302,6 @@ const TitleBar: React.FC = () => {
       </div>
       <div className="tabs-container">
         {repositories.map((tab, index) => {
-          const isEditing = editingTabId === tab.id
           const displayName = tab.customName || tab.name
 
           return (
@@ -320,7 +311,7 @@ const TitleBar: React.FC = () => {
               style={tab.customColor ? ({ '--tab-custom-color': tab.customColor } as React.CSSProperties) : undefined}
               onClick={() => setActiveId(tab.id)}
               data-testid="repo-tab"
-              draggable={!isEditing}
+              draggable={true}
               onDragStart={(e) => handleDragStart(e, index)}
               onDragOver={(e) => handleDragOver(e, index)}
               onDragEnd={handleDragEnd}
@@ -333,41 +324,16 @@ const TitleBar: React.FC = () => {
                   data-testid="tab-color-dot"
                 />
               )}
-              {isEditing ? (
-                <input
-                  type="text"
-                  className="tab-rename-input"
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveEditName(tab.id)
-                    if (e.key === 'Escape') setEditingTabId(null)
-                  }}
-                  onBlur={() => handleSaveEditName(tab.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  autoFocus
-                  data-testid="tab-rename-input"
-                />
-              ) : (
-                <span className="tab-title" onDoubleClick={(e) => handleStartEditName(e, tab)}>
-                  {displayName}
-                </span>
-              )}
+              <span className="tab-title" onDoubleClick={(e) => handleToggleTabSettings(e, tab)}>
+                {displayName}
+              </span>
               <div className="tab-actions">
-                <Palette 
+                <Settings 
                   className="tab-action-btn" 
                   size={12} 
-                  onClick={(e) => handleToggleColorPicker(e, tab)}
-                  data-testid="set-tab-color-btn"
-                  data-tooltip="Set Tab Color"
-                  onDragStart={(e) => e.stopPropagation()}
-                />
-                <Pencil 
-                  className="tab-action-btn" 
-                  size={12} 
-                  onClick={(e) => handleStartEditName(e, tab)}
-                  data-testid="set-tab-name-btn"
-                  data-tooltip="Set Custom Name"
+                  onClick={(e) => handleToggleTabSettings(e, tab)}
+                  data-testid="set-tab-settings-btn"
+                  data-tooltip="Tab Settings"
                   onDragStart={(e) => e.stopPropagation()}
                 />
                 <X 
@@ -560,49 +526,104 @@ const TitleBar: React.FC = () => {
         document.body
       )}
 
-      {colorPickerTabId && colorPickerPos && createPortal(
+      {tabSettingsTabId && tabSettingsPos && createPortal(
         <div
-          ref={colorPickerRef}
-          className="tab-color-popover"
-          style={{ position: 'fixed', top: colorPickerPos.top, left: colorPickerPos.left }}
-          data-testid="tab-color-popover"
+          ref={tabSettingsRef}
+          className="tab-settings-popover"
+          style={{ position: 'fixed', top: tabSettingsPos.top, left: tabSettingsPos.left }}
+          data-testid="tab-settings-popover"
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="tab-color-popover-title">Tab Color</div>
-          <div className="tab-color-swatches">
-            {PRESET_COLORS.map((c) => (
-              <button
-                key={c}
-                className="color-swatch"
-                style={{ backgroundColor: c }}
-                onClick={() => {
-                  setRepoTabColor(colorPickerTabId, c)
-                  setColorPickerTabId(null)
-                }}
-                data-testid={`color-swatch-${c}`}
-              />
-            ))}
-          </div>
-          <div className="tab-color-custom-row">
-            <label className="custom-color-label">
-              <span>Custom:</span>
+          <div className="tab-settings-header">Tab Settings</div>
+
+          {/* Section 1: Tab Name */}
+          <div className="tab-settings-section">
+            <div className="tab-settings-label">Tab Name</div>
+            <div className="tab-settings-name-row">
               <input
-                type="color"
-                value={repositories.find(r => r.id === colorPickerTabId)?.customColor || '#3b82f6'}
-                onChange={(e) => setRepoTabColor(colorPickerTabId, e.target.value)}
-                data-testid="tab-custom-color-input"
+                type="text"
+                className="tab-settings-name-input"
+                value={editingName}
+                onChange={(e) => {
+                  setEditingName(e.target.value)
+                  setRepoCustomName(tabSettingsTabId, e.target.value)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === 'NumpadEnter') {
+                    e.preventDefault()
+                    setTabSettingsTabId(null)
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    setTabSettingsTabId(null)
+                  }
+                }}
+                placeholder="Custom tab name..."
+                autoFocus
+                data-testid="tab-rename-input"
               />
+              {editingName.trim().length > 0 && (
+                <button
+                  className="tab-settings-reset-name-btn"
+                  onClick={() => {
+                    setEditingName('')
+                    setRepoCustomName(tabSettingsTabId, undefined)
+                  }}
+                  title="Reset tab name"
+                >
+                  <RotateCcw size={11} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Section 2: Tab Color */}
+          <div className="tab-settings-section">
+            <div className="tab-settings-label">Tab Color</div>
+            <div className="tab-color-swatches">
+              {PRESET_COLORS.map((c) => (
+                <button
+                  key={c}
+                  className="color-swatch"
+                  style={{ backgroundColor: c }}
+                  onClick={() => setRepoTabColor(tabSettingsTabId, c)}
+                  data-testid={`color-swatch-${c}`}
+                />
+              ))}
+            </div>
+            <div className="tab-color-custom-row">
+              <label className="custom-color-label">
+                <span>Custom:</span>
+                <input
+                  type="color"
+                  value={repositories.find(r => r.id === tabSettingsTabId)?.customColor || '#3b82f6'}
+                  onChange={(e) => setRepoTabColor(tabSettingsTabId, e.target.value)}
+                  data-testid="tab-custom-color-input"
+                />
+              </label>
+              <button
+                className="reset-color-btn"
+                onClick={() => setRepoTabColor(tabSettingsTabId, undefined)}
+                data-testid="reset-tab-color-btn"
+              >
+                <RotateCcw size={11} />
+                Reset
+              </button>
+            </div>
+          </div>
+
+          {/* Section 3: Auto Fetch */}
+          <div className="tab-settings-section">
+            <div className="tab-settings-label">Automations</div>
+            <label className="tab-settings-checkbox-label">
+              <input
+                type="checkbox"
+                checked={repositories.find(r => r.id === tabSettingsTabId)?.autoFetch !== false}
+                onChange={(e) => setRepoAutoFetch(tabSettingsTabId, e.target.checked)}
+                data-testid="tab-auto-fetch-checkbox"
+              />
+              <span>Auto fetch (every 5 min)</span>
             </label>
-            <button
-              className="reset-color-btn"
-              onClick={() => {
-                setRepoTabColor(colorPickerTabId, undefined)
-                setColorPickerTabId(null)
-              }}
-              data-testid="reset-tab-color-btn"
-            >
-              <RotateCcw size={12} />
-              Reset
-            </button>
           </div>
         </div>,
         document.body

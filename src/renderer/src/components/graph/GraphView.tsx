@@ -45,8 +45,10 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const [isPulling, setIsPulling] = useState(false)
   const [isPushing, setIsPushing] = useState(false)
   const [showPushDropdown, setShowPushDropdown] = useState(false)
+  const [showPullDropdown, setShowPullDropdown] = useState(false)
   const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const pullDropdownRef = useRef<HTMLDivElement>(null)
 
   const handleFetch = async () => {
     if (!activeRepo || isFetching || isPulling || isPushing) return
@@ -346,6 +348,20 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [showPushDropdown])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pullDropdownRef.current && !pullDropdownRef.current.contains(event.target as Node)) {
+        setShowPullDropdown(false)
+      }
+    }
+    if (showPullDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showPullDropdown])
 
   // Global keydown event listener for navigation
   useEffect(() => {
@@ -1035,68 +1051,141 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
           }}
           data-testid="sync-actions-panel"
         >
-          <button
-            className="btn-secondary"
-            onClick={handleFetch}
-            disabled={isFetching || isPulling || isPushing}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              opacity: (isFetching || isPulling || isPushing) ? 0.6 : 1,
-              cursor: (isFetching || isPulling || isPushing) ? 'not-allowed' : 'pointer',
-              padding: '6px 12px',
-              fontSize: '12px',
-              fontWeight: 600,
-              backgroundColor: 'rgba(139, 92, 246, 0.15)',
-              border: '1px solid rgba(139, 92, 246, 0.4)',
-              color: '#a78bfa'
-            }}
-            data-testid="fetch-btn"
-            data-tooltip="Fetch updates and remote branches from remote repository"
-          >
-            <RefreshCw size={14} className={isFetching ? 'spin-animation' : ''} style={{ color: '#a78bfa' }} />
-            <span>{isFetching ? 'Fetching...' : 'Fetch'}</span>
-          </button>
-
-          <button
-            className="btn-secondary"
-            onClick={handlePull}
-            disabled={isFetching || isPulling || isPushing}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              opacity: (isPulling || isPushing) ? 0.6 : 1,
-              cursor: (isPulling || isPushing) ? 'not-allowed' : 'pointer',
-              padding: '6px 12px',
-              fontSize: '12px',
-              fontWeight: 600,
-              backgroundColor: 'rgba(59, 130, 246, 0.15)',
-              border: '1px solid rgba(59, 130, 246, 0.4)',
-              color: '#60a5fa'
-            }}
-            data-testid="pull-btn"
-            data-tooltip="Pull changes from remote repository"
-          >
-            <ArrowDown size={14} className={isPulling ? 'spin-animation' : ''} style={{ color: '#60a5fa' }} />
-            <span>{isPulling ? 'Pulling...' : 'Pull'}</span>
-            {activeRepo.status?.behind > 0 && (
-              <span 
+          <div ref={pullDropdownRef} style={{ display: 'inline-flex', position: 'relative', alignItems: 'stretch' }}>
+            <button
+              className="btn-secondary"
+              onClick={handlePull}
+              disabled={isFetching || isPulling || isPushing}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                opacity: (isPulling || isPushing) ? 0.6 : 1,
+                cursor: (isPulling || isPushing) ? 'not-allowed' : 'pointer',
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: 600,
+                borderTopRightRadius: 0,
+                borderBottomRightRadius: 0,
+                borderRight: 'none',
+                backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                borderLeft: '1px solid rgba(59, 130, 246, 0.4)',
+                borderTop: '1px solid rgba(59, 130, 246, 0.4)',
+                borderBottom: '1px solid rgba(59, 130, 246, 0.4)',
+                color: '#60a5fa'
+              }}
+              data-testid="pull-btn"
+              data-tooltip="Pull changes from remote repository"
+            >
+              <ArrowDown size={14} className={isPulling ? 'spin-animation' : ''} style={{ color: '#60a5fa' }} />
+              <span>{isPulling ? 'Pulling...' : 'Pull'}</span>
+              {activeRepo.status?.behind > 0 && (
+                <span 
+                  style={{
+                    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+                    color: '#fbbf24',
+                    padding: '1px 5px',
+                    borderRadius: '3px',
+                    fontSize: '10px',
+                    fontWeight: 700
+                  }}
+                  data-testid="pull-behind-count"
+                >
+                  {activeRepo.status.behind}
+                </span>
+              )}
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => setShowPullDropdown(!showPullDropdown)}
+              disabled={isFetching || isPulling || isPushing}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '6px 6px',
+                opacity: (isFetching || isPulling || isPushing) ? 0.6 : 1,
+                cursor: (isFetching || isPulling || isPushing) ? 'not-allowed' : 'pointer',
+                borderTopLeftRadius: 0,
+                borderBottomLeftRadius: 0,
+                borderLeft: '1px solid rgba(59, 130, 246, 0.4)',
+                borderTop: '1px solid rgba(59, 130, 246, 0.4)',
+                borderBottom: '1px solid rgba(59, 130, 246, 0.4)',
+                borderRight: '1px solid rgba(59, 130, 246, 0.4)',
+                backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                color: '#60a5fa'
+              }}
+              data-testid="pull-dropdown-btn"
+              data-tooltip="Pull Options"
+            >
+              <ChevronDown size={14} />
+            </button>
+            {showPullDropdown && (
+              <div 
                 style={{
-                  backgroundColor: 'rgba(251, 191, 36, 0.2)',
-                  color: '#fbbf24',
-                  padding: '1px 5px',
-                  borderRadius: '3px',
-                  fontSize: '10px',
-                  fontWeight: 700
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  marginTop: '4px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+                  zIndex: 100,
+                  minWidth: '130px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden'
                 }}
-                data-testid="pull-behind-count"
+                data-testid="pull-dropdown-menu"
               >
-                {activeRepo.status.behind}
-              </span>
+                <button
+                  onClick={() => {
+                    setShowPullDropdown(false)
+                    handlePull()
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    width: '100%'
+                  }}
+                  className="dropdown-item-hover"
+                  data-testid="pull-option"
+                  data-tooltip="Pull changes from remote repository"
+                >
+                  Pull
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPullDropdown(false)
+                    handleFetch()
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'none',
+                    border: 'none',
+                    color: '#a78bfa',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    width: '100%'
+                  }}
+                  className="dropdown-item-hover"
+                  data-testid="fetch-only-option"
+                  data-tooltip="Fetch updates and remote branches from remote repository"
+                >
+                  Fetch only
+                </button>
+              </div>
             )}
-          </button>
+          </div>
 
           <div ref={dropdownRef} style={{ display: 'inline-flex', position: 'relative', alignItems: 'stretch' }}>
             <button

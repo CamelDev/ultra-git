@@ -285,28 +285,29 @@ test.describe('Multi-Repo Tab System', () => {
       const tabs = page1.locator('[data-testid="repo-tab"]');
       await expect(tabs).toHaveCount(1);
 
-      // Set custom tab name
-      const setCustomNameBtn = tabs.first().locator('[data-testid="set-tab-name-btn"]');
-      await expect(setCustomNameBtn).toBeVisible();
-      await setCustomNameBtn.click();
+      // Open Tab Settings popover via single cog icon
+      const setTabSettingsBtn = tabs.first().locator('[data-testid="set-tab-settings-btn"]');
+      await expect(setTabSettingsBtn).toBeVisible();
+      await setTabSettingsBtn.click();
 
-      const renameInput = tabs.first().locator('[data-testid="tab-rename-input"]');
+      const settingsPopover = page1.locator('[data-testid="tab-settings-popover"]');
+      await expect(settingsPopover).toBeVisible();
+
+      // Verify auto fetch checkbox is checked by default
+      const autoFetchCheckbox = settingsPopover.locator('[data-testid="tab-auto-fetch-checkbox"]');
+      await expect(autoFetchCheckbox).toBeVisible();
+      await expect(autoFetchCheckbox).toBeChecked();
+
+      // Set custom tab name inside settings popover
+      const renameInput = settingsPopover.locator('[data-testid="tab-rename-input"]');
       await expect(renameInput).toBeVisible();
       await renameInput.fill('My Customized Sandbox');
-      await renameInput.press('Enter');
 
       // Verify custom name is displayed
       await expect(tabs.first()).toContainText('My Customized Sandbox');
 
-      // Set custom tab color
-      const setCustomColorBtn = tabs.first().locator('[data-testid="set-tab-color-btn"]');
-      await expect(setCustomColorBtn).toBeVisible();
-      await setCustomColorBtn.click();
-
-      const colorPopover = page1.locator('[data-testid="tab-color-popover"]');
-      await expect(colorPopover).toBeVisible();
-
-      const redSwatch = page1.locator('[data-testid="color-swatch-#ef4444"]');
+      // Set custom tab color inside settings popover
+      const redSwatch = settingsPopover.locator('[data-testid="color-swatch-#ef4444"]');
       await expect(redSwatch).toBeVisible();
       await redSwatch.click();
 

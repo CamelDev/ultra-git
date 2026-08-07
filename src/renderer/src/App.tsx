@@ -293,6 +293,35 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
     }
   }, [activeRepo?.id, refreshRepo])
 
+  // Periodic background auto-fetch for all open repositories (hardcoded every 5 minutes = 300,000ms)
+  useEffect(() => {
+    const AUTO_FETCH_INTERVAL_MS = 5 * 60 * 1000
+
+    const performAutoFetch = async () => {
+      const openRepos = useRepoStore.getState().repositories
+      const fetchableRepos = openRepos.filter((r) => r.autoFetch !== false)
+
+      for (const repo of fetchableRepos) {
+        try {
+          const res = await window.api.git.fetch(repo.path)
+          if (res.success) {
+            await refreshRepo(repo.id)
+          }
+        } catch (err) {
+          console.error(`Auto-fetch failed for repo ${repo.name}:`, err)
+        }
+      }
+    }
+
+    const interval = setInterval(() => {
+      performAutoFetch().catch((err) =>
+        console.error('Error during background auto-fetch cycle', err)
+      )
+    }, AUTO_FETCH_INTERVAL_MS)
+
+    return () => clearInterval(interval)
+  }, [refreshRepo])
+
   // Listen for layout reset event
   useEffect(() => {
     const handleReset = () => {
