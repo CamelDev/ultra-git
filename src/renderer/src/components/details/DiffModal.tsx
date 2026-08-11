@@ -14,7 +14,8 @@ import {
   Trash2,
   Layers,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Search
 } from 'lucide-react'
 import {
   buildHunksFromDiffItems,
@@ -178,6 +179,7 @@ function InlineContent({
 }
 
 interface RenderRow {
+  rowIdx?: number
   rowType: 'normal' | 'change' | 'delete' | 'add'
   beforeLine?: string
   afterLine?: string
@@ -186,6 +188,75 @@ interface RenderRow {
   oldSpans?: CharSpan[]
   newSpans?: CharSpan[]
   diffIndices: number[]
+}
+
+interface SearchMatch {
+  matchIndex: number
+  rowIdx: number
+  side: 'left' | 'right'
+  startIdx: number
+  length: number
+}
+
+function SearchHighlightContent({
+  text,
+  side,
+  spans,
+  type,
+  searchQuery,
+  rowMatches,
+  activeMatchIndex
+}: {
+  text: string
+  side: 'left' | 'right'
+  spans?: CharSpan[]
+  type?: 'add' | 'delete'
+  searchQuery: string
+  rowMatches: SearchMatch[]
+  activeMatchIndex: number
+}) {
+  if (!searchQuery) {
+    if (spans && type) {
+      return <InlineContent spans={spans} type={type} />
+    }
+    return <pre className="diff-line-content">{text}</pre>
+  }
+
+  const sideMatches = rowMatches.filter((m) => m.side === side)
+  if (sideMatches.length === 0) {
+    if (spans && type) {
+      return <InlineContent spans={spans} type={type} />
+    }
+    return <pre className="diff-line-content">{text}</pre>
+  }
+
+  const elements: React.ReactNode[] = []
+  let lastIndex = 0
+
+  sideMatches.forEach((m) => {
+    if (m.startIdx > lastIndex) {
+      elements.push(
+        <span key={`text-${lastIndex}`}>{text.substring(lastIndex, m.startIdx)}</span>
+      )
+    }
+    const isActive = m.matchIndex === activeMatchIndex
+    elements.push(
+      <mark
+        id={`search-match-${m.matchIndex}`}
+        key={`match-${m.matchIndex}`}
+        className={`diff-search-highlight${isActive ? ' active' : ''}`}
+      >
+        {text.substring(m.startIdx, m.startIdx + m.length)}
+      </mark>
+    )
+    lastIndex = m.startIdx + m.length
+  })
+
+  if (lastIndex < text.length) {
+    elements.push(<span key={`text-${lastIndex}`}>{text.substring(lastIndex)}</span>)
+  }
+
+  return <pre className="diff-line-content">{elements}</pre>
 }
 
 function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
@@ -269,6 +340,10 @@ function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
       i++
     }
   }
+
+  rows.forEach((r, idx) => {
+    r.rowIdx = idx
+  })
 
   return rows
 }
@@ -428,6 +503,13 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const [stashFilesError, setStashFilesError] = useState<string | null>(null)
   const [selectedStashFile, setSelectedStashFile] = useState<any | null>(null)
 
+  // Search state
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [caseSensitive, setCaseSensitive] = useState(false)
+  const [activeMatchIndex, setActiveMatchIndex] = useState(0)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
   // Sync currentFileIndex when modal opens or initialFileIndex/files/filePath changes
   useEffect(() => {
     if (isOpen) {
@@ -529,6 +611,91 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     () => renderRows.filter((row) => row.diffIndices.some((idx) => selectedLineIndices.has(idx))).length,
     [renderRows, selectedLineIndices]
   )
+
+  // Search matches calculation
+  const matches = useMemo<SearchMatch[]>(() => {
+    if (!searchQuery) return []
+    const result: SearchMatch[] = []
+    let count = 0
+
+    renderRows.forEach((row) => {
+      const rIdx = row.rowIdx ?? 0
+      if (row.rowType !== 'add' && row.beforeLine) {
+        const line = row.beforeLine
+        const haystack = caseSensitive ? line : line.toLowerCase()
+        const needle = caseSensitive ? searchQuery : searchQuery.toLowerCase()
+        if (needle.length > 0) {
+          let pos = haystack.indexOf(needle)
+          while (pos !== -1) {
+            result.push({
+              matchIndex: count++,
+              rowIdx: rIdx,
+              side: 'left',
+              startIdx: pos,
+              length: needle.length
+            })
+            pos = haystack.indexOf(needle, pos + needle.length)
+          }
+        }
+      }
+
+      if (row.rowType !== 'delete' && row.afterLine) {
+        const line = row.afterLine
+        const haystack = caseSensitive ? line : line.toLowerCase()
+        const needle = caseSensitive ? searchQuery : searchQuery.toLowerCase()
+        if (needle.length > 0) {
+          let pos = haystack.indexOf(needle)
+          while (pos !== -1) {
+            result.push({
+              matchIndex: count++,
+              rowIdx: rIdx,
+              side: 'right',
+              startIdx: pos,
+              length: needle.length
+            })
+            pos = haystack.indexOf(needle, pos + needle.length)
+          }
+        }
+      }
+    })
+
+    return result
+  }, [renderRows, searchQuery, caseSensitive])
+
+  const matchesByRowIdx = useMemo(() => {
+    const map = new Map<number, SearchMatch[]>()
+    matches.forEach((m) => {
+      const existing = map.get(m.rowIdx) || []
+      existing.push(m)
+      map.set(m.rowIdx, existing)
+    })
+    return map
+  }, [matches])
+
+  useEffect(() => {
+    setActiveMatchIndex(0)
+  }, [searchQuery, caseSensitive])
+
+  const handlePrevMatch = useCallback(() => {
+    if (matches.length === 0) return
+    setActiveMatchIndex((prev) => (prev - 1 + matches.length) % matches.length)
+  }, [matches.length])
+
+  const handleNextMatch = useCallback(() => {
+    if (matches.length === 0) return
+    setActiveMatchIndex((prev) => (prev + 1) % matches.length)
+  }, [matches.length])
+
+  // Scroll active match into view
+  useEffect(() => {
+    if (searchOpen && matches.length > 0 && matches[activeMatchIndex] !== undefined) {
+      const curMatch = matches[activeMatchIndex]
+      const matchEl = document.getElementById(`search-match-${curMatch.matchIndex}`)
+      if (matchEl) {
+        matchEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+  }, [searchOpen, activeMatchIndex, matches])
 
   // Scroll to targeted hunk element
   const scrollToHunk = useCallback((hunkIdx: number) => {
@@ -864,7 +1031,25 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     if (!isOpen) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setSearchOpen((prev) => {
+          const next = !prev
+          if (next) {
+            setTimeout(() => {
+              searchInputRef.current?.focus()
+              searchInputRef.current?.select()
+            }, 50)
+          }
+          return next
+        })
+      } else if (e.key === 'Escape') {
+        if (searchOpen) {
+          e.preventDefault()
+          e.stopPropagation()
+          setSearchOpen(false)
+          return
+        }
         if (selectedLineIndices.size > 0) {
           setSelectedLineIndices(new Set())
         } else {
@@ -925,6 +1110,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   }, [
     isOpen,
     onClose,
+    searchOpen,
     selectedLineIndices,
     activeChunkIndex,
     hunks,
@@ -947,6 +1133,8 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       setStashFiles([])
       setSelectedLineIndices(new Set())
       setActiveChunkIndex(0)
+      setSearchOpen(false)
+      setSearchQuery('')
     }
   }, [isOpen])
 
@@ -1267,6 +1455,30 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                 )
               )}
 
+              {/* Search Toggle Button */}
+              {renderRows.length > 0 && !loading && !error && !isBinary && (
+                <button
+                  className={`diff-search-toggle-btn${searchOpen ? ' active' : ''}`}
+                  onClick={() => {
+                    setSearchOpen((prev) => {
+                      const next = !prev
+                      if (next) {
+                        setTimeout(() => {
+                          searchInputRef.current?.focus()
+                          searchInputRef.current?.select()
+                        }, 50)
+                      }
+                      return next
+                    })
+                  }}
+                  data-tooltip="Search Text (Cmd+F / Ctrl+F)"
+                  data-testid="toggle-search-btn"
+                >
+                  <Search size={13} />
+                  <span>Search</span>
+                </button>
+              )}
+
               <button
                 className="diff-copy-btn"
                 data-testid="copy-left-btn"
@@ -1290,6 +1502,83 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Expandable Search Bar */}
+          {searchOpen && (
+            <div className="diff-search-bar" data-testid="diff-search-bar">
+              <div className="diff-search-input-wrapper">
+                <Search size={14} className="diff-search-icon" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  className="diff-search-input"
+                  placeholder="Search diff..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      if (e.shiftKey) {
+                        handlePrevMatch()
+                      } else {
+                        handleNextMatch()
+                      }
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setSearchOpen(false)
+                    }
+                  }}
+                  data-testid="diff-search-input"
+                />
+                {searchQuery && (
+                  <span className="diff-search-counter" data-testid="diff-search-counter">
+                    {matches.length > 0
+                      ? `${activeMatchIndex + 1} of ${matches.length}`
+                      : 'No results'}
+                  </span>
+                )}
+              </div>
+
+              <button
+                className={`diff-search-btn${caseSensitive ? ' active' : ''}`}
+                onClick={() => setCaseSensitive((prev) => !prev)}
+                data-tooltip="Match Case (Alt+C)"
+                data-testid="toggle-case-sensitive-btn"
+              >
+                <span>Aa</span>
+              </button>
+
+              <button
+                className="diff-search-btn"
+                onClick={handlePrevMatch}
+                disabled={matches.length === 0}
+                data-tooltip="Previous Match (Shift+Enter)"
+                data-testid="prev-match-btn"
+              >
+                <ChevronUp size={14} />
+              </button>
+
+              <button
+                className="diff-search-btn"
+                onClick={handleNextMatch}
+                disabled={matches.length === 0}
+                data-tooltip="Next Match (Enter)"
+                data-testid="next-match-btn"
+              >
+                <ChevronDown size={14} />
+              </button>
+
+              <button
+                className="diff-search-btn close-search-btn"
+                onClick={() => setSearchOpen(false)}
+                data-tooltip="Close Search (Escape)"
+                data-testid="close-search-btn"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           {/* Bottom Row: File Icon + File Path */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '2px' }}>
@@ -1505,19 +1794,27 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                             >
                               <div className={`diff-col left${row.rowType === 'add' ? ' empty-side' : ''}`}>
                                 <span className="diff-line-number">{row.beforeNum || ''}</span>
-                                {row.oldSpans ? (
-                                  <InlineContent spans={row.oldSpans} type="delete" />
-                                ) : (
-                                  <pre className="diff-line-content">{row.beforeLine ?? ''}</pre>
-                                )}
+                                <SearchHighlightContent
+                                  text={row.beforeLine ?? ''}
+                                  side="left"
+                                  spans={row.oldSpans}
+                                  type="delete"
+                                  searchQuery={searchQuery}
+                                  rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) || []}
+                                  activeMatchIndex={activeMatchIndex}
+                                />
                               </div>
                               <div className={`diff-col right${row.rowType === 'delete' ? ' empty-side' : ''}`}>
                                 <span className="diff-line-number">{row.afterNum || ''}</span>
-                                {row.newSpans ? (
-                                  <InlineContent spans={row.newSpans} type="add" />
-                                ) : (
-                                  <pre className="diff-line-content">{row.afterLine ?? ''}</pre>
-                                )}
+                                <SearchHighlightContent
+                                  text={row.afterLine ?? ''}
+                                  side="right"
+                                  spans={row.newSpans}
+                                  type="add"
+                                  searchQuery={searchQuery}
+                                  rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) || []}
+                                  activeMatchIndex={activeMatchIndex}
+                                />
                               </div>
                             </div>
                           )
@@ -1608,19 +1905,27 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                         >
                           <div className={`diff-col left${row.rowType === 'add' ? ' empty-side' : ''}`}>
                             <span className="diff-line-number">{row.beforeNum || ''}</span>
-                            {row.oldSpans ? (
-                              <InlineContent spans={row.oldSpans} type="delete" />
-                            ) : (
-                              <pre className="diff-line-content">{row.beforeLine ?? ''}</pre>
-                            )}
+                            <SearchHighlightContent
+                              text={row.beforeLine ?? ''}
+                              side="left"
+                              spans={row.oldSpans}
+                              type="delete"
+                              searchQuery={searchQuery}
+                              rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) || []}
+                              activeMatchIndex={activeMatchIndex}
+                            />
                           </div>
                           <div className={`diff-col right${row.rowType === 'delete' ? ' empty-side' : ''}`}>
                             <span className="diff-line-number">{row.afterNum || ''}</span>
-                            {row.newSpans ? (
-                              <InlineContent spans={row.newSpans} type="add" />
-                            ) : (
-                              <pre className="diff-line-content">{row.afterLine ?? ''}</pre>
-                            )}
+                            <SearchHighlightContent
+                              text={row.afterLine ?? ''}
+                              side="right"
+                              spans={row.newSpans}
+                              type="add"
+                              searchQuery={searchQuery}
+                              rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) || []}
+                              activeMatchIndex={activeMatchIndex}
+                            />
                           </div>
                         </div>
                       </React.Fragment>

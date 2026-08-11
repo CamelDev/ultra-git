@@ -886,7 +886,135 @@ body {
   transform: rotate(90deg);
 }
 
-/* View Mode Toggle Styles */
+/* View Mode & Search Bar Toggle Styles */
+.diff-search-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.diff-search-toggle-btn:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.diff-search-toggle-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.diff-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-top: 4px;
+}
+
+.diff-search-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.diff-search-input-wrapper:focus-within {
+  border-color: var(--accent);
+}
+
+.diff-search-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.diff-search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  width: 100%;
+}
+
+.diff-search-counter {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.diff-search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.diff-search-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text-primary);
+  border-color: var(--accent-light);
+}
+
+.diff-search-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.diff-search-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.diff-search-btn.close-search-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Diff Search Text Highlights */
+mark.diff-search-highlight {
+  background-color: rgba(250, 204, 21, 0.4);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+mark.diff-search-highlight.active {
+  background-color: #facc15;
+  color: #000000;
+  font-weight: 600;
+  outline: 2px solid #eab308;
+  box-shadow: 0 0 6px rgba(234, 179, 8, 0.6);
+}
+
 .diff-view-toggle {
   display: flex;
   align-items: center;

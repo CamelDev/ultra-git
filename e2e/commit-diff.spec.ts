@@ -394,4 +394,102 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       await app.close()
     }
   })
+
+  test('should support searching text in diff modal', async () => {
+    const sandbox = await createSandboxRepo('test-diff-search-repo')
+
+    try {
+      // 1. Create commit with text content
+      await writeSandboxFile(sandbox, 'search-test.txt', 'alpha line\nbeta line\ngamma line\nBETA UPPERCASE\nalpha line end\n')
+      await execInSandbox(sandbox, 'git add search-test.txt')
+      await execInSandbox(sandbox, 'git commit -m "Add search test file"')
+
+      // 2. Launch Electron App
+      const { app, page } = await launchApp()
+
+      // 3. Setup repo
+      await page.evaluate(() => localStorage.clear())
+      await app.evaluate(({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, sandbox.dir)
+
+      await addRepoViaUI(page)
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      // 4. Select commit and open diff modal
+      const commitItems = page.locator('.commit-item')
+      await commitItems.first().click()
+      await page.waitForTimeout(500)
+
+      const fileItem = page.locator('.details-panel .file-item').first()
+      await fileItem.click()
+      await page.waitForTimeout(500)
+
+      const diffModalOverlay = page.locator('.diff-modal-overlay')
+      await expect(diffModalOverlay).toBeVisible()
+
+      // 5. Click search button in toolbar
+      const toggleSearchBtn = page.getByTestId('toggle-search-btn')
+      await expect(toggleSearchBtn).toBeVisible()
+      await toggleSearchBtn.click()
+
+      // 6. Assert search bar is visible
+      const searchBar = page.getByTestId('diff-search-bar')
+      await expect(searchBar).toBeVisible()
+
+      const searchInput = page.getByTestId('diff-search-input')
+      await expect(searchInput).toBeFocused()
+
+      // 7. Type query "beta" (case-insensitive by default -> should match "beta line" and "BETA UPPERCASE")
+      await searchInput.fill('beta')
+      await page.waitForTimeout(300)
+
+      const searchCounter = page.getByTestId('diff-search-counter')
+      await expect(searchCounter).toContainText('1 of 2')
+
+      // 8. Test Next and Prev match buttons
+      const nextMatchBtn = page.getByTestId('next-match-btn')
+      const prevMatchBtn = page.getByTestId('prev-match-btn')
+
+      await nextMatchBtn.click()
+      await expect(searchCounter).toContainText('2 of 2')
+
+      await prevMatchBtn.click()
+      await expect(searchCounter).toContainText('1 of 1') || await expect(searchCounter).toContainText('1 of 2')
+
+      // 9. Test Case Sensitivity toggle
+      const toggleCaseBtn = page.getByTestId('toggle-case-sensitive-btn')
+      await toggleCaseBtn.click()
+      await page.waitForTimeout(300)
+      // With case-sensitivity ON, "beta" matches only 1 result ("beta line")
+      await expect(searchCounter).toContainText('1 of 1')
+
+      // 10. Close search using Escape key
+      await page.keyboard.press('Escape')
+      await expect(searchBar).toBeHidden()
+
+      // 11. Re-open search using shortcut Control+f
+      await page.keyboard.press('Control+f')
+      await expect(searchBar).toBeVisible()
+
+      // 12. Close search modal
+      const closeSearchBtn = page.getByTestId('close-search-btn')
+      await closeSearchBtn.click()
+      await expect(searchBar).toBeHidden()
+
+      const closeModalBtn = page.locator('.diff-modal-close')
+      await closeModalBtn.click()
+      await expect(diffModalOverlay).toBeHidden()
+
+    } finally {
+      await app.close()
+    }
+  })
 })
