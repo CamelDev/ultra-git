@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, ChevronRight, ChevronDown, Search, LogIn, HardDrive, RefreshCw } from "lucide-react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, Check, ChevronRight, ChevronDown, Search, LogIn, HardDrive, RefreshCw } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
@@ -110,6 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const [errorMessage, setErrorMessage] = useState("")
   const [branchModalMode, setBranchModalMode] = useState<"create" | "rename">("create")
   const [branchToRename, setBranchToRename] = useState<string>("")
+  const [isBranchNameCopied, setIsBranchNameCopied] = useState(false)
 
   const [mergeModalOpen, setMergeModalOpen] = useState(false)
   const [mergeTargetBranch, setMergeTargetBranch] = useState("")
@@ -398,6 +399,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     setBranchModalMode('create')
     setNewBranchName('')
     setErrorMessage('')
+    setIsBranchNameCopied(false)
     setIsBranchModalOpen(true)
   }
 
@@ -407,7 +409,23 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     setBranchToRename(branchName)
     setNewBranchName(branchName)
     setErrorMessage('')
+    setIsBranchNameCopied(false)
     setIsBranchModalOpen(true)
+  }
+
+  const handleCopyBranchName = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const textToCopy = branchToRename || newBranchName
+    if (!textToCopy) return
+    try {
+      await navigator.clipboard.writeText(textToCopy)
+      setIsBranchNameCopied(true)
+      setTimeout(() => {
+        setIsBranchNameCopied(false)
+      }, 2000)
+    } catch (err) {
+      console.error('Failed to copy branch name:', err)
+    }
   }
 
   const handleBranchModalSubmit = async () => {
@@ -1085,6 +1103,15 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
           >
             <Download size={12} />
           </button>
+          <button
+            className="stash-action-btn"
+            style={{ padding: 0, height: '24px', width: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={(e) => openRenameBranchModal(e, name)}
+            data-tooltip={`Rename branch ${name}`}
+            data-testid={`rename-branch-btn-${name}`}
+          >
+            <Edit2 size={13} />
+          </button>
         </div>
       </div>
     );
@@ -1621,35 +1648,59 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                 {branchModalMode === 'create' ? (
                   <>Create a new local branch starting from the latest commit of <strong>{branch}</strong>.</>
                 ) : (
-                  <>Enter a new name for the local branch <strong>{branchToRename}</strong>.</>
+                  <>Enter a new name for the {remoteBranches.includes(branchToRename) || branchToRename.includes('/') ? 'remote' : 'local'} branch <strong>{branchToRename}</strong>.</>
                 )}
               </div>
-              <input
-                type="text"
-                placeholder={branchModalMode === 'create' ? "Branch name..." : "New branch name..."}
-                value={newBranchName}
-                onChange={(e) => {
-                  setNewBranchName(e.target.value)
-                  setErrorMessage('')
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleBranchModalSubmit()
-                  }
-                }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '4px',
-                  border: '1px solid var(--border)',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  fontSize: '13px',
-                  outline: 'none'
-                }}
-                autoFocus
-                data-testid="new-branch-name-input"
-              />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder={branchModalMode === 'create' ? "Branch name..." : "New branch name..."}
+                  value={newBranchName}
+                  onChange={(e) => {
+                    setNewBranchName(e.target.value)
+                    setErrorMessage('')
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleBranchModalSubmit()
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                  autoFocus
+                  data-testid="new-branch-name-input"
+                />
+                {branchModalMode === 'rename' && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleCopyBranchName}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 12px',
+                      whiteSpace: 'nowrap',
+                      height: '35px',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                    data-testid="copy-branch-name-btn"
+                    data-tooltip="Copy branch name to clipboard"
+                  >
+                    {isBranchNameCopied ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
+                    <span>{isBranchNameCopied ? 'Copied!' : 'Copy'}</span>
+                  </button>
+                )}
+              </div>
               {errorMessage && (
                 <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }} data-testid="branch-error-message">
                   {errorMessage}

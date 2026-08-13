@@ -469,4 +469,75 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await app.close();
     }
   });
+
+  test('should support copying branch name in rename dialog for local and remote branches', async () => {
+    const { app, page } = await launchElectronApp();
+
+    try {
+      await page.evaluate(() => localStorage.clear());
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(1000);
+
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath };
+        });
+      }, sandbox.dir);
+
+      await addRepoViaUI(page);
+
+      const tabs = page.locator('[data-testid="repo-tab"]');
+      await tabs.last().click();
+      await page.waitForTimeout(1000);
+
+      // 1. Local branch copy branch name test
+      const activeBranch = page.locator('[data-testid="sidebar-active-branch"]');
+      await activeBranch.hover();
+      const renameActiveBtn = page.locator('[data-testid="sidebar-rename-branch-btn"]');
+      await expect(renameActiveBtn).toBeVisible();
+      await renameActiveBtn.click();
+      await page.waitForTimeout(300);
+
+      const modal = page.locator('.diff-modal-content');
+      await expect(modal).toBeVisible();
+      await expect(modal).toContainText('Rename Branch');
+      await expect(modal).toContainText('local branch');
+
+      const copyBtn = page.locator('[data-testid="copy-branch-name-btn"]');
+      await expect(copyBtn).toBeVisible();
+      await copyBtn.click();
+      await expect(copyBtn).toContainText('Copied!');
+
+      const cancelBtn = page.locator('[data-testid="cancel-branch-btn"]');
+      await cancelBtn.click();
+      await page.waitForTimeout(300);
+
+      // 2. Remote branch copy branch name test
+      const remoteBranchItem = page.locator('[data-testid="sidebar-remote-branch-origin/main"]');
+      await expect(remoteBranchItem).toBeVisible();
+      await remoteBranchItem.hover();
+
+      const renameRemoteBtn = page.locator('[data-testid="rename-branch-btn-origin/main"]');
+      await expect(renameRemoteBtn).toBeVisible();
+      await renameRemoteBtn.click();
+      await page.waitForTimeout(300);
+
+      await expect(modal).toBeVisible();
+      await expect(modal).toContainText('remote branch');
+      await expect(modal).toContainText('origin/main');
+
+      await expect(copyBtn).toBeVisible();
+      await copyBtn.click();
+      await expect(copyBtn).toContainText('Copied!');
+
+      await cancelBtn.click();
+      await page.waitForTimeout(300);
+      await expect(modal).not.toBeVisible();
+
+    } finally {
+      await app.close();
+    }
+  });
 })

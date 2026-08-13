@@ -662,8 +662,33 @@ export const gitService = {
 
   renameBranch: async (repoPath: string, oldName: string, newName: string) => {
     const git = getGitInstance(repoPath);
-    await git.raw(['branch', '-m', oldName, newName]);
-    return { success: true };
+    try {
+      await git.raw(['branch', '-m', oldName, newName]);
+      return { success: true };
+    } catch (err: any) {
+      const cleanOld = oldName.replace(/^remotes\//, '');
+      const slashIdx = cleanOld.indexOf('/');
+      if (slashIdx !== -1) {
+        const remote = cleanOld.substring(0, slashIdx);
+        const oldRemoteBranch = cleanOld.substring(slashIdx + 1);
+        const newRemoteBranch = newName.startsWith(remote + '/') ? newName.substring(remote.length + 1) : newName;
+        
+        try {
+          await git.raw(['push', remote, `refs/remotes/${cleanOld}:refs/heads/${newRemoteBranch}`]);
+          await git.raw(['push', remote, '--delete', oldRemoteBranch]);
+          await git.raw(['fetch', remote, '--prune']);
+        } catch {
+          try {
+            await git.raw(['update-ref', `refs/remotes/${remote}/${newRemoteBranch}`, `refs/remotes/${cleanOld}`]);
+            await git.raw(['update-ref', '-d', `refs/remotes/${cleanOld}`]);
+          } catch {
+            throw err;
+          }
+        }
+        return { success: true };
+      }
+      throw err;
+    }
   },
 
   getBranches: async (repoPath: string) => {
