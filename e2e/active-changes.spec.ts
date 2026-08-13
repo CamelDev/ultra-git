@@ -496,4 +496,163 @@ test.describe('Active Changes Panel', () => {
       await app.close()
     }
   })
+
+  test('should commit staged changes when user presses Enter in commit message input', async () => {
+    const { app, page } = await launchElectronApp()
+
+    try {
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, sandbox.dir)
+
+      await addRepoViaUI(page)
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      fs.writeFileSync(path.join(sandbox.dir, 'commit-enter.txt'), 'Content for enter commit test\n')
+
+      await tabs.first().click()
+      await page.waitForTimeout(500)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      const panel = page.locator('[data-testid="active-changes-panel"]')
+      await expect(panel).toBeVisible()
+
+      const stageAllBtn = page.locator('.toolbar .btn-primary', { hasText: 'Stage all' })
+      await stageAllBtn.click()
+      await page.waitForTimeout(500)
+
+      const commitInput = page.locator('.toolbar [data-testid="commit-message-input"]')
+      await commitInput.fill('Commit via Enter key')
+      await commitInput.press('Enter')
+      await page.waitForTimeout(1000)
+
+      await expect(panel).not.toBeVisible()
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('should support multi-file selection, select-all checkbox, batch stage, batch unstage, and batch discard', async () => {
+    const { app, page } = await launchElectronApp()
+
+    try {
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, sandbox.dir)
+
+      await addRepoViaUI(page)
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      // Create 3 untracked files
+      fs.writeFileSync(path.join(sandbox.dir, 'file1.txt'), 'File 1 content\n')
+      fs.writeFileSync(path.join(sandbox.dir, 'file2.txt'), 'File 2 content\n')
+      fs.writeFileSync(path.join(sandbox.dir, 'file3.txt'), 'File 3 content\n')
+
+      await tabs.first().click()
+      await page.waitForTimeout(500)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      const panel = page.locator('[data-testid="active-changes-panel"]')
+      await expect(panel).toBeVisible()
+
+      const unstagedColumn = panel.locator('.unstaged-column')
+      const stagedColumn = panel.locator('.staged-column')
+      const unstagedItems = unstagedColumn.locator('.file-item')
+      const stagedItems = stagedColumn.locator('.file-item')
+
+      await expect(unstagedItems).toHaveCount(3)
+
+      // 1. Select All checkbox in unstaged column
+      const selectAllUnstagedCheckbox = unstagedColumn.locator('[data-testid="select-all-unstaged-checkbox"]')
+      await expect(selectAllUnstagedCheckbox).toBeVisible()
+      await selectAllUnstagedCheckbox.click()
+      await page.waitForTimeout(300)
+
+      // Verify batch stage button appears with "Stage (3)"
+      const batchStageBtn = unstagedColumn.locator('[data-testid="batch-stage-btn"]')
+      await expect(batchStageBtn).toBeVisible()
+      await expect(batchStageBtn).toContainText('Stage (3)')
+
+      // Click batch stage button
+      await batchStageBtn.click()
+      await page.waitForTimeout(500)
+
+      // All 3 files should now be staged
+      await expect(unstagedItems).toHaveCount(0)
+      await expect(stagedItems).toHaveCount(3)
+
+      // 2. Select individual checkboxes in staged column (select 2 files)
+      const checkbox1 = stagedColumn.locator('[data-testid="checkbox-staged-file1.txt"]')
+      const checkbox2 = stagedColumn.locator('[data-testid="checkbox-staged-file2.txt"]')
+
+      await checkbox1.click()
+      await checkbox2.click()
+      await page.waitForTimeout(300)
+
+      const batchUnstageBtn = stagedColumn.locator('[data-testid="batch-unstage-btn"]')
+      await expect(batchUnstageBtn).toBeVisible()
+      await expect(batchUnstageBtn).toContainText('Unstage (2)')
+
+      // Click batch unstage button
+      await batchUnstageBtn.click()
+      await page.waitForTimeout(500)
+
+      // 2 files back in unstaged, 1 remains staged
+      await expect(unstagedItems).toHaveCount(2)
+      await expect(stagedItems).toHaveCount(1)
+
+      // 3. Batch discard unstaged files
+      await selectAllUnstagedCheckbox.click()
+      await page.waitForTimeout(300)
+
+      const batchDiscardUnstagedBtn = unstagedColumn.locator('[data-testid="batch-discard-unstaged-btn"]')
+      await expect(batchDiscardUnstagedBtn).toBeVisible()
+      await batchDiscardUnstagedBtn.click()
+      await page.waitForTimeout(500)
+
+      // Discard confirmation dialog should appear
+      const dialog = page.locator('[data-testid="discard-changes-dialog"]')
+      await expect(dialog).toBeVisible()
+      await expect(dialog).toContainText('2 selected files')
+
+      // Confirm discard
+      const confirmDiscardBtn = dialog.locator('button', { hasText: 'Discard' })
+      await confirmDiscardBtn.click()
+      await page.waitForTimeout(500)
+
+      // Unstaged list should now be empty (0 files)
+      await expect(unstagedItems).toHaveCount(0)
+      await expect(stagedItems).toHaveCount(1)
+
+    } finally {
+      await app.close()
+    }
+  })
 })
+

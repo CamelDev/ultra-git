@@ -286,6 +286,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                   placeholder="Commit message..."
                   value={commitMessage}
                   onChange={(e) => setCommitMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleCommit()
+                    }
+                  }}
                   disabled={isIdentityRequiredAndMissing}
                   style={{
                     opacity: isIdentityRequiredAndMissing ? 0.6 : 1,

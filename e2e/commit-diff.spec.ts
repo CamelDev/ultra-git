@@ -396,16 +396,23 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
   })
 
   test('should support searching text in diff modal', async () => {
-    const sandbox = await createSandboxRepo('test-diff-search-repo')
+    const searchSandbox = new GitSandbox()
+    await searchSandbox.init()
+
+    let app: any
 
     try {
       // 1. Create commit with text content
-      await writeSandboxFile(sandbox, 'search-test.txt', 'alpha line\nbeta line\ngamma line\nBETA UPPERCASE\nalpha line end\n')
-      await execInSandbox(sandbox, 'git add search-test.txt')
-      await execInSandbox(sandbox, 'git commit -m "Add search test file"')
+      await searchSandbox.createCommit(
+        'search-test.txt',
+        'alpha line\nbeta line\ngamma line\nBETA UPPERCASE\nalpha line end\n',
+        'Add search test file'
+      )
 
       // 2. Launch Electron App
-      const { app, page } = await launchApp()
+      const launched = await launchElectronApp()
+      app = launched.app
+      const page = launched.page
 
       // 3. Setup repo
       await page.evaluate(() => localStorage.clear())
@@ -414,7 +421,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
         ipcMain.handle('dialog:openDirectory', async () => {
           return { canceled: false, path: sandboxPath }
         })
-      }, sandbox.dir)
+      }, searchSandbox.dir)
 
       await addRepoViaUI(page)
 
@@ -462,7 +469,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       await expect(searchCounter).toContainText('2 of 2')
 
       await prevMatchBtn.click()
-      await expect(searchCounter).toContainText('1 of 1') || await expect(searchCounter).toContainText('1 of 2')
+      await expect(searchCounter).toContainText('1 of 2')
 
       // 9. Test Case Sensitivity toggle
       const toggleCaseBtn = page.getByTestId('toggle-case-sensitive-btn')
@@ -489,7 +496,8 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       await expect(diffModalOverlay).toBeHidden()
 
     } finally {
-      await app.close()
+      if (app) await app.close()
+      await searchSandbox.destroy()
     }
   })
 })

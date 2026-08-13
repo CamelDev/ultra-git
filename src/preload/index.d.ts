@@ -41,10 +41,10 @@ declare global {
           oldPath?: string,
           status?: string
         ) => Promise<IpcResponse<{ before: string, after: string, isBinary: boolean }>>;
-        add: (repoPath: string, filePath: string) => Promise<IpcResponse<void>>;
-        reset: (repoPath: string, filePath: string) => Promise<IpcResponse<void>>;
+        add: (repoPath: string, filePath: string | string[]) => Promise<IpcResponse<void>>;
+        reset: (repoPath: string, filePath: string | string[]) => Promise<IpcResponse<void>>;
         applyPatch: (repoPath: string, patch: string, options?: { cached?: boolean; reverse?: boolean }) => Promise<IpcResponse<void>>;
-        discardChanges: (repoPath: string, filePath: string, isStaged: boolean) => Promise<IpcResponse<void>>;
+        discardChanges: (repoPath: string, filePath: string | string[], isStaged: boolean) => Promise<IpcResponse<void>>;
         resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => Promise<IpcResponse<void>>;
         squashCommits: (repoPath: string, commitHash: string, message: string) => Promise<IpcResponse<void>>;
         getWorktrees: (repoPath: string) => Promise<IpcResponse<Array<{ path: string; branch: string; hash: string }>>>;

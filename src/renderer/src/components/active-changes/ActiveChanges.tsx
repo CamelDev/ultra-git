@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { FileText, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { useToaster } from '../toaster/ToasterContext'
@@ -10,6 +10,11 @@ export const ActiveChanges: React.FC = () => {
   const { addToast } = useToaster()
   const activeRepo = getActiveRepo()
 
+  const [selectedUnstaged, setSelectedUnstaged] = useState<Set<string>>(new Set())
+  const [selectedStaged, setSelectedStaged] = useState<Set<string>>(new Set())
+  const [lastUnstagedIndex, setLastUnstagedIndex] = useState<number | null>(null)
+  const [lastStagedIndex, setLastStagedIndex] = useState<number | null>(null)
+
   const [selectedFileForDiff, setSelectedFileForDiff] = useState<{
     path: string
     oldPath?: string
@@ -17,7 +22,7 @@ export const ActiveChanges: React.FC = () => {
     isStaged: boolean
   } | null>(null)
 
-  const [discardTarget, setDiscardTarget] = useState<{ filePath: string; isStaged: boolean } | null>(null)
+  const [discardTarget, setDiscardTarget] = useState<{ filePaths: string[]; isStaged: boolean } | null>(null)
 
   if (!activeRepo || !activeRepo.status || !activeRepo.status.files) {
     return null
@@ -31,6 +36,41 @@ export const ActiveChanges: React.FC = () => {
   // Unstaged files: working_dir is not space (' '), or index is untracked ('?')
   const unstagedFiles = files.filter((f) => f.working_dir !== ' ' || f.index === '?')
 
+  // Sync selection sets whenever files change to prune deleted/staged paths
+  useEffect(() => {
+    const unstagedPaths = new Set(unstagedFiles.map((f) => f.path))
+    setSelectedUnstaged((prev) => {
+      const next = new Set<string>()
+      prev.forEach((p) => {
+        if (unstagedPaths.has(p)) next.add(p)
+      })
+      return next
+    })
+  }, [unstagedFiles.map((f) => f.path).join(',')])
+
+  useEffect(() => {
+    const stagedPaths = new Set(stagedFiles.map((f) => f.path))
+    setSelectedStaged((prev) => {
+      const next = new Set<string>()
+      prev.forEach((p) => {
+        if (stagedPaths.has(p)) next.add(p)
+      })
+      return next
+    })
+  }, [stagedFiles.map((f) => f.path).join(',')])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (selectedFileForDiff) return
+        setSelectedUnstaged(new Set())
+        setSelectedStaged(new Set())
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedFileForDiff])
+
   if (files.length === 0) {
     return null
   }
@@ -39,6 +79,11 @@ export const ActiveChanges: React.FC = () => {
     try {
       const res = await window.api.git.add(activeRepo.path, filePath)
       if (res.success) {
+        setSelectedUnstaged((prev) => {
+          const next = new Set(prev)
+          next.delete(filePath)
+          return next
+        })
         await refreshRepo(activeRepo.id)
       } else {
         addToast({ variant: 'error', title: 'Stage Failed', message: res.error || 'Failed to stage file' })
@@ -52,6 +97,11 @@ export const ActiveChanges: React.FC = () => {
     try {
       const res = await window.api.git.reset(activeRepo.path, filePath)
       if (res.success) {
+        setSelectedStaged((prev) => {
+          const next = new Set(prev)
+          next.delete(filePath)
+          return next
+        })
         await refreshRepo(activeRepo.id)
       } else {
         addToast({ variant: 'error', title: 'Unstage Failed', message: res.error || 'Failed to unstage file' })
@@ -61,8 +111,99 @@ export const ActiveChanges: React.FC = () => {
     }
   }
 
-  const handleDiscardChanges = (filePath: string, isStaged: boolean) => {
-    setDiscardTarget({ filePath, isStaged })
+  const handleBatchStage = async () => {
+    const paths = Array.from(selectedUnstaged)
+    if (paths.length === 0) return
+    try {
+      const res = await window.api.git.add(activeRepo.path, paths)
+      if (res.success) {
+        setSelectedUnstaged(new Set())
+        await refreshRepo(activeRepo.id)
+        addToast({ variant: 'success', title: 'Staged', message: `Staged ${paths.length} file(s)` })
+      } else {
+        addToast({ variant: 'error', title: 'Batch Stage Failed', message: res.error || 'Failed to stage selected files' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Batch Stage Error', message: err.message || 'Error staging selected files' })
+    }
+  }
+
+  const handleBatchUnstage = async () => {
+    const paths = Array.from(selectedStaged)
+    if (paths.length === 0) return
+    try {
+      const res = await window.api.git.reset(activeRepo.path, paths)
+      if (res.success) {
+        setSelectedStaged(new Set())
+        await refreshRepo(activeRepo.id)
+        addToast({ variant: 'success', title: 'Unstaged', message: `Unstaged ${paths.length} file(s)` })
+      } else {
+        addToast({ variant: 'error', title: 'Batch Unstage Failed', message: res.error || 'Failed to unstage selected files' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Batch Unstage Error', message: err.message || 'Error unstaging selected files' })
+    }
+  }
+
+  const handleDiscardChanges = (filePath: string | string[], isStaged: boolean) => {
+    const filePaths = Array.isArray(filePath) ? filePath : [filePath]
+    setDiscardTarget({ filePaths, isStaged })
+  }
+
+  const toggleUnstagedFile = (path: string, index: number, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setSelectedUnstaged((prev) => {
+      const next = new Set(prev)
+      if (e?.shiftKey && lastUnstagedIndex !== null) {
+        const start = Math.min(lastUnstagedIndex, index)
+        const end = Math.max(lastUnstagedIndex, index)
+        for (let i = start; i <= end; i++) {
+          if (unstagedFiles[i]) next.add(unstagedFiles[i].path)
+        }
+      } else if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+      return next
+    })
+    setLastUnstagedIndex(index)
+  }
+
+  const toggleStagedFile = (path: string, index: number, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setSelectedStaged((prev) => {
+      const next = new Set(prev)
+      if (e?.shiftKey && lastStagedIndex !== null) {
+        const start = Math.min(lastStagedIndex, index)
+        const end = Math.max(lastStagedIndex, index)
+        for (let i = start; i <= end; i++) {
+          if (stagedFiles[i]) next.add(stagedFiles[i].path)
+        }
+      } else if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+      return next
+    })
+    setLastStagedIndex(index)
+  }
+
+  const handleSelectAllUnstaged = () => {
+    if (selectedUnstaged.size === unstagedFiles.length) {
+      setSelectedUnstaged(new Set())
+    } else {
+      setSelectedUnstaged(new Set(unstagedFiles.map((f) => f.path)))
+    }
+  }
+
+  const handleSelectAllStaged = () => {
+    if (selectedStaged.size === stagedFiles.length) {
+      setSelectedStaged(new Set())
+    } else {
+      setSelectedStaged(new Set(stagedFiles.map((f) => f.path)))
+    }
   }
 
   const getStatusClass = (status: string) => {
@@ -77,6 +218,12 @@ export const ActiveChanges: React.FC = () => {
   }
 
   const isIdentityRequiredAndMissing = !!(activeRepo && identities.length > 1 && !activeRepo.identityId)
+
+  const discardMessage = discardTarget
+    ? discardTarget.filePaths.length === 1
+      ? `Are you sure you want to discard changes in "${discardTarget.filePaths[0]}"? This operation cannot be undone.`
+      : `Are you sure you want to discard changes in ${discardTarget.filePaths.length} selected files? This operation cannot be undone.`
+    : ''
 
   return (
     <div className="active-changes-panel" data-testid="active-changes-panel">
@@ -105,8 +252,52 @@ export const ActiveChanges: React.FC = () => {
       <div className="active-changes-columns">
         {/* Unstaged (Changed files) column */}
         <div className="active-changes-column unstaged-column">
-          <div className="column-header">
-            <span>Changed files ({unstagedFiles.length})</span>
+          <div className="column-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {unstagedFiles.length > 0 && (
+                <input
+                  type="checkbox"
+                  className="file-select-checkbox header-checkbox"
+                  checked={selectedUnstaged.size === unstagedFiles.length}
+                  ref={(el) => {
+                    if (el) {
+                      el.indeterminate = selectedUnstaged.size > 0 && selectedUnstaged.size < unstagedFiles.length
+                    }
+                  }}
+                  onChange={handleSelectAllUnstaged}
+                  title="Select / Deselect all unstaged files"
+                  data-testid="select-all-unstaged-checkbox"
+                />
+              )}
+              <span>
+                Changed files ({unstagedFiles.length})
+                {selectedUnstaged.size > 0 && ` • ${selectedUnstaged.size} selected`}
+              </span>
+            </div>
+            {selectedUnstaged.size > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button
+                  className="action-btn reset-btn"
+                  onClick={() => handleDiscardChanges(Array.from(selectedUnstaged), false)}
+                  data-tooltip={`Discard ${selectedUnstaged.size} selected changes`}
+                  data-testid="batch-discard-unstaged-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 6px' }}
+                >
+                  <RotateCcw size={12} />
+                  <span>Discard ({selectedUnstaged.size})</span>
+                </button>
+                <button
+                  className="action-btn stage-btn"
+                  onClick={handleBatchStage}
+                  data-tooltip={`Stage ${selectedUnstaged.size} selected files`}
+                  data-testid="batch-stage-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 8px' }}
+                >
+                  <span>Stage ({selectedUnstaged.size})</span>
+                  <ArrowRight size={12} />
+                </button>
+              </div>
+            )}
           </div>
           <div className="active-file-list">
             {unstagedFiles.length === 0 ? (
@@ -114,21 +305,34 @@ export const ActiveChanges: React.FC = () => {
                 No unstaged changes
               </div>
             ) : (
-              unstagedFiles.map((file) => {
+              unstagedFiles.map((file, index) => {
                 const statusChar = file.working_dir === ' ' && file.index === '?' ? '?' : file.working_dir
+                const isSelected = selectedUnstaged.has(file.path)
                 return (
                   <div
                     key={`unstaged-${file.path}`}
-                    className="file-item"
+                    className={`file-item ${isSelected ? 'selected' : ''}`}
                     style={{ cursor: 'pointer' }}
-                    onClick={() =>
-                      setSelectedFileForDiff({
-                        path: file.path,
-                        status: statusChar,
-                        isStaged: false
-                      })
-                    }
+                    onClick={(e) => {
+                      if (e.shiftKey || e.metaKey || e.ctrlKey) {
+                        toggleUnstagedFile(file.path, index, e)
+                      } else {
+                        setSelectedFileForDiff({
+                          path: file.path,
+                          status: statusChar,
+                          isStaged: false
+                        })
+                      }
+                    }}
                   >
+                    <input
+                      type="checkbox"
+                      className="file-select-checkbox"
+                      checked={isSelected}
+                      onChange={(e) => toggleUnstagedFile(file.path, index, e)}
+                      onClick={(e) => e.stopPropagation()}
+                      data-testid={`checkbox-unstaged-${file.path}`}
+                    />
                     <FileText size={14} style={{ marginRight: '8px', color: 'var(--text-secondary)', flexShrink: 0 }} />
                     <span
                       style={{
@@ -177,8 +381,52 @@ export const ActiveChanges: React.FC = () => {
 
         {/* Staged column */}
         <div className="active-changes-column staged-column">
-          <div className="column-header">
-            <span>Staged ({stagedFiles.length})</span>
+          <div className="column-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {stagedFiles.length > 0 && (
+                <input
+                  type="checkbox"
+                  className="file-select-checkbox header-checkbox"
+                  checked={selectedStaged.size === stagedFiles.length}
+                  ref={(el) => {
+                    if (el) {
+                      el.indeterminate = selectedStaged.size > 0 && selectedStaged.size < stagedFiles.length
+                    }
+                  }}
+                  onChange={handleSelectAllStaged}
+                  title="Select / Deselect all staged files"
+                  data-testid="select-all-staged-checkbox"
+                />
+              )}
+              <span>
+                Staged ({stagedFiles.length})
+                {selectedStaged.size > 0 && ` • ${selectedStaged.size} selected`}
+              </span>
+            </div>
+            {selectedStaged.size > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button
+                  className="action-btn reset-btn"
+                  onClick={() => handleDiscardChanges(Array.from(selectedStaged), true)}
+                  data-tooltip={`Discard ${selectedStaged.size} selected staged changes`}
+                  data-testid="batch-discard-staged-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 6px' }}
+                >
+                  <RotateCcw size={12} />
+                  <span>Discard ({selectedStaged.size})</span>
+                </button>
+                <button
+                  className="action-btn unstage-btn"
+                  onClick={handleBatchUnstage}
+                  data-tooltip={`Unstage ${selectedStaged.size} selected files`}
+                  data-testid="batch-unstage-btn"
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 8px' }}
+                >
+                  <ArrowLeft size={12} />
+                  <span>Unstage ({selectedStaged.size})</span>
+                </button>
+              </div>
+            )}
           </div>
           <div className="active-file-list">
             {stagedFiles.length === 0 ? (
@@ -186,22 +434,35 @@ export const ActiveChanges: React.FC = () => {
                 No staged changes
               </div>
             ) : (
-              stagedFiles.map((file) => {
+              stagedFiles.map((file, index) => {
                 const oldPath = getRenamedOldPath(file.path)
+                const isSelected = selectedStaged.has(file.path)
                 return (
                   <div
                     key={`staged-${file.path}`}
-                    className="file-item"
+                    className={`file-item ${isSelected ? 'selected' : ''}`}
                     style={{ cursor: 'pointer' }}
-                    onClick={() =>
-                      setSelectedFileForDiff({
-                        path: file.path,
-                        oldPath,
-                        status: file.index,
-                        isStaged: true
-                      })
-                    }
+                    onClick={(e) => {
+                      if (e.shiftKey || e.metaKey || e.ctrlKey) {
+                        toggleStagedFile(file.path, index, e)
+                      } else {
+                        setSelectedFileForDiff({
+                          path: file.path,
+                          oldPath,
+                          status: file.index,
+                          isStaged: true
+                        })
+                      }
+                    }}
                   >
+                    <input
+                      type="checkbox"
+                      className="file-select-checkbox"
+                      checked={isSelected}
+                      onChange={(e) => toggleStagedFile(file.path, index, e)}
+                      onClick={(e) => e.stopPropagation()}
+                      data-testid={`checkbox-staged-${file.path}`}
+                    />
                     <FileText size={14} style={{ marginRight: '8px', color: 'var(--text-secondary)', flexShrink: 0 }} />
                     <span
                       style={{
@@ -285,7 +546,7 @@ export const ActiveChanges: React.FC = () => {
       <AppDialog
         isOpen={discardTarget !== null}
         title="Discard Changes"
-        message={`Are you sure you want to discard changes in "${discardTarget?.filePath}"? This operation cannot be undone.`}
+        message={discardMessage}
         variant="warning"
         icon={<Trash2 size={16} />}
         testId="discard-changes-dialog"
@@ -295,13 +556,33 @@ export const ActiveChanges: React.FC = () => {
         ]}
         onResolve={async (val) => {
           if (val === 'discard' && discardTarget) {
-            const { filePath, isStaged } = discardTarget
+            const { filePaths, isStaged } = discardTarget
             setDiscardTarget(null)
             try {
-              const res = await window.api.git.discardChanges(activeRepo.path, filePath, isStaged)
+              const res = await window.api.git.discardChanges(activeRepo.path, filePaths, isStaged)
               if (res.success) {
+                if (isStaged) {
+                  setSelectedStaged((prev) => {
+                    const next = new Set(prev)
+                    filePaths.forEach((p) => next.delete(p))
+                    return next
+                  })
+                } else {
+                  setSelectedUnstaged((prev) => {
+                    const next = new Set(prev)
+                    filePaths.forEach((p) => next.delete(p))
+                    return next
+                  })
+                }
                 await refreshRepo(activeRepo.id)
-                addToast({ variant: 'success', title: 'Changes Discarded', message: `Discarded changes in "${filePath}"` })
+                addToast({
+                  variant: 'success',
+                  title: 'Changes Discarded',
+                  message:
+                    filePaths.length === 1
+                      ? `Discarded changes in "${filePaths[0]}"`
+                      : `Discarded changes in ${filePaths.length} files`
+                })
               } else {
                 addToast({ variant: 'error', title: 'Discard Failed', message: res.error || 'Failed to discard changes' })
               }

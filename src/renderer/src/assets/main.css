@@ -808,6 +808,70 @@ body {
   background-color: var(--hover);
 }
 
+.file-item.selected {
+  background-color: rgba(99, 102, 241, 0.15);
+  box-shadow: inset 2px 0 0 var(--accent-light);
+}
+
+.file-select-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 3px;
+  background-color: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  position: relative;
+  outline: none;
+  opacity: 0.45;
+}
+
+.file-select-checkbox:hover {
+  opacity: 0.8;
+  border-color: var(--accent-light, #818cf8);
+}
+
+.file-select-checkbox:checked {
+  opacity: 0.8;
+  background-color: var(--accent, #6366f1);
+  border-color: var(--accent, #6366f1);
+}
+
+.file-select-checkbox:checked::after {
+  content: '';
+  width: 3.5px;
+  height: 6.5px;
+  border: solid #ffffff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg) translate(-0.5px, -0.5px);
+  display: block;
+}
+
+.file-select-checkbox:indeterminate {
+  opacity: 0.85;
+  background-color: var(--accent, #6366f1);
+  border-color: var(--accent, #6366f1);
+}
+
+.file-select-checkbox:indeterminate::after {
+  content: '';
+  width: 6.5px;
+  height: 1.5px;
+  background-color: #ffffff;
+  display: block;
+}
+
+.header-checkbox {
+  margin-right: 0;
+}
+
 .file-status {
   margin-left: auto;
   font-size: 11px;

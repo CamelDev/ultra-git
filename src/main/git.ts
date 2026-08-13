@@ -825,14 +825,15 @@ export const gitService = {
     };
   },
 
-  add: async (repoPath: string, filePath: string) => {
+  add: async (repoPath: string, filePath: string | string[]) => {
     const git = getGitInstance(repoPath);
     return await git.add(filePath);
   },
 
-  reset: async (repoPath: string, filePath: string) => {
+  reset: async (repoPath: string, filePath: string | string[]) => {
     const git = getGitInstance(repoPath);
-    return await git.reset(['--', filePath]);
+    const files = Array.isArray(filePath) ? filePath : [filePath];
+    return await git.reset(['--', ...files]);
   },
 
   applyPatch: async (
@@ -872,36 +873,39 @@ export const gitService = {
     }
   },
 
-  discardChanges: async (repoPath: string, filePath: string, isStaged: boolean) => {
+  discardChanges: async (repoPath: string, filePath: string | string[], isStaged: boolean) => {
     const git = getGitInstance(repoPath);
-    
-    // Check if the file is tracked
-    let isTracked = false;
-    try {
-      await git.raw(['ls-files', '--error-unmatch', filePath]);
-      isTracked = true;
-    } catch (e) {
-      isTracked = false;
-    }
+    const files = Array.isArray(filePath) ? filePath : [filePath];
 
-    if (isTracked) {
-      if (isStaged) {
-        // Discarding staged changes reverts both staged and unstaged edits to match HEAD
-        await git.checkout(['HEAD', '--', filePath]);
+    for (const file of files) {
+      // Check if the file is tracked
+      let isTracked = false;
+      try {
+        await git.raw(['ls-files', '--error-unmatch', file]);
+        isTracked = true;
+      } catch (e) {
+        isTracked = false;
+      }
+
+      if (isTracked) {
+        if (isStaged) {
+          // Discarding staged changes reverts both staged and unstaged edits to match HEAD
+          await git.checkout(['HEAD', '--', file]);
+        } else {
+          // Discarding unstaged changes restores file from index
+          await git.checkout(['--', file]);
+        }
       } else {
-        // Discarding unstaged changes restores file from index
-        await git.checkout(['--', filePath]);
-      }
-    } else {
-      // For untracked files
-      if (isStaged) {
-        // If staged, unstage it first
-        await git.reset(['--', filePath]);
-      }
-      // Delete the file from filesystem
-      const absolutePath = resolve(repoPath, filePath);
-      if (fs.existsSync(absolutePath)) {
-        fs.rmSync(absolutePath, { recursive: true, force: true });
+        // For untracked files
+        if (isStaged) {
+          // If staged, unstage it first
+          await git.reset(['--', file]);
+        }
+        // Delete the file from filesystem
+        const absolutePath = resolve(repoPath, file);
+        if (fs.existsSync(absolutePath)) {
+          fs.rmSync(absolutePath, { recursive: true, force: true });
+        }
       }
     }
   },
