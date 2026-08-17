@@ -15,7 +15,8 @@ import {
   Layers,
   AlertTriangle,
   Loader2,
-  Search
+  Search,
+  Eye
 } from 'lucide-react'
 import {
   buildHunksFromDiffItems,
@@ -25,6 +26,7 @@ import {
 } from '../../utils/patchBuilder'
 import { useRepoStore } from '../../store/useRepoStore'
 import { useToaster } from '../toaster/ToasterContext'
+import { MarkdownDiffView } from './MarkdownDiffView'
 
 export interface DiffFileItem {
   path: string
@@ -49,6 +51,7 @@ interface DiffModalProps {
   stashMessage?: string | null
   files?: DiffFileItem[]
   initialFileIndex?: number
+  initialViewMode?: 'chunks' | 'full' | 'preview'
 }
 
 interface DiffItem {
@@ -468,13 +471,16 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   stashIndex = null,
   stashMessage = null,
   files,
-  initialFileIndex
+  initialFileIndex,
+  initialViewMode
 }) => {
   const { getActiveRepo, refreshRepo } = useRepoStore()
   const { addToast } = useToaster()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [diffItems, setDiffItems] = useState<DiffItem[]>([])
+  const [rawBefore, setRawBefore] = useState<string>('')
+  const [rawAfter, setRawAfter] = useState<string>('')
   const [isBinary, setIsBinary] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
 
@@ -482,7 +488,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const [currentFileIndex, setCurrentFileIndex] = useState<number>(initialFileIndex || 0)
 
   // Chunk navigation, view mode, and line selection state
-  const [viewMode, setViewMode] = useState<'chunks' | 'full'>('chunks')
+  const [viewMode, setViewMode] = useState<'chunks' | 'full' | 'preview'>(initialViewMode || 'chunks')
   const [activeChunkIndex, setActiveChunkIndex] = useState(0)
   const [selectedLineIndices, setSelectedLineIndices] = useState<Set<number>>(new Set())
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
@@ -547,6 +553,19 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     : files && files.length > 0
     ? Math.max(0, Math.min(currentFileIndex, files.length - 1))
     : 0
+
+  // Check if current file is Markdown
+  const isMarkdown = useMemo(() => {
+    if (!currentFilePath || currentFilePath === 'No file selected') return false
+    return /\.(md|markdown|mdown|mkdn|mdx)$/i.test(currentFilePath)
+  }, [currentFilePath])
+
+  // Reset viewMode from preview if active file is not a markdown file
+  useEffect(() => {
+    if (viewMode === 'preview' && !isMarkdown) {
+      setViewMode('chunks')
+    }
+  }, [isMarkdown, viewMode])
 
   // File navigation handlers
   const handlePrevFile = useCallback(() => {
@@ -797,9 +816,15 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           if (res.data.isBinary) {
             setIsBinary(true)
             setDiffItems([])
+            setRawBefore('')
+            setRawAfter('')
           } else {
             setIsBinary(false)
-            const computed = computeDiff(res.data.before, res.data.after)
+            const beforeStr = res.data.before || ''
+            const afterStr = res.data.after || ''
+            setRawBefore(beforeStr)
+            setRawAfter(afterStr)
+            const computed = computeDiff(beforeStr, afterStr)
             setDiffItems(computed)
           }
         } else {
@@ -1401,102 +1426,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                 </div>
               )}
 
-              {/* Chunk Navigation Buttons */}
-              {hunks.length > 0 && (
-                <div className="diff-chunk-nav" data-testid="chunk-nav">
-                  <button
-                    className="diff-chunk-btn"
-                    onClick={handlePrevChunk}
-                    disabled={activeChunkIndex === 0}
-                    data-tooltip="Previous Chunk (W or Alt+Up)"
-                    data-testid="prev-chunk-btn"
-                  >
-                    <ChevronUp size={14} />
-                  </button>
-                  <span className="diff-chunk-counter" data-testid="chunk-counter">
-                    Chunk {activeChunkIndex + 1} of {hunks.length}
-                  </span>
-                  <button
-                    className="diff-chunk-btn"
-                    onClick={handleNextChunk}
-                    disabled={activeChunkIndex >= hunks.length - 1}
-                    data-tooltip="Next Chunk (S or Alt+Down)"
-                    data-testid="next-chunk-btn"
-                  >
-                    <ChevronDown size={14} />
-                  </button>
-                </div>
-              )}
-
-              {/* Entire File Stage / Unstage Button */}
-              {isActiveChange && !isStash && (
-                !currentIsStaged ? (
-                  <button
-                    className="diff-file-action-btn stage-file-btn"
-                    onClick={handleStageEntireFile}
-                    disabled={actionLoading}
-                    data-tooltip="Stage this entire file"
-                    data-testid="stage-file-modal-btn"
-                  >
-                    <Plus size={13} />
-                    <span>Stage File</span>
-                  </button>
-                ) : (
-                  <button
-                    className="diff-file-action-btn unstage-file-btn"
-                    onClick={handleUnstageEntireFile}
-                    disabled={actionLoading}
-                    data-tooltip="Unstage this entire file"
-                    data-testid="unstage-file-modal-btn"
-                  >
-                    <Minus size={13} />
-                    <span>Unstage File</span>
-                  </button>
-                )
-              )}
-
-              {/* Search Toggle Button */}
-              {renderRows.length > 0 && !loading && !error && !isBinary && (
-                <button
-                  className={`diff-search-toggle-btn${searchOpen ? ' active' : ''}`}
-                  onClick={() => {
-                    setSearchOpen((prev) => {
-                      const next = !prev
-                      if (next) {
-                        setTimeout(() => {
-                          searchInputRef.current?.focus()
-                          searchInputRef.current?.select()
-                        }, 50)
-                      }
-                      return next
-                    })
-                  }}
-                  data-tooltip="Search Text (Cmd+F / Ctrl+F)"
-                  data-testid="toggle-search-btn"
-                >
-                  <Search size={13} />
-                  <span>Search</span>
-                </button>
-              )}
-
-              <button
-                className="diff-copy-btn"
-                data-testid="copy-left-btn"
-                onClick={handleCopyLeft}
-                data-tooltip="Copy Old (Left) File Content"
-              >
-                {copiedSide === 'left' ? <Check size={14} style={{ color: '#34d399' }} /> : <Copy size={14} />}
-                <span>{copiedSide === 'left' ? 'Copied Old!' : 'Copy Old'}</span>
-              </button>
-              <button
-                className="diff-copy-btn"
-                data-testid="copy-right-btn"
-                onClick={handleCopyRight}
-                data-tooltip="Copy New (Right) File Content"
-              >
-                {copiedSide === 'right' ? <Check size={14} style={{ color: '#34d399' }} /> : <Copy size={14} />}
-                <span>{copiedSide === 'right' ? 'Copied New!' : 'Copy New'}</span>
-              </button>
+              {/* Modal Close Button */}
               <button className="diff-modal-close" onClick={onClose} data-tooltip="Close modal (Escape)">
                 <X size={18} />
               </button>
@@ -1580,11 +1510,132 @@ export const DiffModal: React.FC<DiffModalProps> = ({
             </div>
           )}
 
-          {/* Bottom Row: File Icon + File Path */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '2px' }}>
-            <FileText size={16} style={{ color: 'var(--accent-light)', flexShrink: 0 }} />
-            <div style={{ fontWeight: 600, fontSize: '14px', wordBreak: 'break-all', fontFamily: 'JetBrains Mono, monospace' }}>
-              {currentFilePath}
+          {/* Bottom Row: Preview Button + File Icon + File Path on Left, Action Controls on Right */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', paddingTop: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+              {/* Dedicated Green Preview Button for Markdown files */}
+              {isMarkdown && (
+                <button
+                  className={`diff-dedicated-preview-btn ${viewMode === 'preview' ? 'active' : ''}`}
+                  onClick={() => setViewMode((prev) => (prev === 'preview' ? 'chunks' : 'preview'))}
+                  data-tooltip={viewMode === 'preview' ? 'Return to code diff' : 'Show rendered Markdown preview'}
+                  data-testid="toggle-preview-btn"
+                >
+                  <Eye size={13} />
+                  <span>Preview</span>
+                </button>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                <FileText size={16} style={{ color: 'var(--accent-light)', flexShrink: 0 }} />
+                <div style={{ fontWeight: 600, fontSize: '14px', wordBreak: 'break-all', fontFamily: 'JetBrains Mono, monospace' }}>
+                  {currentFilePath}
+                </div>
+              </div>
+            </div>
+
+            {/* Controls Toolbar: [ Chunk 1 of 3 ] [ Stage File ] [ Search ] [ Copy Old ] [ Copy New ] */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              {/* Chunk Navigation Buttons */}
+              {viewMode !== 'preview' && hunks.length > 0 && (
+                <div className="diff-chunk-nav" data-testid="chunk-nav">
+                  <button
+                    className="diff-chunk-btn"
+                    onClick={handlePrevChunk}
+                    disabled={activeChunkIndex === 0}
+                    data-tooltip="Previous Chunk (W or Alt+Up)"
+                    data-testid="prev-chunk-btn"
+                  >
+                    <ChevronUp size={14} />
+                  </button>
+                  <span className="diff-chunk-counter" data-testid="chunk-counter">
+                    Chunk {activeChunkIndex + 1} of {hunks.length}
+                  </span>
+                  <button
+                    className="diff-chunk-btn"
+                    onClick={handleNextChunk}
+                    disabled={activeChunkIndex >= hunks.length - 1}
+                    data-tooltip="Next Chunk (S or Alt+Down)"
+                    data-testid="next-chunk-btn"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+              )}
+
+              {/* Entire File Stage / Unstage Button */}
+              {isActiveChange && !isStash && (
+                !currentIsStaged ? (
+                  <button
+                    className="diff-file-action-btn stage-file-btn"
+                    onClick={handleStageEntireFile}
+                    disabled={actionLoading}
+                    data-tooltip="Stage this entire file"
+                    data-testid="stage-file-modal-btn"
+                  >
+                    <Plus size={13} />
+                    <span>Stage File</span>
+                  </button>
+                ) : (
+                  <button
+                    className="diff-file-action-btn unstage-file-btn"
+                    onClick={handleUnstageEntireFile}
+                    disabled={actionLoading}
+                    data-tooltip="Unstage this entire file"
+                    data-testid="unstage-file-modal-btn"
+                  >
+                    <Minus size={13} />
+                    <span>Unstage File</span>
+                  </button>
+                )
+              )}
+
+              {/* Search Toggle Button */}
+              {viewMode !== 'preview' && renderRows.length > 0 && !loading && !error && !isBinary && (
+                <button
+                  className={`diff-search-toggle-btn${searchOpen ? ' active' : ''}`}
+                  onClick={() => {
+                    setSearchOpen((prev) => {
+                      const next = !prev
+                      if (next) {
+                        setTimeout(() => {
+                          searchInputRef.current?.focus()
+                          searchInputRef.current?.select()
+                        }, 50)
+                      }
+                      return next
+                    })
+                  }}
+                  data-tooltip="Search Text (Cmd+F / Ctrl+F)"
+                  data-testid="toggle-search-btn"
+                >
+                  <Search size={13} />
+                  <span>Search</span>
+                </button>
+              )}
+
+              {/* Copy Old & Copy New Buttons */}
+              {viewMode !== 'preview' && (
+                <>
+                  <button
+                    className="diff-copy-btn"
+                    data-testid="copy-left-btn"
+                    onClick={handleCopyLeft}
+                    data-tooltip="Copy Old (Left) File Content"
+                  >
+                    {copiedSide === 'left' ? <Check size={14} style={{ color: '#34d399' }} /> : <Copy size={14} />}
+                    <span>{copiedSide === 'left' ? 'Copied Old!' : 'Copy Old'}</span>
+                  </button>
+                  <button
+                    className="diff-copy-btn"
+                    data-testid="copy-right-btn"
+                    onClick={handleCopyRight}
+                    data-tooltip="Copy New (Right) File Content"
+                  >
+                    {copiedSide === 'right' ? <Check size={14} style={{ color: '#34d399' }} /> : <Copy size={14} />}
+                    <span>{copiedSide === 'right' ? 'Copied New!' : 'Copy New'}</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1659,9 +1710,12 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
           <div
             ref={bodyRef}
-            className="diff-modal-scroll"
+            className={`diff-modal-scroll ${viewMode === 'preview' ? 'preview-mode' : ''}`}
             onCopy={handleCopy}
-            style={{ display: isStash && !selectedStashFile ? 'none' : 'block' }}
+            style={{
+              display: isStash && !selectedStashFile ? 'none' : 'flex',
+              flexDirection: 'column'
+            }}
           >
             {loading && (
               <div
@@ -1692,7 +1746,16 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               </div>
             )}
 
-            {!loading && !error && !isBinary && (
+            {!loading && !error && !isBinary && viewMode === 'preview' && (
+              <MarkdownDiffView
+                beforeContent={rawBefore}
+                afterContent={rawAfter}
+                filePath={currentFilePath}
+                status={currentStatus}
+              />
+            )}
+
+            {!loading && !error && !isBinary && viewMode !== 'preview' && (
               <div className="diff-table">
                 {renderRows.length === 0 ? (
                   <div
@@ -1999,7 +2062,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
             </div>
           )}
 
-          {!loading && !error && !isBinary && renderRows.length > 0 && (
+          {!loading && !error && !isBinary && viewMode !== 'preview' && renderRows.length > 0 && (
             <div className="diff-overview-ruler" onClick={handleRulerClick}>
               {changeIndexes.map((change) => {
                 const topPct = (change.idx / renderRows.length) * 100
