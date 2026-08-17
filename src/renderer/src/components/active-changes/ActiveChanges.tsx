@@ -329,8 +329,11 @@ export const ActiveChanges: React.FC = () => {
                       type="checkbox"
                       className="file-select-checkbox"
                       checked={isSelected}
-                      onChange={(e) => toggleUnstagedFile(file.path, index, e)}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleUnstagedFile(file.path, index, e)
+                      }}
+                      onChange={() => {}}
                       data-testid={`checkbox-unstaged-${file.path}`}
                     />
                     <FileText size={14} style={{ marginRight: '8px', color: 'var(--text-secondary)', flexShrink: 0 }} />
@@ -353,9 +356,17 @@ export const ActiveChanges: React.FC = () => {
                       className="action-btn reset-btn"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleDiscardChanges(file.path, false)
+                        if (isSelected && selectedUnstaged.size > 1) {
+                          handleDiscardChanges(Array.from(selectedUnstaged), false)
+                        } else {
+                          handleDiscardChanges(file.path, false)
+                        }
                       }}
-                      data-tooltip="Discard changes"
+                      data-tooltip={
+                        isSelected && selectedUnstaged.size > 1
+                          ? `Discard ${selectedUnstaged.size} selected changes`
+                          : "Discard changes"
+                      }
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
                       <RotateCcw size={12} />
@@ -364,9 +375,17 @@ export const ActiveChanges: React.FC = () => {
                       className="action-btn stage-btn"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleStageFile(file.path)
+                        if (isSelected && selectedUnstaged.size > 1) {
+                          handleBatchStage()
+                        } else {
+                          handleStageFile(file.path)
+                        }
                       }}
-                      data-tooltip="Stage changes"
+                      data-tooltip={
+                        isSelected && selectedUnstaged.size > 1
+                          ? `Stage ${selectedUnstaged.size} selected files`
+                          : "Stage changes"
+                      }
                       style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
                       <span>Stage</span>
@@ -459,8 +478,11 @@ export const ActiveChanges: React.FC = () => {
                       type="checkbox"
                       className="file-select-checkbox"
                       checked={isSelected}
-                      onChange={(e) => toggleStagedFile(file.path, index, e)}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleStagedFile(file.path, index, e)
+                      }}
+                      onChange={() => {}}
                       data-testid={`checkbox-staged-${file.path}`}
                     />
                     <FileText size={14} style={{ marginRight: '8px', color: 'var(--text-secondary)', flexShrink: 0 }} />
@@ -483,9 +505,17 @@ export const ActiveChanges: React.FC = () => {
                       className="action-btn reset-btn"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleDiscardChanges(file.path, true)
+                        if (isSelected && selectedStaged.size > 1) {
+                          handleDiscardChanges(Array.from(selectedStaged), true)
+                        } else {
+                          handleDiscardChanges(file.path, true)
+                        }
                       }}
-                      data-tooltip="Discard changes"
+                      data-tooltip={
+                        isSelected && selectedStaged.size > 1
+                          ? `Discard ${selectedStaged.size} selected staged changes`
+                          : "Discard changes"
+                      }
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
                       <RotateCcw size={12} />
@@ -494,9 +524,17 @@ export const ActiveChanges: React.FC = () => {
                       className="action-btn unstage-btn"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleUnstageFile(file.path)
+                        if (isSelected && selectedStaged.size > 1) {
+                          handleBatchUnstage()
+                        } else {
+                          handleUnstageFile(file.path)
+                        }
                       }}
-                      data-tooltip="Unstage changes"
+                      data-tooltip={
+                        isSelected && selectedStaged.size > 1
+                          ? `Unstage ${selectedStaged.size} selected files`
+                          : "Unstage changes"
+                      }
                       style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
                       <ArrowLeft size={12} />

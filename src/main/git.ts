@@ -945,16 +945,16 @@ export const gitService = {
     const files = Array.isArray(filePath) ? filePath : [filePath];
 
     for (const file of files) {
-      // Check if the file is tracked
-      let isTracked = false;
+      // Check if the file exists in HEAD
+      let existsInHead = false;
       try {
-        await git.raw(['ls-files', '--error-unmatch', file]);
-        isTracked = true;
+        await git.raw(['cat-file', '-e', `HEAD:${file}`]);
+        existsInHead = true;
       } catch (e) {
-        isTracked = false;
+        existsInHead = false;
       }
 
-      if (isTracked) {
+      if (existsInHead) {
         if (isStaged) {
           // Discarding staged changes reverts both staged and unstaged edits to match HEAD
           await git.checkout(['HEAD', '--', file]);
@@ -963,10 +963,14 @@ export const gitService = {
           await git.checkout(['--', file]);
         }
       } else {
-        // For untracked files
+        // Not in HEAD (either untracked, or newly added/staged file)
         if (isStaged) {
-          // If staged, unstage it first
-          await git.reset(['--', file]);
+          // If staged, unstage it first from index
+          try {
+            await git.reset(['HEAD', '--', file]);
+          } catch (e) {
+            await git.reset(['--', file]);
+          }
         }
         // Delete the file from filesystem
         const absolutePath = resolve(repoPath, file);

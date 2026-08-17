@@ -650,6 +650,44 @@ test.describe('Active Changes Panel', () => {
       await expect(unstagedItems).toHaveCount(0)
       await expect(stagedItems).toHaveCount(1)
 
+      // 4. Batch discard staged files
+      const stagedCheckbox = stagedColumn.locator('[data-testid="checkbox-staged-file3.txt"]')
+      await stagedCheckbox.click()
+      await page.waitForTimeout(300)
+
+      // Create another staged file to test multi-selection discard in staged
+      fs.writeFileSync(path.join(sandbox.dir, 'file4.txt'), 'File 4 content\n')
+      await tabs.first().click()
+      await page.waitForTimeout(300)
+      await tabs.last().click()
+      await page.waitForTimeout(300)
+
+      // Stage file4.txt
+      const stageFile4Btn = unstagedColumn.locator('.file-item', { hasText: 'file4.txt' }).locator('.stage-btn')
+      await stageFile4Btn.click()
+      await page.waitForTimeout(500)
+
+      await expect(stagedItems).toHaveCount(2)
+
+      // Select both staged files
+      const selectAllStagedCheckbox = stagedColumn.locator('[data-testid="select-all-staged-checkbox"]')
+      await selectAllStagedCheckbox.click()
+      await page.waitForTimeout(300)
+
+      // Click row discard button on one of the selected files
+      const rowResetBtn = stagedColumn.locator('.file-item').first().locator('.reset-btn')
+      await rowResetBtn.click()
+      await page.waitForTimeout(500)
+
+      // Should prompt for both staged files
+      await expect(dialog).toBeVisible()
+      await expect(dialog).toContainText('2 selected files')
+
+      await confirmDiscardBtn.click()
+      await page.waitForTimeout(500)
+
+      // Staged list should now be empty
+      await expect(stagedItems).toHaveCount(0)
     } finally {
       await app.close()
     }
