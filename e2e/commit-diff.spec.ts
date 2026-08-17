@@ -331,9 +331,9 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
   test('should support binary file detection in diff modal', async () => {
     // 1. Commit a mock binary file containing null bytes to the sandbox
     console.log('[Binary File Diff Test] 1. Creating and committing a binary file...');
-    fs.writeFileSync(path.join(sandbox.dir, 'mock-image.png'), 'PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89')
-    await sandbox.git.add('mock-image.png')
-    await sandbox.git.commit('Add binary mock-image.png')
+    fs.writeFileSync(path.join(sandbox.dir, 'data.bin'), 'BIN\r\n\x1a\n\x00\x00\x00\r\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89')
+    await sandbox.git.add('data.bin')
+    await sandbox.git.commit('Add binary data.bin')
 
     console.log('[Binary File Diff Test] 2. Launching Electron App...');
     const { app, page } = await launchElectronApp()
@@ -365,7 +365,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       console.log('[Binary File Diff Test] 7. Finding top commit adding binary file...');
       const commitItems = page.locator('.commit-item')
       const topCommit = commitItems.first()
-      await expect(topCommit).toContainText('Add binary mock-image.png')
+      await expect(topCommit).toContainText('Add binary data.bin')
 
       console.log('[Binary File Diff Test] 8. Selecting commit...');
       await topCommit.click()
@@ -373,7 +373,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
 
       console.log('[Binary File Diff Test] 9. Clicking file item to open diff...');
       const fileItem = page.locator('.details-panel .file-item').first()
-      await expect(fileItem).toContainText('mock-image.png')
+      await expect(fileItem).toContainText('data.bin')
       await fileItem.click()
       await page.waitForTimeout(500)
 

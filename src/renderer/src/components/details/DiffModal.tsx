@@ -27,6 +27,7 @@ import {
 import { useRepoStore } from '../../store/useRepoStore'
 import { useToaster } from '../toaster/ToasterContext'
 import { MarkdownDiffView } from './MarkdownDiffView'
+import { ImageDiffView } from './ImageDiffView'
 
 export interface DiffFileItem {
   path: string
@@ -488,7 +489,14 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const [currentFileIndex, setCurrentFileIndex] = useState<number>(initialFileIndex || 0)
 
   // Chunk navigation, view mode, and line selection state
-  const [viewMode, setViewMode] = useState<'chunks' | 'full' | 'preview'>(initialViewMode || 'chunks')
+  const [viewMode, setViewMode] = useState<'chunks' | 'full' | 'preview'>(() => {
+    if (initialViewMode) return initialViewMode
+    const p = (files && files.length > 0 && initialFileIndex !== undefined && files[initialFileIndex]?.path) || filePath
+    if (p && /\.(png|jpg|jpeg|bmp|svg|gif|webp|ico|avif)$/i.test(p)) {
+      return 'preview'
+    }
+    return 'chunks'
+  })
   const [activeChunkIndex, setActiveChunkIndex] = useState(0)
   const [selectedLineIndices, setSelectedLineIndices] = useState<Set<number>>(new Set())
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
@@ -554,18 +562,27 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     ? Math.max(0, Math.min(currentFileIndex, files.length - 1))
     : 0
 
-  // Check if current file is Markdown
+  // Check if current file is Markdown or Image
   const isMarkdown = useMemo(() => {
     if (!currentFilePath || currentFilePath === 'No file selected') return false
     return /\.(md|markdown|mdown|mkdn|mdx)$/i.test(currentFilePath)
   }, [currentFilePath])
 
-  // Reset viewMode from preview if active file is not a markdown file
+  const isImage = useMemo(() => {
+    if (!currentFilePath || currentFilePath === 'No file selected') return false
+    return /\.(png|jpg|jpeg|bmp|svg|gif|webp|ico|avif)$/i.test(currentFilePath)
+  }, [currentFilePath])
+
+  const isPreviewable = isMarkdown || isImage
+
+  // Automatically switch to 'preview' for known images, or reset from preview if active file is not previewable
   useEffect(() => {
-    if (viewMode === 'preview' && !isMarkdown) {
+    if (isImage) {
+      setViewMode('preview')
+    } else if (viewMode === 'preview' && !isMarkdown) {
       setViewMode('chunks')
     }
-  }, [isMarkdown, viewMode])
+  }, [currentFilePath, isImage, isMarkdown])
 
   // File navigation handlers
   const handlePrevFile = useCallback(() => {
@@ -816,8 +833,8 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           if (res.data.isBinary) {
             setIsBinary(true)
             setDiffItems([])
-            setRawBefore('')
-            setRawAfter('')
+            setRawBefore(res.data.before || '')
+            setRawAfter(res.data.after || '')
           } else {
             setIsBinary(false)
             const beforeStr = res.data.before || ''
@@ -1513,12 +1530,18 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           {/* Bottom Row: Preview Button + File Icon + File Path on Left, Action Controls on Right */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', paddingTop: '4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-              {/* Dedicated Green Preview Button for Markdown files */}
-              {isMarkdown && (
+              {/* Dedicated Green Preview Button for Markdown & Image files */}
+              {(isMarkdown || isImage) && (
                 <button
                   className={`diff-dedicated-preview-btn ${viewMode === 'preview' ? 'active' : ''}`}
                   onClick={() => setViewMode((prev) => (prev === 'preview' ? 'chunks' : 'preview'))}
-                  data-tooltip={viewMode === 'preview' ? 'Return to code diff' : 'Show rendered Markdown preview'}
+                  data-tooltip={
+                    viewMode === 'preview'
+                      ? 'Return to code / raw diff'
+                      : isMarkdown
+                      ? 'Show rendered Markdown preview'
+                      : 'Show visual image preview & comparison'
+                  }
                   data-testid="toggle-preview-btn"
                 >
                   <Eye size={13} />
@@ -1733,7 +1756,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                 Error: {error}
               </div>
             )}
-            {!loading && !error && isBinary && (
+            {!loading && !error && isBinary && !isImage && viewMode !== 'preview' && (
               <div
                 data-testid="binary-file-placeholder"
                 style={{
@@ -1746,7 +1769,16 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               </div>
             )}
 
-            {!loading && !error && !isBinary && viewMode === 'preview' && (
+            {!loading && !error && isImage && (viewMode === 'preview' || isBinary) && (
+              <ImageDiffView
+                beforeContent={rawBefore}
+                afterContent={rawAfter}
+                filePath={currentFilePath}
+                status={currentStatus}
+              />
+            )}
+
+            {!loading && !error && viewMode === 'preview' && isMarkdown && (
               <MarkdownDiffView
                 beforeContent={rawBefore}
                 afterContent={rawAfter}

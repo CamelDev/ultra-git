@@ -148,6 +148,36 @@ export async function withGitLockRetry<T>(
   }
 }
 
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'bmp', 'svg', 'gif', 'webp', 'ico', 'avif']);
+
+const getImageMimeType = (filePath: string): string | null => {
+  const ext = filePath.toLowerCase().split('.').pop();
+  switch (ext) {
+    case 'png': return 'image/png';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'gif': return 'image/gif';
+    case 'webp': return 'image/webp';
+    case 'svg': return 'image/svg+xml';
+    case 'bmp': return 'image/bmp';
+    case 'ico': return 'image/x-icon';
+    case 'avif': return 'image/avif';
+    default: return null;
+  }
+};
+
+const getGitBuffer = (repoPath: string, args: string[]): Promise<Buffer | null> => {
+  return new Promise((resolve) => {
+    execFile('git', args, { cwd: repoPath, encoding: 'buffer', maxBuffer: 50 * 1024 * 1024 }, (err, stdout) => {
+      if (err) {
+        resolve(null);
+      } else {
+        resolve(stdout);
+      }
+    });
+  });
+};
+
 export const gitService = {
   status: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
@@ -784,6 +814,43 @@ export const gitService = {
     status?: string
   ) => {
     const git = getGitInstance(repoPath);
+    const mime = getImageMimeType(filePath);
+
+    if (mime) {
+      let before = '';
+      let after = '';
+
+      if (status !== 'D') {
+        const buf = await getGitBuffer(repoPath, ['show', `${commitHash}:${filePath}`]);
+        if (buf) {
+          after = mime === 'image/svg+xml' ? buf.toString('utf8') : `data:${mime};base64,${buf.toString('base64')}`;
+        }
+      }
+
+      if (status !== 'A') {
+        try {
+          const parentResult = await git.raw(['rev-list', '--parents', '-n', '1', commitHash]);
+          const parents = parentResult.trim().split(/\s+/).slice(1);
+          if (parents.length > 0) {
+            const parentHash = parents[0];
+            const pathBefore = oldPath || filePath;
+            const buf = await getGitBuffer(repoPath, ['show', `${parentHash}:${pathBefore}`]);
+            if (buf) {
+              before = mime === 'image/svg+xml' ? buf.toString('utf8') : `data:${mime};base64,${buf.toString('base64')}`;
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not get parent image content for ${filePath} at ${commitHash}`, e);
+        }
+      }
+
+      return {
+        before,
+        after,
+        isBinary: mime !== 'image/svg+xml'
+      };
+    }
+
     let before = '';
     let after = '';
 
@@ -1170,6 +1237,40 @@ export const gitService = {
   ) => {
     const git = getGitInstance(repoPath);
     const stashRef = `stash@{${index}}`;
+    const mime = getImageMimeType(filePath);
+
+    if (mime) {
+      let before = '';
+      let after = '';
+
+      if (isUntracked) {
+        const buf = await getGitBuffer(repoPath, ['show', `${stashRef}^3:${filePath}`]);
+        if (buf) {
+          after = mime === 'image/svg+xml' ? buf.toString('utf8') : `data:${mime};base64,${buf.toString('base64')}`;
+        }
+      } else {
+        if (status !== 'D') {
+          const buf = await getGitBuffer(repoPath, ['show', `${stashRef}:${filePath}`]);
+          if (buf) {
+            after = mime === 'image/svg+xml' ? buf.toString('utf8') : `data:${mime};base64,${buf.toString('base64')}`;
+          }
+        }
+        if (status !== 'A') {
+          const pathBefore = oldPath || filePath;
+          const buf = await getGitBuffer(repoPath, ['show', `${stashRef}^1:${pathBefore}`]);
+          if (buf) {
+            before = mime === 'image/svg+xml' ? buf.toString('utf8') : `data:${mime};base64,${buf.toString('base64')}`;
+          }
+        }
+      }
+
+      return {
+        before,
+        after,
+        isBinary: mime !== 'image/svg+xml'
+      };
+    }
+
     let before = '';
     let after = '';
 
@@ -1220,6 +1321,51 @@ export const gitService = {
     oldPath?: string
   ) => {
     const git = getGitInstance(repoPath);
+    const mime = getImageMimeType(filePath);
+
+    if (mime) {
+      let before = '';
+      let after = '';
+
+      if (isStaged) {
+        const bufBefore = await getGitBuffer(repoPath, ['show', `HEAD:${oldPath || filePath}`]);
+        if (bufBefore) {
+          before = mime === 'image/svg+xml' ? bufBefore.toString('utf8') : `data:${mime};base64,${bufBefore.toString('base64')}`;
+        }
+        const bufAfter = await getGitBuffer(repoPath, ['show', `:${filePath}`]);
+        if (bufAfter) {
+          after = mime === 'image/svg+xml' ? bufAfter.toString('utf8') : `data:${mime};base64,${bufAfter.toString('base64')}`;
+        } else {
+          try {
+            const fileBuf = await fs.promises.readFile(join(repoPath, filePath));
+            after = mime === 'image/svg+xml' ? fileBuf.toString('utf8') : `data:${mime};base64,${fileBuf.toString('base64')}`;
+          } catch {
+            after = '';
+          }
+        }
+      } else {
+        let bufBefore = await getGitBuffer(repoPath, ['show', `:${filePath}`]);
+        if (!bufBefore) {
+          bufBefore = await getGitBuffer(repoPath, ['show', `HEAD:${filePath}`]);
+        }
+        if (bufBefore) {
+          before = mime === 'image/svg+xml' ? bufBefore.toString('utf8') : `data:${mime};base64,${bufBefore.toString('base64')}`;
+        }
+        try {
+          const fileBuf = await fs.promises.readFile(join(repoPath, filePath));
+          after = mime === 'image/svg+xml' ? fileBuf.toString('utf8') : `data:${mime};base64,${fileBuf.toString('base64')}`;
+        } catch {
+          after = '';
+        }
+      }
+
+      return {
+        before,
+        after,
+        isBinary: mime !== 'image/svg+xml'
+      };
+    }
+
     let before = '';
     let after = '';
 
