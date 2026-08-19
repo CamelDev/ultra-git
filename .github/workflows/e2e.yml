@@ -10,36 +10,47 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      PLAYWRIGHT_BROWSERS_PATH: '0'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock', '**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Cache Electron binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/electron
+          key: ${{ runner.os }}-electron-${{ hashFiles('**/bun.lock', '**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+
       - name: Install Dependencies
         run: bun install
 
-      - name: Check for Lockfile
-        run: ls -la bun.lock || echo "No bun.lock found"
-
-      - name: Install Playwright OS Dependencies and Browsers
-        run: |
-          bunx playwright install --with-deps
-          bunx playwright install chromium
+      - name: Install Playwright OS Dependencies
+        run: bunx playwright install-deps chromium
 
       - name: Build Application
         run: bun run build
 
       - name: Run E2E Tests
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" bun run test:e2e
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" bunx playwright test
 
       - name: Upload E2E Test Report on Failure
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: playwright-report/
