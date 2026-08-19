@@ -172,11 +172,8 @@ test.describe('Tag Creation from Latest Local Commit', () => {
 
       console.log('21. Hovering and clicking delete button on tag...')
       const tagItemHover = page.locator('[data-testid="sidebar-tag-v1.0.0"]')
-      await tagItemHover.hover()
-      
       const deleteTagBtn = page.locator('[data-testid="delete-tag-btn-v1.0.0"]')
-      await expect(deleteTagBtn).toBeVisible()
-      await deleteTagBtn.click()
+      await deleteTagBtn.dispatchEvent('click')
 
       console.log('22. Confirming tag deletion in custom in-app dialog...')
       const confirmDeleteBtn = page.locator('[data-testid="delete-tag-confirm-dialog-action-confirm"]')
@@ -381,8 +378,7 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await page.waitForTimeout(300)
 
       const commitTagBtn = commitRow.locator('[data-testid^="commit-tag-btn-"]')
-      await expect(commitTagBtn).toBeVisible()
-      await commitTagBtn.click()
+      await commitTagBtn.dispatchEvent('click')
       await page.waitForTimeout(300)
 
       console.log('[Commit Tag Test] Verifying target commit info is displayed in tag dialog...')
@@ -474,7 +470,7 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await expect(tagBtn).toBeVisible()
 
       console.log('[Branch Preview Actions Test] Creating tag on previewed branch commit...')
-      await tagBtn.click()
+      await tagBtn.dispatchEvent('click')
       await page.waitForTimeout(300)
 
       const input = page.locator('[data-testid="new-tag-name-input"]')

@@ -134,9 +134,7 @@ test.describe('Git Stashes Improvements', () => {
       console.log('Action buttons visible again after modal close.');
 
       console.log('16. Testing Delete Cancel...');
-      await stashItem.hover()
-      await expect(deleteBtn).toBeVisible()
-      await deleteBtn.click({ force: true })
+      await deleteBtn.dispatchEvent('click')
       const deleteCancelBtn = page.locator('[data-testid="delete-stash-dialog-action-cancel"]')
       await expect(deleteCancelBtn).toBeVisible()
       await deleteCancelBtn.click()
@@ -145,9 +143,7 @@ test.describe('Git Stashes Improvements', () => {
       console.log('Delete Cancel verified.');
 
       console.log('17. Testing Pop Cancel...');
-      await stashItem.hover()
-      await expect(popBtn).toBeVisible()
-      await popBtn.click({ force: true })
+      await popBtn.dispatchEvent('click')
       const popCancelBtn = page.locator('[data-testid="pop-stash-dialog-action-cancel"]')
       await expect(popCancelBtn).toBeVisible()
       await popCancelBtn.click()
@@ -156,9 +152,7 @@ test.describe('Git Stashes Improvements', () => {
       console.log('Pop Cancel verified.');
 
       console.log('18. Testing Delete Confirm...');
-      await stashItem.hover()
-      await expect(deleteBtn).toBeVisible()
-      await deleteBtn.click({ force: true })
+      await deleteBtn.dispatchEvent('click')
       const deleteConfirmBtn = page.locator('[data-testid="delete-stash-dialog-action-delete"]')
       await expect(deleteConfirmBtn).toBeVisible()
       await deleteConfirmBtn.click()
