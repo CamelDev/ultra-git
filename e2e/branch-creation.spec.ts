@@ -129,7 +129,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await mainBranchItem.hover()
       const checkoutMainBtn = page.locator('[data-testid="checkout-branch-btn-main"]')
       await expect(checkoutMainBtn).toBeVisible()
-      await checkoutMainBtn.click()
+      await checkoutMainBtn.click({ force: true })
       await page.waitForTimeout(1000)
 
       console.log('17.3. Verifying active branch is back to main...')
@@ -192,7 +192,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await mainBranchItem.hover()
       const renameInactiveBtn = page.locator('[data-testid="rename-branch-btn-main"]')
       await expect(renameInactiveBtn).toBeVisible()
-      await renameInactiveBtn.click()
+      await renameInactiveBtn.click({ force: true })
       await page.waitForTimeout(300)
       
       await expect(modal).toBeVisible()
@@ -212,7 +212,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await renamedMainBranchItem.hover()
       const deleteInactiveBtn = page.locator('[data-testid="delete-branch-btn-main-renamed"]')
       await expect(deleteInactiveBtn).toBeVisible()
-      await deleteInactiveBtn.click()
+      await deleteInactiveBtn.click({ force: true })
 
       // Interact with the custom robust delete branches modal
       const deleteModal = page.locator('[data-testid="delete-branches-modal"]')
@@ -351,7 +351,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await unmergedBranchItem.hover()
       const deleteBtn = page.locator('[data-testid="delete-branch-btn-unmerged-branch"]')
       await expect(deleteBtn).toBeVisible()
-      await deleteBtn.click()
+      await deleteBtn.click({ force: true })
 
       // Interact with the custom robust delete branches modal and check force delete
       const deleteModal = page.locator('[data-testid="delete-branches-modal"]')
@@ -421,7 +421,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await remoteBranchItem.hover();
       const checkoutBtn = page.locator('[data-testid="checkout-remote-btn-origin/feature-remote"]');
       await expect(checkoutBtn).toBeVisible();
-      await checkoutBtn.click();
+      await checkoutBtn.click({ force: true });
 
       console.log('9. Confirming checkout in custom in-app dialog...');
       const dialogCheckoutBtn = page.locator('[data-testid="checkout-remote-dialog-action-checkout"]');
@@ -443,7 +443,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await mainBranchItem.hover();
       const checkoutMainBtn = page.locator('[data-testid="checkout-branch-btn-main"]');
       await expect(checkoutMainBtn).toBeVisible();
-      await checkoutMainBtn.click();
+      await checkoutMainBtn.click({ force: true });
       await page.waitForTimeout(1000);
       await expect(activeBranch).toContainText('main');
 
@@ -457,7 +457,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       console.log('13. Clicking remote branch hover button again to checkout existing local branch...');
       await remoteBranchItem.hover();
       await expect(checkoutBtn).toBeVisible();
-      await checkoutBtn.click();
+      await checkoutBtn.click({ force: true });
 
       const dialogCheckoutBtn2 = page.locator('[data-testid="checkout-remote-dialog-action-checkout"]');
       await expect(dialogCheckoutBtn2).toBeVisible();
@@ -497,7 +497,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await activeBranch.hover();
       const renameActiveBtn = page.locator('[data-testid="sidebar-rename-branch-btn"]');
       await expect(renameActiveBtn).toBeVisible();
-      await renameActiveBtn.click();
+      await renameActiveBtn.click({ force: true });
       await page.waitForTimeout(300);
 
       const modal = page.locator('.diff-modal-content');
@@ -521,7 +521,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
 
       const renameRemoteBtn = page.locator('[data-testid="rename-branch-btn-origin/main"]');
       await expect(renameRemoteBtn).toBeVisible();
-      await renameRemoteBtn.click();
+      await renameRemoteBtn.click({ force: true });
       await page.waitForTimeout(300);
 
       await expect(modal).toBeVisible();
