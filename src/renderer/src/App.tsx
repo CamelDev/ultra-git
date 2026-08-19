@@ -298,10 +298,11 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
     const AUTO_FETCH_INTERVAL_MS = 5 * 60 * 1000
 
     const performAutoFetch = async () => {
-      const openRepos = useRepoStore.getState().repositories
-      const fetchableRepos = openRepos.filter((r) => r.autoFetch !== false)
+      const { repositories, setRepoFetching } = useRepoStore.getState()
+      const fetchableRepos = repositories.filter((r) => r.autoFetch !== false)
 
       for (const repo of fetchableRepos) {
+        setRepoFetching(repo.id, true)
         try {
           const res = await window.api.git.fetch(repo.path)
           if (res.success) {
@@ -309,6 +310,8 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
           }
         } catch (err) {
           console.error(`Auto-fetch failed for repo ${repo.name}:`, err)
+        } finally {
+          setRepoFetching(repo.id, false)
         }
       }
     }

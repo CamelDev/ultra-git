@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, X, Settings, Palette, Pencil, RotateCcw, FolderOpen, Trash2 } from 'lucide-react'
+import { Plus, X, Settings, Palette, Pencil, RotateCcw, FolderOpen, Trash2, RefreshCw } from 'lucide-react'
 import { useRepoStore, Repository } from '../../store/useRepoStore'
 import logoIcon from '../../assets/icon.png'
 import { IdentitiesModal } from '../details/IdentitiesModal'
@@ -303,6 +303,14 @@ const TitleBar: React.FC = () => {
       <div className="tabs-container">
         {repositories.map((tab, index) => {
           const displayName = tab.customName || tab.name
+          const isRepoBusy = !!(tab.isPushing || tab.isPulling || tab.isFetching)
+          const busyTooltip = tab.isPushing
+            ? 'Pushing...'
+            : tab.isPulling
+              ? 'Pulling...'
+              : tab.isFetching
+                ? 'Fetching...'
+                : undefined
 
           return (
             <div 
@@ -317,13 +325,21 @@ const TitleBar: React.FC = () => {
               onDragEnd={handleDragEnd}
               onDrop={(e) => e.preventDefault()}
             >
-              {tab.customColor && (
+              {isRepoBusy ? (
+                <RefreshCw 
+                  size={12} 
+                  className="spin-animation tab-busy-spinner" 
+                  style={{ color: 'var(--accent)', flexShrink: 0 }}
+                  data-testid="tab-busy-spinner"
+                  data-tooltip={busyTooltip}
+                />
+              ) : tab.customColor ? (
                 <span 
                   className="tab-color-dot" 
                   style={{ backgroundColor: tab.customColor }}
                   data-testid="tab-color-dot"
                 />
-              )}
+              ) : null}
               <span className="tab-title" onDoubleClick={(e) => handleToggleTabSettings(e, tab)}>
                 {displayName}
               </span>

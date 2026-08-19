@@ -309,4 +309,43 @@ describe('useRepoStore', () => {
     expect(state.recentRepos.length).toBe(19);
     expect(state.recentRepos[0].path).toBe('/repo-24');
   });
+
+  it('should isolate isPushing, isPulling, and isFetching per repository', async () => {
+    const { addRepo, setRepoPushing, setRepoPulling, setRepoFetching } = useRepoStore.getState();
+    await addRepo('/repo1');
+    const id1 = useRepoStore.getState().activeId!;
+    await addRepo('/repo2');
+    const id2 = useRepoStore.getState().activeId!;
+
+    expect(useRepoStore.getState().repositories.find(r => r.id === id1)?.isPushing).toBeFalsy();
+    expect(useRepoStore.getState().repositories.find(r => r.id === id2)?.isPushing).toBeFalsy();
+
+    // Set pushing on repo 1
+    setRepoPushing(id1, true);
+    expect(useRepoStore.getState().repositories.find(r => r.id === id1)?.isPushing).toBe(true);
+    expect(useRepoStore.getState().repositories.find(r => r.id === id2)?.isPushing).toBeFalsy();
+
+    // Set pulling on repo 2
+    setRepoPulling(id2, true);
+    expect(useRepoStore.getState().repositories.find(r => r.id === id1)?.isPulling).toBeFalsy();
+    expect(useRepoStore.getState().repositories.find(r => r.id === id2)?.isPulling).toBe(true);
+
+    // Set fetching on repo 1
+    setRepoFetching(id1, true);
+    expect(useRepoStore.getState().repositories.find(r => r.id === id1)?.isFetching).toBe(true);
+    expect(useRepoStore.getState().repositories.find(r => r.id === id2)?.isFetching).toBeFalsy();
+
+    // Reset repo 1 pushing & fetching
+    setRepoPushing(id1, false);
+    setRepoFetching(id1, false);
+    expect(useRepoStore.getState().repositories.find(r => r.id === id1)?.isPushing).toBe(false);
+    expect(useRepoStore.getState().repositories.find(r => r.id === id1)?.isFetching).toBe(false);
+    // repo 2 pulling is still true
+    expect(useRepoStore.getState().repositories.find(r => r.id === id2)?.isPulling).toBe(true);
+
+    // Reset repo 2 pulling
+    setRepoPulling(id2, false);
+    expect(useRepoStore.getState().repositories.find(r => r.id === id2)?.isPulling).toBe(false);
+  });
 });
+

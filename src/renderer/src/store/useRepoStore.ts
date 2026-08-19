@@ -32,6 +32,9 @@ export interface Repository {
   commitLimit?: number;
   stashes: StashEntry[];
   isLoading: boolean;
+  isPushing?: boolean;
+  isPulling?: boolean;
+  isFetching?: boolean;
   error: string | null;
   identityId?: string;
   branches?: {
@@ -75,6 +78,9 @@ interface RepoState {
   setRepoCustomName: (repoId: string, customName: string | undefined) => void;
   setRepoTabColor: (repoId: string, customColor: string | undefined) => void;
   setRepoAutoFetch: (repoId: string, autoFetch: boolean) => void;
+  setRepoPushing: (repoId: string, isPushing: boolean) => void;
+  setRepoPulling: (repoId: string, isPulling: boolean) => void;
+  setRepoFetching: (repoId: string, isFetching: boolean) => void;
   addRecentRepo: (path: string, name?: string) => void;
   removeRecentRepo: (path: string) => void;
   
@@ -838,6 +844,30 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     }
     customizations[normalized].autoFetch = autoFetch;
     saveRepoCustomizations(customizations);
+  },
+
+  setRepoPushing: (repoId: string, isPushing: boolean) => {
+    set((state) => ({
+      repositories: state.repositories.map((r) =>
+        r.id === repoId ? { ...r, isPushing } : r
+      )
+    }));
+  },
+
+  setRepoPulling: (repoId: string, isPulling: boolean) => {
+    set((state) => ({
+      repositories: state.repositories.map((r) =>
+        r.id === repoId ? { ...r, isPulling } : r
+      )
+    }));
+  },
+
+  setRepoFetching: (repoId: string, isFetching: boolean) => {
+    set((state) => ({
+      repositories: state.repositories.map((r) =>
+        r.id === repoId ? { ...r, isFetching } : r
+      )
+    }));
   },
 
   addRecentRepo: (path: string, name?: string) => {

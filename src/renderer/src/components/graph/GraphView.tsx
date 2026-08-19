@@ -32,7 +32,23 @@ interface SmartPullChoice {
 }
 
 const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
-  const { getActiveRepo, selectedCommitHash, setSelectedCommitHash, refreshRepo, identities, setRepoIdentity, previewBranch, previewCommits, previewCommitLimit, clearBranchPreview, loadMoreBranchCommits, isLoadingPreview } = useRepoStore()
+  const { 
+    getActiveRepo, 
+    selectedCommitHash, 
+    setSelectedCommitHash, 
+    refreshRepo, 
+    identities, 
+    setRepoIdentity, 
+    previewBranch, 
+    previewCommits, 
+    previewCommitLimit, 
+    clearBranchPreview, 
+    loadMoreBranchCommits, 
+    isLoadingPreview,
+    setRepoPushing,
+    setRepoPulling,
+    setRepoFetching
+  } = useRepoStore()
   const { addToast } = useToaster()
   const activeRepo = getActiveRepo()
   const isPreviewing = !!previewBranch;
@@ -41,9 +57,9 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const isCurrentRepoWorktree = mainWtPath ? normalizePath(activeRepo.path) !== normalizePath(mainWtPath) : false;
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const [isFetching, setIsFetching] = useState(false)
-  const [isPulling, setIsPulling] = useState(false)
-  const [isPushing, setIsPushing] = useState(false)
+  const isFetching = !!activeRepo?.isFetching
+  const isPulling = !!activeRepo?.isPulling
+  const isPushing = !!activeRepo?.isPushing
   const [showPushDropdown, setShowPushDropdown] = useState(false)
   const [showPullDropdown, setShowPullDropdown] = useState(false)
   const [isPushTagsConfirmOpen, setIsPushTagsConfirmOpen] = useState(false)
@@ -52,21 +68,25 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   const pullDropdownRef = useRef<HTMLDivElement>(null)
 
   const handleFetch = async () => {
-    if (!activeRepo || isFetching || isPulling || isPushing) return
+    const targetRepo = activeRepo
+    if (!targetRepo || targetRepo.isFetching || targetRepo.isPulling || targetRepo.isPushing) return
+    const repoId = targetRepo.id
+    const repoPath = targetRepo.path
+    const repoName = targetRepo.customName || targetRepo.name
 
-    setIsFetching(true)
+    setRepoFetching(repoId, true)
     try {
-      const res = await window.api.git.fetch(activeRepo.path)
+      const res = await window.api.git.fetch(repoPath)
       if (res && !res.success) {
-        addToast({ variant: 'error', title: 'Fetch Failed', message: res.error || 'Failed to fetch from remote repository' })
+        addToast({ variant: 'error', title: `[${repoName}] Fetch Failed`, message: res.error || 'Failed to fetch from remote repository' })
       } else {
-        await refreshRepo(activeRepo.id)
-        addToast({ variant: 'success', title: 'Fetch Successful', message: 'Remote tracking branches have been updated.' })
+        await refreshRepo(repoId)
+        addToast({ variant: 'success', title: `[${repoName}] Fetch Successful`, message: 'Remote tracking branches have been updated.' })
       }
     } catch (err: any) {
-      addToast({ variant: 'error', title: 'Fetch Error', message: err.message || 'An error occurred during fetch' })
+      addToast({ variant: 'error', title: `[${repoName}] Fetch Error`, message: err.message || 'An error occurred during fetch' })
     } finally {
-      setIsFetching(false)
+      setRepoFetching(repoId, false)
     }
   }
 
@@ -546,14 +566,17 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   }
 
   const handlePull = async () => {
-    if (!activeRepo || isPulling || isPushing || smartPullDialog.isOpen || pullResultDialog.isOpen) return
+    const targetRepo = activeRepo
+    if (!targetRepo || targetRepo.isPulling || targetRepo.isPushing || smartPullDialog.isOpen || pullResultDialog.isOpen) return
+    const repoId = targetRepo.id
+    const repoPath = targetRepo.path
 
-    setIsPulling(true)
+    setRepoPulling(repoId, true)
     try {
       // Phase 1: preflight — fetch + state/overlap analysis
-      const preRes = await window.api.git.pullPreflight(activeRepo.path)
+      const preRes = await window.api.git.pullPreflight(repoPath)
       if (!preRes.success || !preRes.data) {
-        setIsPulling(false)
+        setRepoPulling(repoId, false)
         await showPullResultDialog('Pull Failed', preRes.error || 'Failed to analyze the repository state before pulling.', 'error')
         return
       }
@@ -561,12 +584,12 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
 
       // Blockers: states in which pulling is impossible or unsafe
       if (!plan.ok) {
-        setIsPulling(false)
+        setRepoPulling(repoId, false)
         switch (plan.blocker) {
           case 'NO_UPSTREAM': {
             const action = await showPullResultDialog(
               'No Upstream Branch',
-              `The current branch "${activeRepo.branch}" is not tracking any remote branch, so there is nothing to pull from.\n\nSet an upstream branch to enable pulling.`,
+              `The current branch "${targetRepo.branch}" is not tracking any remote branch, so there is nothing to pull from.\n\nSet an upstream branch to enable pulling.`,
               'warning',
               [
                 { label: 'Set Upstream...', value: 'set-upstream', variant: 'primary' },
@@ -575,9 +598,9 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
             )
             if (action === 'set-upstream') {
               let initialRemote = 'origin'
-              const initialBranch = activeRepo.branch || 'main'
+              const initialBranch = targetRepo.branch || 'main'
               try {
-                const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+                const remotesRes = await window.api.git.getRemotes(repoPath)
                 if (remotesRes.success && remotesRes.data && remotesRes.data.length > 0) {
                   initialRemote = remotesRes.data[0].name
                 }
@@ -612,7 +635,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
       // Nothing to pull
       if (plan.behind === 0) {
         addToast({ variant: 'info', title: 'Already Up To Date', message: `Your branch is up to date with ${plan.upstream}.` })
-        await refreshRepo(activeRepo.id)
+        await refreshRepo(repoId)
         return
       }
 
@@ -622,35 +645,35 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
 
       // Commit-first path: commit staged changes before pulling
       if (choice.mode === 'commit' && choice.commitMessage) {
-        const commitRes = await window.api.git.commit(activeRepo.path, choice.commitMessage)
+        const commitRes = await window.api.git.commit(repoPath, choice.commitMessage)
         if (!commitRes.success) {
-          setIsPulling(false)
+          setRepoPulling(repoId, false)
           await showPullResultDialog('Commit Failed', `${commitRes.error || 'Failed to commit staged changes.'}\n\nThe pull was not started.`, 'error')
           return
         }
       }
 
       // Phase 3: orchestrated pull (optional app-managed autostash)
-      const res = await window.api.git.smartPull(activeRepo.path, {
+      const res = await window.api.git.smartPull(repoPath, {
         strategy: choice.strategy,
         stash: choice.mode !== 'direct',
         stashIncludeUntracked: choice.includeUntracked,
         prune: choice.prune
       })
-      await refreshRepo(activeRepo.id)
+      await refreshRepo(repoId)
       // The git work is done — release the busy state before presenting
       // (potentially long-lived) result dialogs.
-      setIsPulling(false)
+      setRepoPulling(repoId, false)
       if (!res.success || !res.data) {
         await showPullResultDialog('Pull Failed', res.error || 'Failed to pull from remote repository.', 'error')
         return
       }
       await presentPullResult(res.data, plan.behind, plan.upstream || 'the remote', choice.mode !== 'direct', choice.prune)
     } catch (err: any) {
-      setIsPulling(false)
+      setRepoPulling(repoId, false)
       await showPullResultDialog('Error', err.message || 'An unexpected error occurred during pull.', 'error')
     } finally {
-      setIsPulling(false)
+      setRepoPulling(repoId, false)
     }
   }
 
@@ -694,8 +717,10 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     const remote = remoteName.trim()
     const url = remoteUrl.trim()
     const branch = remoteBranch.trim()
-    
-    if (!remote || !branch || !url || !activeRepo) return
+    const targetRepo = activeRepo
+    if (!remote || !branch || !url || !targetRepo) return
+    const repoId = targetRepo.id
+    const repoPath = targetRepo.path
 
     const parsed = parseGitUrl(url)
     if (!parsed.provider || !parsed.repo) {
@@ -703,13 +728,14 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
       return
     }
 
-    const activeIdentity = identities.find(id => id.id === activeRepo.identityId)
+    const activeIdentity = identities.find(id => id.id === targetRepo.identityId)
     if (!activeIdentity || !activeIdentity.personalAccessToken) {
       setRemoteError('No Personal Access Token configured for the current active Identity.')
       return
     }
 
     setIsCreatingRemote(true)
+    setRepoPushing(repoId, true)
     setRemoteError('')
     try {
       // 1. Create remote repository using API
@@ -723,28 +749,30 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
       if (!createRes.success) {
         setRemoteError(createRes.error || `Failed to create remote repository on ${parsed.provider}.`)
         setIsCreatingRemote(false)
+        setRepoPushing(repoId, false)
         return
       }
 
       // 2. Add remote to local repo if it doesn't already exist
-      const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+      const remotesRes = await window.api.git.getRemotes(repoPath)
       let remoteExists = false
       if (remotesRes.success && remotesRes.data) {
         remoteExists = remotesRes.data.some(r => r.name === remote)
       }
 
       if (!remoteExists) {
-        const addRes = await window.api.git.addRemote(activeRepo.path, remote, url)
+        const addRes = await window.api.git.addRemote(repoPath, remote, url)
         if (!addRes.success) {
           setRemoteError(addRes.error || 'Failed to add remote repository to local config.')
           setIsCreatingRemote(false)
+          setRepoPushing(repoId, false)
           return
         }
       }
 
       // 3. Perform push with upstream option
-      const pushRes = await window.api.git.push(activeRepo.path, false, remote, branch, true)
-      await refreshRepo(activeRepo.id)
+      const pushRes = await window.api.git.push(repoPath, false, remote, branch, true)
+      await refreshRepo(repoId)
       
       if (pushRes.success) {
         setIsRemoteModalOpen(false)
@@ -757,6 +785,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
       setRemoteError(err.message || 'An unexpected error occurred.')
     } finally {
       setIsCreatingRemote(false)
+      setRepoPushing(repoId, false)
     }
   }
 
@@ -764,52 +793,54 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     const remote = remoteName.trim()
     const url = remoteUrl.trim()
     const branch = remoteBranch.trim()
-    
-    if (!remote || !branch || !activeRepo) return
+    const targetRepo = activeRepo
+    if (!remote || !branch || !targetRepo) return
+    const repoId = targetRepo.id
+    const repoPath = targetRepo.path
 
-    setIsPushing(true)
+    setRepoPushing(repoId, true)
     setRemoteError('')
     try {
       // 1. If remote URL is entered, configure it
       if (url) {
-        const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+        const remotesRes = await window.api.git.getRemotes(repoPath)
         if (remotesRes.success && remotesRes.data) {
           const exists = remotesRes.data.some(r => r.name === remote)
           if (!exists) {
-            const addRes = await window.api.git.addRemote(activeRepo.path, remote, url)
+            const addRes = await window.api.git.addRemote(repoPath, remote, url)
             if (!addRes.success) {
               setRemoteError(addRes.error || 'Failed to add remote.')
-              setIsPushing(false)
+              setRepoPushing(repoId, false)
               return
             }
           }
         } else if (remotesRes.success) {
-          const addRes = await window.api.git.addRemote(activeRepo.path, remote, url)
+          const addRes = await window.api.git.addRemote(repoPath, remote, url)
           if (!addRes.success) {
             setRemoteError(addRes.error || 'Failed to add remote.')
-            setIsPushing(false)
+            setRepoPushing(repoId, false)
             return
           }
         } else {
           setRemoteError(remotesRes.error || 'Failed to read remotes.')
-          setIsPushing(false)
+          setRepoPushing(repoId, false)
           return
         }
       } else {
-        const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+        const remotesRes = await window.api.git.getRemotes(repoPath)
         if (remotesRes.success && remotesRes.data) {
           const exists = remotesRes.data.some(r => r.name === remote)
           if (!exists) {
             setRemoteError(`Remote "${remote}" does not exist. Please specify a Remote URL to add it.`)
-            setIsPushing(false)
+            setRepoPushing(repoId, false)
             return
           }
         }
       }
 
       // 2. Perform push with upstream option
-      const pushRes = await window.api.git.push(activeRepo.path, false, remote, `${activeRepo.branch}:${branch}`, true)
-      await refreshRepo(activeRepo.id)
+      const pushRes = await window.api.git.push(repoPath, false, remote, `${targetRepo.branch}:${branch}`, true)
+      await refreshRepo(repoId)
       
       if (pushRes.success) {
         setIsRemoteModalOpen(false)
@@ -821,19 +852,22 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     } catch (err: any) {
       setRemoteError(err.message || 'An unexpected error occurred.')
     } finally {
-      setIsPushing(false)
+      setRepoPushing(repoId, false)
     }
   }
 
   const handleSetUpstreamSubmit = async () => {
     const branch = upstreamBranch.trim()
-    if (!branch || !activeRepo) return
+    const targetRepo = activeRepo
+    if (!branch || !targetRepo) return
+    const repoId = targetRepo.id
+    const repoPath = targetRepo.path
 
-    setIsPushing(true)
+    setRepoPushing(repoId, true)
     setUpstreamError('')
     try {
-      const pushRes = await window.api.git.push(activeRepo.path, false, upstreamRemote, `${activeRepo.branch}:${branch}`, true)
-      await refreshRepo(activeRepo.id)
+      const pushRes = await window.api.git.push(repoPath, false, upstreamRemote, `${targetRepo.branch}:${branch}`, true)
+      await refreshRepo(repoId)
       
       if (pushRes.success) {
         setIsUpstreamModalOpen(false)
@@ -844,7 +878,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     } catch (err: any) {
       setUpstreamError(err.message || 'An unexpected error occurred.')
     } finally {
-      setIsPushing(false)
+      setRepoPushing(repoId, false)
     }
   }
 
@@ -937,13 +971,17 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
   }, [isTagModalOpen])
 
   const handlePush = async (force?: boolean) => {
-    if (!activeRepo || isPulling || isPushing) return
+    const targetRepo = activeRepo
+    if (!targetRepo || targetRepo.isPulling || targetRepo.isPushing) return
+    const repoId = targetRepo.id
+    const repoPath = targetRepo.path
+    const repoName = targetRepo.customName || targetRepo.name
 
     // 1. Beforehand check
-    if (!force && activeRepo.status?.behind > 0) {
+    if (!force && targetRepo.status?.behind > 0) {
       const response = await showCustomPushDialog(
         'Remote Changes Detected',
-        `Your local branch is behind its remote counterpart by ${activeRepo.status.behind} commit(s). A standard push will be rejected.\n\nWould you like to Pull first or Force Push (overwriting remote changes)?`,
+        `Your local branch is behind its remote counterpart by ${targetRepo.status.behind} commit(s). A standard push will be rejected.\n\nWould you like to Pull first or Force Push (overwriting remote changes)?`,
         'warning',
         [
           { label: 'Cancel', value: 'cancel', variant: 'secondary' },
@@ -961,14 +999,14 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
       return // Cancel or unknown response
     }
 
-    setIsPushing(true)
+    setRepoPushing(repoId, true)
     try {
-      const res = await window.api.git.push(activeRepo.path, force)
-      await refreshRepo(activeRepo.id)
+      const res = await window.api.git.push(repoPath, force)
+      await refreshRepo(repoId)
       if (res.success) {
         addToast({
           variant: 'success',
-          title: force ? 'Force Push Successful' : 'Push Successful',
+          title: force ? `[${repoName}] Force Push Successful` : `[${repoName}] Push Successful`,
           message: force
             ? 'Local changes have been force-pushed to the remote repository.'
             : 'Local commits have been pushed to the remote repository.'
@@ -988,7 +1026,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
             ]
           )
           if (response === 'force') {
-            setIsPushing(false)
+            setRepoPushing(repoId, false)
             await handlePush(true)
             return
           }
@@ -1001,10 +1039,10 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
 
         if (noUpstream) {
           setRemoteName('origin')
-          setRemoteBranch(activeRepo.branch || 'main')
+          setRemoteBranch(targetRepo.branch || 'main')
           
           try {
-            const remotesRes = await window.api.git.getRemotes(activeRepo.path)
+            const remotesRes = await window.api.git.getRemotes(repoPath)
             if (remotesRes.success && remotesRes.data && remotesRes.data.length > 0) {
               setRemoteName(remotesRes.data[0].name)
               setRemoteUrl(remotesRes.data[0].refs.push || remotesRes.data[0].refs.fetch || '')
@@ -1021,38 +1059,44 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
 
         addToast({
           variant: 'error',
-          title: force ? 'Force Push Failed' : 'Push Failed',
+          title: force ? `[${repoName}] Force Push Failed` : `[${repoName}] Push Failed`,
           message: res.error || 'Failed to push to remote repository.'
         })
       }
     } catch (err: any) {
       addToast({
         variant: 'error',
-        title: 'Error',
+        title: `[${repoName}] Error`,
         message: err.message || 'An unexpected error occurred during push.'
       })
     } finally {
-      setIsPushing(false)
+      setRepoPushing(repoId, false)
     }
   }
 
   /** Pushes all local tags to the remote (origin). Invoked after the user confirms via the in-app dialog. */
   const performPushTags = async () => {
-    if (!activeRepo) return
+    const targetRepo = activeRepo
+    if (!targetRepo) return
+    const repoId = targetRepo.id
+    const repoPath = targetRepo.path
+    const repoName = targetRepo.customName || targetRepo.name
+
+    setRepoPushing(repoId, true)
     try {
-      const res = await window.api.git.pushTags(activeRepo.path)
+      const res = await window.api.git.pushTags(repoPath)
       if (res.success) {
         addToast({
           variant: 'success',
-          title: 'Tags Pushed',
+          title: `[${repoName}] Tags Pushed`,
           message: 'All local tags have been successfully pushed to the remote repository.'
         })
-        await refreshRepo(activeRepo.id)
+        await refreshRepo(repoId)
       } else {
         console.error('Failed to push tags:', res.error)
         addToast({
           variant: 'error',
-          title: 'Push Failed',
+          title: `[${repoName}] Push Failed`,
           message: `Failed to push tags: ${res.error}`
         })
       }
@@ -1060,9 +1104,11 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
       console.error('Error pushing tags:', err)
       addToast({
         variant: 'error',
-        title: 'Push Failed',
+        title: `[${repoName}] Push Failed`,
         message: `Error pushing tags: ${err.message || err}`
       })
+    } finally {
+      setRepoPushing(repoId, false)
     }
   }
 

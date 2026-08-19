@@ -92,7 +92,7 @@ const buildBranchTree = (
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
-  const { repositories, activeId, refreshRepo, switchActiveRepoPath, loadBranchCommits, clearBranchPreview, previewBranch } = useRepoStore()
+  const { repositories, activeId, refreshRepo, switchActiveRepoPath, loadBranchCommits, clearBranchPreview, previewBranch, setRepoFetching } = useRepoStore()
   const { addToast } = useToaster()
   const activeRepo = repositories.find(r => r.id === activeId)
 
@@ -147,24 +147,29 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const [popStashIndex, setPopStashIndex] = useState<number | null>(null)
   const [deleteStashIndex, setDeleteStashIndex] = useState<number | null>(null)
   const [tagToDelete, setTagToDelete] = useState<string | null>(null)
-  const [isFetchingRemote, setIsFetchingRemote] = useState(false)
+  const isFetchingRemote = !!activeRepo?.isFetching
 
   const handleFetchRemoteBranches = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!activeRepo || isFetchingRemote) return
-    setIsFetchingRemote(true)
+    const targetRepo = activeRepo
+    if (!targetRepo || targetRepo.isFetching) return
+    const repoId = targetRepo.id
+    const repoPath = targetRepo.path
+    const repoName = targetRepo.customName || targetRepo.name
+
+    setRepoFetching(repoId, true)
     try {
-      const res = await window.api.git.fetch(activeRepo.path)
+      const res = await window.api.git.fetch(repoPath)
       if (res && !res.success) {
-        addToast({ title: 'Fetch Failed', message: res.error || 'Failed to fetch remote branches', type: 'error' })
+        addToast({ title: `[${repoName}] Fetch Failed`, message: res.error || 'Failed to fetch remote branches', type: 'error' })
       } else {
-        await refreshRepo(activeRepo.id)
-        addToast({ title: 'Fetched Remote Branches', message: 'Remote references are up to date.', type: 'success' })
+        await refreshRepo(repoId)
+        addToast({ title: `[${repoName}] Fetched Remote Branches`, message: 'Remote references are up to date.', type: 'success' })
       }
     } catch (err: any) {
-      addToast({ title: 'Fetch Error', message: err.message || 'An error occurred while fetching', type: 'error' })
+      addToast({ title: `[${repoName}] Fetch Error`, message: err.message || 'An error occurred while fetching', type: 'error' })
     } finally {
-      setIsFetchingRemote(false)
+      setRepoFetching(repoId, false)
     }
   }
 
