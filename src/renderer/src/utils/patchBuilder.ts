@@ -92,8 +92,17 @@ export function buildHunksFromDiffItems(diffItems: DiffItem[], contextPadding = 
       }
     }
 
-    if (oldStart === 0) oldStart = 1
-    if (newStart === 0) newStart = 1
+    if (oldCount === 0) {
+      oldStart = 0
+    } else if (oldStart === 0) {
+      oldStart = 1
+    }
+
+    if (newCount === 0) {
+      newStart = 0
+    } else if (newStart === 0) {
+      newStart = 1
+    }
 
     const header = `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`
 
@@ -155,7 +164,7 @@ export function buildSelectedLinesPatch(
   filePath: string,
   hunk: DiffHunk,
   selectedLineIndices: Set<number>,
-  _mode: 'stage' | 'unstage' | 'discard' = 'stage'
+  mode: 'stage' | 'unstage' | 'discard' = 'stage'
 ): string {
   let patchOldCount = 0
   let patchNewCount = 0
@@ -173,26 +182,39 @@ export function buildSelectedLinesPatch(
         patchLines.push(`+${line.content}`)
         patchNewCount++
       } else {
-        // Unselected addition is omitted from patch
+        // When unstaging or discarding, unselected additions exist in index/worktree so act as context
+        if (mode === 'unstage' || mode === 'discard') {
+          patchLines.push(` ${line.content}`)
+          patchOldCount++
+          patchNewCount++
+        }
+        // When staging, unselected additions are omitted
       }
     } else if (line.type === 'delete') {
       if (isSelected) {
         patchLines.push(`-${line.content}`)
         patchOldCount++
       } else {
-        // Unselected deletion is converted to context line
-        patchLines.push(` ${line.content}`)
-        patchOldCount++
-        patchNewCount++
+        // When staging or unstaging, unselected deletions remain as context
+        if (mode === 'stage' || mode === 'unstage') {
+          patchLines.push(` ${line.content}`)
+          patchOldCount++
+          patchNewCount++
+        }
+        // When discarding, unselected deletions are omitted because they don't exist in working tree
       }
     }
   })
 
+  const oldStart = patchOldCount === 0 ? 0 : hunk.oldStart
+  const newStart = patchNewCount === 0 ? 0 : hunk.newStart
+
   const headerLines = [
     `--- a/${filePath}`,
     `+++ b/${filePath}`,
-    `@@ -${hunk.oldStart},${patchOldCount} +${hunk.newStart},${patchNewCount} @@`
+    `@@ -${oldStart},${patchOldCount} +${newStart},${patchNewCount} @@`
   ]
 
   return [...headerLines, ...patchLines, ''].join('\n')
 }
+

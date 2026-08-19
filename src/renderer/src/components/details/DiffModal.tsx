@@ -1826,7 +1826,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
                           {isActiveChange && (
                             <div className="diff-hunk-actions">
-                              {!isStaged ? (
+                              {!currentIsStaged ? (
                                 <>
                                   <button
                                     className="diff-hunk-btn btn-stage"
@@ -1942,7 +1942,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
                             {isActiveChange && (
                               <div className="diff-hunk-actions">
-                                {!isStaged ? (
+                                {!currentIsStaged ? (
                                   <>
                                     <button
                                       className="diff-hunk-btn btn-stage"
@@ -2039,7 +2039,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                 <span>{selectedRowCount} selected line(s)</span>
               </div>
 
-              {!isStaged ? (
+              {!currentIsStaged ? (
                 <>
                   <button
                     className="diff-hunk-btn btn-stage"

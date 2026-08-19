@@ -910,7 +910,7 @@ export const gitService = {
   ) => {
     const runGitApply = (extraArgs: string[] = []): Promise<string> => {
       return new Promise((resolve, reject) => {
-        const args = ['apply', '--whitespace=nowarn', '--recount', ...extraArgs];
+        const args = ['apply', '--whitespace=nowarn', '--recount', '--unidiff-zero', ...extraArgs];
         if (options?.cached) args.push('--cached');
         if (options?.reverse) args.push('--reverse');
         args.push('-');
@@ -931,11 +931,15 @@ export const gitService = {
     try {
       return await runGitApply();
     } catch (err: any) {
-      // Retry with --ignore-space-change if whitespace or line endings differ
+      // Retry with --ignore-whitespace (handles whitespace and line endings)
       try {
-        return await runGitApply(['--ignore-space-change']);
+        return await runGitApply(['--ignore-whitespace']);
       } catch (retryErr: any) {
-        throw new Error(retryErr.message || err.message);
+        try {
+          return await runGitApply(['--ignore-space-change']);
+        } catch (retryErr2: any) {
+          throw new Error(retryErr2.message || retryErr.message || err.message);
+        }
       }
     }
   },
