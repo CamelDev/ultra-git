@@ -4,13 +4,13 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 60000,
   fullyParallel: false,
-  workers: 1,
+  workers: process.env.CI ? 2 : 1,
   expect: {
     timeout: 5000
   },
-  reporter: 'html',
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'html',
   use: {
     trace: 'retain-on-failure',
-    screenshot: 'on',
+    screenshot: 'only-on-failure',
   },
 });

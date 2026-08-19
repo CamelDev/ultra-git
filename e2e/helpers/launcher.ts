@@ -62,16 +62,5 @@ export async function launchElectronApp(options: LaunchOptions = {}): Promise<La
   const page = await app.firstWindow();
   await page.waitForLoadState('networkidle');
 
-  if (cleanState) {
-    await page.evaluate((disable) => {
-      localStorage.clear();
-      if (disable) {
-        localStorage.setItem('disable-default-tab', 'true');
-      }
-    }, disableDefaultTab);
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-  }
-
   return { app, page };
 }

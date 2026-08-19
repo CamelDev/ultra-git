@@ -500,12 +500,10 @@ test.describe('Active Changes Panel', () => {
   test('should commit staged changes when user presses Enter in commit message input', async () => {
     const { app, page } = await launchElectronApp()
 
-    try {
-      await page.evaluate(() => localStorage.clear())
-      await page.reload()
-      await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(1000)
+    page.on('console', msg => console.log('PAGE LOG:', msg.text()))
+    page.on('pageerror', err => console.error('PAGE ERROR:', err.message))
 
+    try {
       await app.evaluate(async ({ ipcMain }, sandboxPath) => {
         ipcMain.removeHandler('dialog:openDirectory')
         ipcMain.handle('dialog:openDirectory', async () => {
@@ -532,12 +530,13 @@ test.describe('Active Changes Panel', () => {
 
       const stageAllBtn = page.locator('.toolbar .btn-primary', { hasText: 'Stage all' })
       await stageAllBtn.click()
-      await page.waitForTimeout(500)
+      
+      const stagedItems = page.locator('.active-changes-panel .staged-column .file-item')
+      await expect(stagedItems).toHaveCount(1)
 
       const commitInput = page.locator('.toolbar [data-testid="commit-message-input"]')
       await commitInput.fill('Commit via Enter key')
       await commitInput.press('Enter')
-      await page.waitForTimeout(1000)
 
       await expect(panel).not.toBeVisible()
     } finally {

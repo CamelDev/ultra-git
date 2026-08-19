@@ -286,7 +286,7 @@ test.describe('Branch Sync Status', () => {
       // Verifying custom push-force dialog is visible
       const customDialog = page.locator('[data-testid="push-force-custom-dialog"]')
       await expect(customDialog).toBeVisible()
-      await expect(customDialog).toContainText('Remote Changes Detected')
+      await expect(customDialog).toContainText('Push Rejected')
 
       // Click the Force Push button inside the custom dialog
       const forcePushBtn = page.locator('[data-testid="push-force-custom-dialog-action-force"]')
