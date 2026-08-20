@@ -148,7 +148,7 @@ function App() {
 
     const doResize = (moveEvent: PointerEvent) => {
       const deltaX = moveEvent.clientX - startX
-      const newWidth = Math.max(180, Math.min(600, startWidth + deltaX))
+      const newWidth = Math.round(Math.max(180, Math.min(600, startWidth + deltaX)))
       setSidebarWidth(newWidth)
     }
 
@@ -176,7 +176,7 @@ function App() {
     const doDetailsResize = (moveEvent: PointerEvent) => {
       const deltaX = moveEvent.clientX - startX
       // Dragging left (negative deltaX) increases width of right panel
-      const newWidth = Math.max(200, Math.min(600, startWidth - deltaX))
+      const newWidth = Math.round(Math.max(200, Math.min(600, startWidth - deltaX)))
       setDetailsWidth(newWidth)
     }
 
@@ -203,7 +203,7 @@ function App() {
 
     const doResize = (moveEvent: PointerEvent) => {
       const deltaY = moveEvent.clientY - startY
-      const newHeight = Math.max(100, Math.min(window.innerHeight - 200, startHeight + deltaY))
+      const newHeight = Math.round(Math.max(100, Math.min(window.innerHeight - 200, startHeight + deltaY)))
       setActiveChangesHeight(newHeight)
     }
 

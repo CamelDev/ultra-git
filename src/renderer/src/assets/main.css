@@ -741,7 +741,7 @@ body {
   width: var(--details-width, 380px);
   min-width: 200px;
   max-width: 600px;
-  flex-shrink: 1;
+  flex-shrink: 0;
   box-sizing: border-box;
   background-color: var(--bg-secondary);
   border-left: 1px solid var(--border);
