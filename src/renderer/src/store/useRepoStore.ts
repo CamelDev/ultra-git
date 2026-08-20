@@ -496,7 +496,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
         const updatedRepos = state.repositories.map(r => {
           if (r.id === id) {
-            const wts = worktreesRes.success ? worktreesRes.data : (r.worktrees || []);
+            const wts = (worktreesRes.success && worktreesRes.data) ? worktreesRes.data : (r.worktrees || []);
             const mainPath = wts[0]?.path || r.path;
             const mainName = mainPath.split(/[\\/]/).pop() || r.name;
             const newBranch = statusRes.success ? statusRes.data.current : r.branch;

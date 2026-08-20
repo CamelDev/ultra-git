@@ -161,13 +161,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     try {
       const res = await window.api.git.fetch(repoPath)
       if (res && !res.success) {
-        addToast({ title: `[${repoName}] Fetch Failed`, message: res.error || 'Failed to fetch remote branches', type: 'error' })
+        addToast({ title: `[${repoName}] Fetch Failed`, message: res.error || 'Failed to fetch remote branches', variant: 'error' })
       } else {
         await refreshRepo(repoId)
-        addToast({ title: `[${repoName}] Fetched Remote Branches`, message: 'Remote references are up to date.', type: 'success' })
+        addToast({ title: `[${repoName}] Fetched Remote Branches`, message: 'Remote references are up to date.', variant: 'success' })
       }
     } catch (err: any) {
-      addToast({ title: `[${repoName}] Fetch Error`, message: err.message || 'An error occurred while fetching', type: 'error' })
+      addToast({ title: `[${repoName}] Fetch Error`, message: err.message || 'An error occurred while fetching', variant: 'error' })
     } finally {
       setRepoFetching(repoId, false)
     }
@@ -1486,8 +1486,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             {(() => {
               const hasTagsToPush = !!activeRepo?.tags?.some(tag => {
                 const tagCommit = activeRepo.commits?.find(c => {
-                  const refs = c.refs || '';
-                  return refs.split(',').some(r => r.trim() === `tag: ${tag}`);
+                  const refs = (c.refs as string) || '';
+                  return refs.split(',').some((r: string) => r.trim() === `tag: ${tag}`);
                 });
                 return (tagCommit && tagCommit.syncStatus === 'local-only') || !!activeRepo?.unpushedTags?.includes(tag);
               });
@@ -1524,8 +1524,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
             <div className="sidebar-tags-list" data-testid="sidebar-tags-list">
               {activeRepo.tags.map((tag) => {
                 const tagCommit = activeRepo.commits?.find(c => {
-                  const refs = c.refs || '';
-                  return refs.split(',').some(r => r.trim() === `tag: ${tag}`);
+                  const refs = (c.refs as string) || '';
+                  return refs.split(',').some((r: string) => r.trim() === `tag: ${tag}`);
                 });
                 const isTagUnpushed = (tagCommit && tagCommit.syncStatus === 'local-only') || !!activeRepo?.unpushedTags?.includes(tag);
                 const colorStyle = isTagUnpushed ? 'var(--text-secondary)' : '#ec4899';

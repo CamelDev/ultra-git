@@ -2,7 +2,9 @@ import { app, shell, BrowserWindow, ipcMain, dialog, clipboard } from 'electron'
 import { join, resolve } from 'path'
 import { realpathSync, existsSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+// @ts-ignore
 import icon from '../../resources/icon.png?asset'
+// @ts-ignore
 import iconWin from '../../resources/icon-win.png?asset'
 import { fixPath } from './env'
 import { gitService } from './git'

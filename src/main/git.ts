@@ -1737,7 +1737,7 @@ export const gitService = {
 
   pushTags: async (repoPath: string, remote?: string): Promise<void> => {
     const git = getGitInstance(repoPath);
-    await git.push(remote || 'origin', { '--tags': null });
+    await git.pushTags(remote || 'origin');
   },
 
   deleteTag: async (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string): Promise<void> => {

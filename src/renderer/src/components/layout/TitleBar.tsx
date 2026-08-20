@@ -278,13 +278,13 @@ const TitleBar: React.FC = () => {
           alt="UltraGIT" 
           className="brand-logo" 
           onClick={() => setAboutModalOpen(true)}
-          style={{ cursor: 'pointer', WebkitAppRegion: 'no-drag' }}
+          style={{ cursor: 'pointer', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           data-testid="brand-logo"
         />
         <span 
           className="brand-name" 
           onClick={() => setAboutModalOpen(true)}
-          style={{ cursor: 'pointer', WebkitAppRegion: 'no-drag' }}
+          style={{ cursor: 'pointer', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           data-testid="brand-name"
         >
           UltraGIT

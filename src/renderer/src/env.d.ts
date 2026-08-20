@@ -80,6 +80,7 @@ declare global {
         getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         add: (repoPath: string, filePath: string | string[]) => Promise<{ success: boolean; error?: string }>;
         reset: (repoPath: string, filePath: string | string[]) => Promise<{ success: boolean; error?: string }>;
+        applyPatch: (repoPath: string, patch: string, options?: { cached?: boolean; reverse?: boolean }) => Promise<{ success: boolean; error?: string }>;
         discardChanges: (repoPath: string, filePath: string | string[], isStaged: boolean) => Promise<{ success: boolean; error?: string }>;
         resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => Promise<{ success: boolean; error?: string }>;
         squashCommits: (repoPath: string, commitHash: string, message: string) => Promise<{ success: boolean; error?: string }>;
@@ -108,6 +109,7 @@ declare global {
         resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) => Promise<{ success: boolean; error?: string }>;
         getMergeStatus: (repoPath: string) => Promise<{ success: boolean; data?: { isMerge: boolean; isRebase: boolean; isCherryPick?: boolean; inProgress: boolean }; error?: string }>;
         getTags: (repoPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>;
+        getUnpushedTags: (repoPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>;
         createTag: (repoPath: string, tagName: string, target?: string) => Promise<{ success: boolean; error?: string }>;
         pushTags: (repoPath: string, remote?: string) => Promise<{ success: boolean; error?: string }>;
         deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) => Promise<{ success: boolean; error?: string }>;

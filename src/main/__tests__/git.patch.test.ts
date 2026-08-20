@@ -411,7 +411,7 @@ describe('Git Patch Discard Tests', () => {
     const fullPath = path.join(tmpDir, filePath)
 
     fs.writeFileSync(fullPath, 'line 1\r\nline 2\r\nline 3\r\n')
-    const git = gitService.getGitInstance ? (gitService as any).getGitInstance(tmpDir) : (await import('simple-git')).default(tmpDir)
+    const git = (gitService as any).getGitInstance ? (gitService as any).getGitInstance(tmpDir) : (await import('simple-git')).default(tmpDir)
     await git.add(filePath)
     await git.commit('initial')
 

@@ -1,5 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, mock } from 'bun:test'
 import { useRepoStore } from '../useRepoStore'
+
+const vi = {
+  fn: (impl?: (...args: any[]) => any) => mock(impl || (() => {})),
+  clearAllMocks: () => {}
+}
 
 // Mock the window.api
 const mockApi = {
@@ -34,9 +39,9 @@ const mockLocalStorage = {
 global.window = {
   api: mockApi,
   localStorage: mockLocalStorage
-}
+} as any
 // @ts-ignore
-global.localStorage = mockLocalStorage
+global.localStorage = mockLocalStorage as any
 
 describe('useRepoStore', () => {
   beforeEach(() => {
