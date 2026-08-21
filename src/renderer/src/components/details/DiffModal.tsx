@@ -1256,6 +1256,26 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   )
 
   const [copiedSide, setCopiedSide] = useState<'left' | 'right' | null>(null)
+  const [copiedFilePath, setCopiedFilePath] = useState(false)
+
+  useEffect(() => {
+    setCopiedFilePath(false)
+  }, [currentFilePath, isOpen])
+
+  const handleCopyFilePath = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation()
+    }
+    if (!currentFilePath || currentFilePath === 'No file selected') return
+
+    if (window.api?.app?.copyToClipboard) {
+      window.api.app.copyToClipboard(currentFilePath)
+    } else if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(currentFilePath)
+    }
+    setCopiedFilePath(true)
+    setTimeout(() => setCopiedFilePath(false), 2000)
+  }
 
   const handleCopyLeft = () => {
     const leftLines = renderRows
@@ -1351,22 +1371,27 @@ export const DiffModal: React.FC<DiffModalProps> = ({
         <div className="diff-modal-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
           {/* Top Row: Context Badge + Navigation & Action Buttons */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {currentStatus === 'R' ? `Renamed from ${currentOldPath} | ` : ''}
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', userSelect: 'text' }}>
+              {currentStatus === 'R' ? (
+                <span style={{ userSelect: 'text' }}>
+                  Renamed from <span style={{ fontFamily: 'JetBrains Mono, monospace', userSelect: 'text' }}>{currentOldPath}</span> |{' '}
+                </span>
+              ) : ''}
               {isStash ? (
-                <span>
+                <span style={{ userSelect: 'text' }}>
                   Stash details:{' '}
                   <code
                     style={{
                       fontFamily: 'JetBrains Mono, monospace',
                       backgroundColor: 'var(--bg-tertiary)',
                       padding: '1px 4px',
-                      borderRadius: '3px'
+                      borderRadius: '3px',
+                      userSelect: 'text'
                     }}
                   >
                     stash@{stashIndex}
                   </code>{' '}
-                  {stashMessage ? `— "${stashMessage}"` : ''}
+                  {stashMessage ? <span style={{ userSelect: 'text' }}>{`— "${stashMessage}"`}</span> : ''}
                 </span>
               ) : isActiveChange ? (
                 <span
@@ -1376,15 +1401,16 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                     borderRadius: '4px',
                     fontWeight: 600,
                     fontSize: '11px',
-                    color: currentIsStaged ? '#34d399' : '#f59e0b'
+                    color: currentIsStaged ? '#34d399' : '#f59e0b',
+                    userSelect: 'text'
                   }}
                 >
                   {currentIsStaged ? 'Staged changes' : 'Unstaged changes'}
                 </span>
               ) : (
-                <span>
+                <span style={{ userSelect: 'text' }}>
                   Commit:{' '}
-                  <span style={{ fontFamily: 'monospace' }}>{commitHash?.substring(0, 8)}</span>
+                  <span style={{ fontFamily: 'monospace', userSelect: 'text' }}>{commitHash?.substring(0, 8)}</span>
                 </span>
               )}
             </div>
@@ -1550,9 +1576,36 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                 <FileText size={16} style={{ color: 'var(--accent-light)', flexShrink: 0 }} />
-                <div style={{ fontWeight: 600, fontSize: '14px', wordBreak: 'break-all', fontFamily: 'JetBrains Mono, monospace' }}>
+                <div
+                  className="diff-file-path"
+                  data-testid="diff-file-path"
+                  style={{
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    wordBreak: 'break-all',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    userSelect: 'text',
+                    WebkitUserSelect: 'text',
+                    cursor: 'text'
+                  }}
+                >
                   {currentFilePath}
                 </div>
+                {currentFilePath && currentFilePath !== 'No file selected' && (
+                  <button
+                    className="diff-copy-file-path-btn"
+                    onClick={handleCopyFilePath}
+                    data-tooltip={copiedFilePath ? 'Copied file path!' : 'Copy file path'}
+                    data-testid="copy-file-path-btn"
+                    aria-label="Copy file path"
+                  >
+                    {copiedFilePath ? (
+                      <Check size={14} style={{ color: '#34d399' }} />
+                    ) : (
+                      <Copy size={14} />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1720,7 +1773,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                         }}
                       >
                         <FileText size={14} style={{ flexShrink: 0 }} />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', userSelect: 'text' }}>
                           {file.path}
                         </span>
                       </div>

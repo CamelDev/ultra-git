@@ -929,6 +929,33 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  user-select: text;
+}
+
+.diff-file-path {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.diff-copy-file-path-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 5px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.diff-copy-file-path-btn:hover {
+  background-color: var(--hover);
+  color: var(--text-primary);
 }
 
 .diff-modal-close {
