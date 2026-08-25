@@ -183,6 +183,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const branch = activeRepo?.branch || 'main'
   const status = activeRepo?.status
   const stashes = activeRepo?.stashes ?? []
+  const mainWtPath = activeRepo?.worktrees?.[0]?.path;
+  const currentRepoPath = activeRepo?.path ?? '';
+  const isCurrentRepoWorktree = mainWtPath ? normalizePath(currentRepoPath) !== normalizePath(mainWtPath) : false;
 
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const autoExpandRef = React.useRef(false);
@@ -549,33 +552,42 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   };
 
   const handleCheckoutBranch = async (branchName: string) => {
-    if (!activeRepo || branchName === branch) return
+    if (!activeRepo) return;
+    if (branchName === branch && !isCurrentRepoWorktree) return;
 
+    // If target branch is checked out in a linked worktree, switch active view to that worktree
     const wt = activeRepo.worktrees?.find(w => w.branch === branchName);
     if (wt && normalizePath(wt.path) !== normalizePath(activeRepo.path)) {
       handleSwitchWorktree(wt.path);
       return;
     }
 
+    // If we are currently inside a linked worktree, switch active repo back to root worktree (mainWtPath)
+    // because linked worktrees are immutable to their assigned branch.
+    const targetRepoPath = (isCurrentRepoWorktree && mainWtPath) ? mainWtPath : activeRepo.path;
+    if (isCurrentRepoWorktree && mainWtPath) {
+      await switchActiveRepoPath(mainWtPath);
+    }
+
     autoExpandRef.current = true;
     try {
-      const res = await window.api.git.checkout(activeRepo.path, branchName)
+      const res = await window.api.git.checkout(targetRepoPath, branchName);
       if (res.success) {
         if (previewBranch === branchName) {
-          clearBranchPreview()
+          clearBranchPreview();
         }
-        await refreshRepo(activeRepo.id)
+        await refreshRepo(activeRepo.id);
       } else {
         autoExpandRef.current = false;
-        console.error('Failed to checkout branch:', res.error)
-        await handleGitCheckoutError(activeRepo.path, res.error || 'Unknown error', () => handleCheckoutBranch(branchName));
+        console.error('Failed to checkout branch:', res.error);
+        await handleGitCheckoutError(targetRepoPath, res.error || 'Unknown error', () => handleCheckoutBranch(branchName));
       }
     } catch (err: any) {
       autoExpandRef.current = false;
-      console.error('Error checking out branch:', err)
-      await handleGitCheckoutError(activeRepo.path, err.message || String(err), () => handleCheckoutBranch(branchName));
+      console.error('Error checking out branch:', err);
+      await handleGitCheckoutError(targetRepoPath, err.message || String(err), () => handleCheckoutBranch(branchName));
     }
-  }
+  };
 
   const handleCheckoutRemoteBranch = (remoteBranchName: string) => {
     if (!activeRepo) return;
@@ -726,10 +738,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
       console.error('Error switching to worktree:', err)
     }
   }
-
-  const mainWtPath = activeRepo?.worktrees?.[0]?.path;
-  const currentRepoPath = activeRepo?.path ?? '';
-  const isCurrentRepoWorktree = mainWtPath ? normalizePath(currentRepoPath) !== normalizePath(mainWtPath) : false;
 
   const localBranches = [...(activeRepo?.branches?.local ?? [branch])]
     .filter((b) => {
@@ -2028,7 +2036,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               await handleCheckoutBranch(target.localName)
             } else {
               try {
-                const res = await window.api.git.createBranch(activeRepo.path, target.localName, target.remoteBranchName)
+                const targetPath = (isCurrentRepoWorktree && mainWtPath) ? mainWtPath : activeRepo.path;
+                if (isCurrentRepoWorktree && mainWtPath) {
+                  await switchActiveRepoPath(mainWtPath);
+                }
+                const res = await window.api.git.createBranch(targetPath, target.localName, target.remoteBranchName)
                 if (res.success) {
                   if (previewBranch === target.remoteBranchName || previewBranch === target.localName) {
                     clearBranchPreview()
