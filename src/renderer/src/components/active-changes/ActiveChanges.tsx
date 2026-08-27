@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { FileText, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { useUndoStore } from '../../store/useUndoStore'
 import { useToaster } from '../toaster/ToasterContext'
 import { DiffModal } from '../details/DiffModal'
 import { AppDialog } from '../dialogs/AppDialog'
@@ -79,6 +80,12 @@ export const ActiveChanges: React.FC = () => {
     try {
       const res = await window.api.git.add(activeRepo.path, filePath)
       if (res.success) {
+        useUndoStore.getState().pushAction({
+          type: 'STAGE',
+          repoPath: activeRepo.path,
+          files: [filePath],
+          description: `Stage "${filePath}"`
+        })
         setSelectedUnstaged((prev) => {
           const next = new Set(prev)
           next.delete(filePath)
@@ -97,6 +104,12 @@ export const ActiveChanges: React.FC = () => {
     try {
       const res = await window.api.git.reset(activeRepo.path, filePath)
       if (res.success) {
+        useUndoStore.getState().pushAction({
+          type: 'UNSTAGE',
+          repoPath: activeRepo.path,
+          files: [filePath],
+          description: `Unstage "${filePath}"`
+        })
         setSelectedStaged((prev) => {
           const next = new Set(prev)
           next.delete(filePath)
@@ -117,6 +130,12 @@ export const ActiveChanges: React.FC = () => {
     try {
       const res = await window.api.git.add(activeRepo.path, paths)
       if (res.success) {
+        useUndoStore.getState().pushAction({
+          type: 'STAGE',
+          repoPath: activeRepo.path,
+          files: paths,
+          description: `Stage ${paths.length} files`
+        })
         setSelectedUnstaged(new Set())
         await refreshRepo(activeRepo.id)
         addToast({ variant: 'success', title: 'Staged', message: `Staged ${paths.length} file(s)` })
@@ -134,6 +153,12 @@ export const ActiveChanges: React.FC = () => {
     try {
       const res = await window.api.git.reset(activeRepo.path, paths)
       if (res.success) {
+        useUndoStore.getState().pushAction({
+          type: 'UNSTAGE',
+          repoPath: activeRepo.path,
+          files: paths,
+          description: `Unstage ${paths.length} files`
+        })
         setSelectedStaged(new Set())
         await refreshRepo(activeRepo.id)
         addToast({ variant: 'success', title: 'Unstaged', message: `Unstaged ${paths.length} file(s)` })
@@ -597,8 +622,24 @@ export const ActiveChanges: React.FC = () => {
             const { filePaths, isStaged } = discardTarget
             setDiscardTarget(null)
             try {
+              // Create safety snapshot before discarding
+              const snapRes = await window.api.git.createSafetySnapshot(activeRepo.path, filePaths)
               const res = await window.api.git.discardChanges(activeRepo.path, filePaths, isStaged)
               if (res.success) {
+                if (snapRes.success && snapRes.snapshotId) {
+                  useUndoStore.getState().pushAction({
+                    type: 'DISCARD',
+                    repoPath: activeRepo.path,
+                    files: filePaths,
+                    isStaged,
+                    snapshotId: snapRes.snapshotId,
+                    description:
+                      filePaths.length === 1
+                        ? `Discard "${filePaths[0]}"`
+                        : `Discard ${filePaths.length} files`
+                  })
+                }
+
                 if (isStaged) {
                   setSelectedStaged((prev) => {
                     const next = new Set(prev)

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Globe, ArrowDown, ArrowUp, AlertTriangle, ChevronDown, Settings, X, GitBranch, ArrowRight, RotateCcw, Layers, Tag, RefreshCw, Search, Upload } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { useUndoStore } from '../../store/useUndoStore'
 import { getAuthorColor } from '../../utils/authorColor'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 import { AppDialog, AppDialogAction } from '../dialogs/AppDialog'
@@ -905,8 +906,29 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     setIsResetting(true)
     setResetError('')
     try {
+      const oldHead = activeRepo.commits?.[0]?.hash || ''
+      let snapshotId: string | undefined
+      if (resetMode === 'hard') {
+        const snapRes = await window.api.git.createSafetySnapshot(activeRepo.path)
+        if (snapRes.success && snapRes.snapshotId) {
+          snapshotId = snapRes.snapshotId
+        }
+      }
+
       const res = await window.api.git.resetToCommit(activeRepo.path, resetTargetCommit.hash, resetMode)
       if (res.success) {
+        if (oldHead) {
+          useUndoStore.getState().pushAction({
+            type: 'RESET',
+            repoPath: activeRepo.path,
+            mode: resetMode,
+            oldCommitHash: oldHead,
+            targetCommitHash: resetTargetCommit.hash,
+            targetCommitSubject: resetTargetCommit.message,
+            snapshotId,
+            description: `Reset to ${resetTargetCommit.hash.substring(0, 7)} (${resetMode})`
+          })
+        }
         setIsResetModalOpen(false)
         setResetTargetCommit(null)
         await refreshRepo(activeRepo.id)

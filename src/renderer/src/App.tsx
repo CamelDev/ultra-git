@@ -10,8 +10,14 @@ import { ConflictResolver } from "./components/sidebar/ConflictResolver"
 import LandingPage from "./components/layout/LandingPage"
 import { useTooltip } from "./hooks/useTooltip"
 import { useTheme } from "./hooks/useTheme"
+import { useUndoShortcuts } from "./hooks/useUndoShortcuts"
 import { ToasterProvider } from "./components/toaster/ToasterContext"
 import { Toaster } from "./components/toaster/Toaster"
+
+const UndoShortcutsListener: React.FC = () => {
+  useUndoShortcuts()
+  return null
+}
 
 interface ConflictState {
   active: boolean
@@ -435,6 +441,7 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
 
   return (
     <ToasterProvider>
+      <UndoShortcutsListener />
       <TitleBar />
       {renderContent()}
       <Toaster />

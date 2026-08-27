@@ -86,6 +86,10 @@ const api = {
     cherryPick: (repoPath: string, commitHash: string) => ipcRenderer.invoke('git:cherryPick', repoPath, commitHash),
     abortCherryPick: (repoPath: string) => ipcRenderer.invoke('git:abortCherryPick', repoPath),
     continueCherryPick: (repoPath: string) => ipcRenderer.invoke('git:continueCherryPick', repoPath),
+    undoCommit: (repoPath: string) => ipcRenderer.invoke('git:undoCommit', repoPath),
+    createSafetySnapshot: (repoPath: string, filePaths?: string[]) => ipcRenderer.invoke('git:createSafetySnapshot', repoPath, filePaths),
+    restoreSafetySnapshot: (repoPath: string, snapshotId: string) => ipcRenderer.invoke('git:restoreSafetySnapshot', repoPath, snapshotId),
+    deleteSafetySnapshot: (repoPath: string, snapshotId: string) => ipcRenderer.invoke('git:deleteSafetySnapshot', repoPath, snapshotId),
   },
   app: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package } from 'lucide-react'
+import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package, Undo2, Redo2 } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
+import { useUndoStore } from '../../store/useUndoStore'
+import { useToaster } from '../toaster/ToasterContext'
 import { CherryPickModal } from './CherryPickModal'
 import BranchGraphModal from '../graph/BranchGraphModal'
 import { AppDialog } from '../dialogs/AppDialog'
@@ -13,6 +15,17 @@ interface ToolbarProps {
 
 const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
   const { getActiveRepo, refreshRepo, identities } = useRepoStore()
+  const {
+    restoredCommitMessage,
+    clearRestoredCommitMessage,
+    canUndo,
+    canRedo,
+    getUndoDescription,
+    getRedoDescription,
+    undo,
+    redo
+  } = useUndoStore()
+  const { addToast } = useToaster()
   const activeRepo = getActiveRepo()
   const [commitMessage, setCommitMessage] = useState('')
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false)
@@ -33,11 +46,25 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
   const mainWtPath = activeRepo?.worktrees?.[0]?.path;
   const isCurrentRepoWorktree = mainWtPath ? normalizePath(activeRepo.path) !== normalizePath(mainWtPath) : false;
 
+  useEffect(() => {
+    if (restoredCommitMessage !== null) {
+      setCommitMessage(restoredCommitMessage)
+      clearRestoredCommitMessage()
+    }
+  }, [restoredCommitMessage, clearRestoredCommitMessage])
+
   const handleStageAll = async () => {
     if (!activeRepo) return
     try {
       const res = await window.api.git.addAll(activeRepo.path)
       if (res.success) {
+        useUndoStore.getState().pushAction({
+          type: 'STAGE',
+          repoPath: activeRepo.path,
+          files: [],
+          isAll: true,
+          description: 'Stage All'
+        })
         await refreshRepo(activeRepo.id)
       } else {
         console.error('Failed to stage all files:', res.error)
@@ -52,6 +79,13 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
     try {
       const res = await window.api.git.resetAll(activeRepo.path)
       if (res.success) {
+        useUndoStore.getState().pushAction({
+          type: 'UNSTAGE',
+          repoPath: activeRepo.path,
+          files: [],
+          isAll: true,
+          description: 'Unstage All'
+        })
         await refreshRepo(activeRepo.id)
       } else {
         console.error('Failed to unstage all files:', res.error)
@@ -82,9 +116,16 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
       setIsNoChangesStagedOpen(true)
       return
     }
+    const msg = commitMessage
     try {
-      const res = await window.api.git.commit(activeRepo.path, commitMessage)
+      const res = await window.api.git.commit(activeRepo.path, msg)
       if (res.success) {
+        useUndoStore.getState().pushAction({
+          type: 'COMMIT',
+          repoPath: activeRepo.path,
+          commitMessage: msg,
+          description: `Commit "${msg.slice(0, 30)}${msg.length > 30 ? '...' : ''}"`
+        })
         setCommitMessage('')
         await refreshRepo(activeRepo.id)
       } else {
@@ -94,6 +135,56 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
       console.error('Error committing changes:', err)
     }
   }
+
+  const handleUndoClick = async () => {
+    if (!activeRepo) return
+    const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
+    const redoShortcut = isMac ? 'Cmd+Shift+Z' : 'Ctrl+Y'
+    const res = await undo(activeRepo.path, async () => {
+      await refreshRepo(activeRepo.id)
+    })
+    if (res.success && res.description) {
+      addToast({
+        variant: 'info',
+        title: 'Undo Successful',
+        message: `Undid: ${res.description} (${redoShortcut} to redo)`
+      })
+    } else if (!res.success && res.error && res.error !== 'Nothing to undo') {
+      addToast({
+        variant: 'error',
+        title: 'Undo Failed',
+        message: res.error
+      })
+    }
+  }
+
+  const handleRedoClick = async () => {
+    if (!activeRepo) return
+    const res = await redo(activeRepo.path, async () => {
+      await refreshRepo(activeRepo.id)
+    })
+    if (res.success && res.description) {
+      addToast({
+        variant: 'info',
+        title: 'Redo Successful',
+        message: `Redid: ${res.description}`
+      })
+    } else if (!res.success && res.error && res.error !== 'Nothing to redo') {
+      addToast({
+        variant: 'error',
+        title: 'Redo Failed',
+        message: res.error
+      })
+    }
+  }
+
+  const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
+  const undoDesc = activeRepo ? getUndoDescription(activeRepo.path) : null
+  const redoDesc = activeRepo ? getRedoDescription(activeRepo.path) : null
+  const undoTooltip = undoDesc ? `Undo: ${undoDesc} (${isMac ? 'Cmd+Z' : 'Ctrl+Z'})` : `Undo (${isMac ? 'Cmd+Z' : 'Ctrl+Z'})`
+  const redoTooltip = redoDesc ? `Redo: ${redoDesc} (${isMac ? 'Cmd+Shift+Z' : 'Ctrl+Y'})` : `Redo (${isMac ? 'Cmd+Shift+Z' : 'Ctrl+Y'})`
+  const hasUndo = activeRepo ? canUndo(activeRepo.path) : false
+  const hasRedo = activeRepo ? canRedo(activeRepo.path) : false
 
   const handleCreateBranchSubmit = async () => {
     const name = newBranchName.trim()
@@ -231,6 +322,30 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
           >
             <Network size={16} />
             <span className="sr-only">Graph</span>
+          </button>
+
+          <button
+            className="btn-stash btn-icon"
+            onClick={handleUndoClick}
+            disabled={!hasUndo}
+            style={{ opacity: hasUndo ? 1 : 0.4, cursor: hasUndo ? 'pointer' : 'not-allowed' }}
+            data-tooltip={undoTooltip}
+            data-testid="toolbar-undo-btn"
+          >
+            <Undo2 size={16} />
+            <span className="sr-only">Undo</span>
+          </button>
+
+          <button
+            className="btn-stash btn-icon"
+            onClick={handleRedoClick}
+            disabled={!hasRedo}
+            style={{ opacity: hasRedo ? 1 : 0.4, cursor: hasRedo ? 'pointer' : 'not-allowed' }}
+            data-tooltip={redoTooltip}
+            data-testid="toolbar-redo-btn"
+          >
+            <Redo2 size={16} />
+            <span className="sr-only">Redo</span>
           </button>
         </div>
       )}

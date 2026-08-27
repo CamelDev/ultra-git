@@ -813,6 +813,38 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:undoCommit', async (_, repoPath) => {
+    try {
+      return await gitService.undoCommit(repoPath)
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:createSafetySnapshot', async (_, repoPath, filePaths) => {
+    try {
+      return await gitService.createSafetySnapshot(repoPath, filePaths)
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:restoreSafetySnapshot', async (_, repoPath, snapshotId) => {
+    try {
+      return await gitService.restoreSafetySnapshot(repoPath, snapshotId)
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:deleteSafetySnapshot', async (_, repoPath, snapshotId) => {
+    try {
+      return await gitService.deleteSafetySnapshot(repoPath, snapshotId)
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   // Update checker IPC handlers
   registerUpdateHandlers(() => mainWindow)
 

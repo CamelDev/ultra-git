@@ -55,6 +55,10 @@ declare global {
         createTag: (repoPath: string, tagName: string, target?: string) => Promise<IpcResponse<void>>;
         pushTags: (repoPath: string, remote?: string) => Promise<IpcResponse<void>>;
         deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) => Promise<IpcResponse<void>>;
+        undoCommit: (repoPath: string) => Promise<IpcResponse<void>>;
+        createSafetySnapshot: (repoPath: string, filePaths?: string[]) => Promise<IpcResponse<void> & { snapshotId?: string }>;
+        restoreSafetySnapshot: (repoPath: string, snapshotId: string) => Promise<IpcResponse<void>>;
+        deleteSafetySnapshot: (repoPath: string, snapshotId: string) => Promise<{ success: boolean }>;
       },
       app: {
         openDirectory: () => Promise<{ canceled: boolean, path?: string }>;

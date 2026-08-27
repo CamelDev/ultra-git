@@ -1837,5 +1837,135 @@ export const gitService = {
     const git = getGitInstance(repoPath);
     await git.raw(['-c', 'core.editor=true', 'cherry-pick', '--continue']);
     return { success: true };
+  },
+
+  undoCommit: async (repoPath: string): Promise<{ success: boolean; error?: string }> => {
+    const git = getGitInstance(repoPath);
+    try {
+      let hasParent = false;
+      try {
+        await git.raw(['rev-parse', '--verify', 'HEAD~1']);
+        hasParent = true;
+      } catch {
+        hasParent = false;
+      }
+
+      if (hasParent) {
+        await git.reset(['--soft', 'HEAD~1']);
+      } else {
+        // Root commit undo: delete HEAD ref so repo returns to unborn branch state with files staged
+        await git.raw(['update-ref', '-d', 'HEAD']);
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to undo commit' };
+    }
+  },
+
+  createSafetySnapshot: async (repoPath: string, filePaths?: string[]): Promise<{ success: boolean; snapshotId?: string; error?: string }> => {
+    const git = getGitInstance(repoPath);
+    try {
+      const snapshotId = `snap_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const snapshotsDir = join(repoPath, '.git', 'ultra-git-snapshots', snapshotId);
+      fs.mkdirSync(snapshotsDir, { recursive: true });
+
+      const status = await git.status();
+      const filesToSnapshot: string[] = filePaths && filePaths.length > 0
+        ? filePaths
+        : status.files.map(f => f.path);
+
+      const metadata: {
+        snapshotId: string;
+        createdAt: number;
+        files: Array<{
+          path: string;
+          exists: boolean;
+          isStaged: boolean;
+          statusIndex: string;
+          statusWorkingDir: string;
+        }>;
+      } = {
+        snapshotId,
+        createdAt: Date.now(),
+        files: []
+      };
+
+      for (const relPath of filesToSnapshot) {
+        const fullPath = resolve(repoPath, relPath);
+        const exists = fs.existsSync(fullPath);
+        const fileStatus = status.files.find(f => f.path === relPath);
+        const isStaged = fileStatus ? (fileStatus.index !== ' ' && fileStatus.index !== '?') : false;
+
+        metadata.files.push({
+          path: relPath,
+          exists,
+          isStaged,
+          statusIndex: fileStatus ? fileStatus.index : ' ',
+          statusWorkingDir: fileStatus ? fileStatus.working_dir : ' '
+        });
+
+        if (exists) {
+          const destPath = join(snapshotsDir, 'files', relPath);
+          fs.mkdirSync(join(destPath, '..'), { recursive: true });
+          fs.copyFileSync(fullPath, destPath);
+        }
+      }
+
+      fs.writeFileSync(join(snapshotsDir, 'metadata.json'), JSON.stringify(metadata, null, 2), 'utf8');
+      return { success: true, snapshotId };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to create safety snapshot' };
+    }
+  },
+
+  restoreSafetySnapshot: async (repoPath: string, snapshotId: string): Promise<{ success: boolean; error?: string }> => {
+    const git = getGitInstance(repoPath);
+    try {
+      const snapshotsDir = join(repoPath, '.git', 'ultra-git-snapshots', snapshotId);
+      const metaPath = join(snapshotsDir, 'metadata.json');
+      if (!fs.existsSync(metaPath)) {
+        return { success: false, error: `Snapshot ${snapshotId} not found` };
+      }
+
+      const metadata = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+
+      for (const file of metadata.files) {
+        const fullPath = resolve(repoPath, file.path);
+        const backupPath = join(snapshotsDir, 'files', file.path);
+
+        if (file.exists && fs.existsSync(backupPath)) {
+          fs.mkdirSync(join(fullPath, '..'), { recursive: true });
+          fs.copyFileSync(backupPath, fullPath);
+          if (file.isStaged) {
+            await git.add(file.path);
+          }
+        } else if (!file.exists && fs.existsSync(fullPath)) {
+          fs.rmSync(fullPath, { recursive: true, force: true });
+          if (file.isStaged) {
+            try {
+              await git.reset(['HEAD', '--', file.path]);
+            } catch {
+              await git.reset(['--', file.path]);
+            }
+          }
+        }
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to restore safety snapshot' };
+    }
+  },
+
+  deleteSafetySnapshot: async (repoPath: string, snapshotId: string): Promise<{ success: boolean }> => {
+    try {
+      const snapshotsDir = join(repoPath, '.git', 'ultra-git-snapshots', snapshotId);
+      if (fs.existsSync(snapshotsDir)) {
+        fs.rmSync(snapshotsDir, { recursive: true, force: true });
+      }
+      return { success: true };
+    } catch {
+      return { success: false };
+    }
   }
 };
