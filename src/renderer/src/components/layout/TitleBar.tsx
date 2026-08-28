@@ -22,6 +22,28 @@ const PRESET_COLORS = [
   '#ec4899', // Pink
 ]
 
+export type TabIndicatorType = 'busy' | 'remote-changes' | 'stashed-or-uncommitted' | 'none'
+
+export function getTabIndicatorState(tab: {
+  isPushing?: boolean
+  isPulling?: boolean
+  isFetching?: boolean
+  status?: { behind?: number; files?: any[] } | null
+  stashes?: any[]
+}): TabIndicatorType {
+  const isRepoBusy = !!(tab.isPushing || tab.isPulling || tab.isFetching)
+  if (isRepoBusy) return 'busy'
+
+  const behindCount = tab.status?.behind ?? 0
+  if (behindCount > 0) return 'remote-changes'
+
+  const stashesCount = tab.stashes?.length ?? 0
+  const modifiedFilesCount = tab.status?.files?.length ?? 0
+  if (stashesCount > 0 || modifiedFilesCount > 0) return 'stashed-or-uncommitted'
+
+  return 'none'
+}
+
 const TitleBar: React.FC = () => {
   const {
     repositories,
@@ -312,6 +334,48 @@ const TitleBar: React.FC = () => {
                 ? 'Fetching...'
                 : undefined
 
+          const behindCount = tab.status?.behind ?? 0
+          const stashesCount = tab.stashes?.length ?? 0
+          const modifiedFilesCount = tab.status?.files?.length ?? 0
+          const indicatorState = getTabIndicatorState(tab)
+
+          let indicatorNode: React.ReactNode = null
+          if (indicatorState === 'busy') {
+            indicatorNode = (
+              <RefreshCw 
+                size={12} 
+                className="spin-animation tab-busy-spinner" 
+                style={{ color: tab.customColor || 'var(--accent)', flexShrink: 0 }}
+                data-testid="tab-busy-spinner"
+                data-tooltip={busyTooltip}
+              />
+            )
+          } else if (indicatorState === 'remote-changes') {
+            indicatorNode = (
+              <span 
+                className="tab-color-dot tab-indicator-dot" 
+                style={tab.customColor ? { backgroundColor: tab.customColor } : undefined}
+                data-testid="tab-indicator-dot"
+                data-tooltip={`${behindCount} commit${behindCount === 1 ? '' : 's'} to pull`}
+              />
+            )
+          } else if (indicatorState === 'stashed-or-uncommitted') {
+            let tooltip = 'Uncommitted changes'
+            if (stashesCount > 0 && modifiedFilesCount > 0) {
+              tooltip = `Uncommitted changes and ${stashesCount} stash${stashesCount === 1 ? '' : 'es'}`
+            } else if (stashesCount > 0) {
+              tooltip = `${stashesCount} stash${stashesCount === 1 ? '' : 'es'}`
+            }
+            indicatorNode = (
+              <span 
+                className="tab-color-dot tab-indicator-circle" 
+                style={tab.customColor ? { borderColor: tab.customColor } : undefined}
+                data-testid="tab-indicator-circle"
+                data-tooltip={tooltip}
+              />
+            )
+          }
+
           return (
             <div 
               key={tab.id} 
@@ -325,21 +389,7 @@ const TitleBar: React.FC = () => {
               onDragEnd={handleDragEnd}
               onDrop={(e) => e.preventDefault()}
             >
-              {isRepoBusy ? (
-                <RefreshCw 
-                  size={12} 
-                  className="spin-animation tab-busy-spinner" 
-                  style={{ color: 'var(--accent)', flexShrink: 0 }}
-                  data-testid="tab-busy-spinner"
-                  data-tooltip={busyTooltip}
-                />
-              ) : tab.customColor ? (
-                <span 
-                  className="tab-color-dot" 
-                  style={{ backgroundColor: tab.customColor }}
-                  data-testid="tab-color-dot"
-                />
-              ) : null}
+              {indicatorNode}
               <span className="tab-title" onDoubleClick={(e) => handleToggleTabSettings(e, tab)}>
                 {displayName}
               </span>

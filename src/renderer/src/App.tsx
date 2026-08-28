@@ -14,6 +14,10 @@ import { useUndoShortcuts } from "./hooks/useUndoShortcuts"
 import { ToasterProvider } from "./components/toaster/ToasterContext"
 import { Toaster } from "./components/toaster/Toaster"
 
+if (typeof window !== 'undefined') {
+  ;(window as any).useRepoStore = useRepoStore
+}
+
 const UndoShortcutsListener: React.FC = () => {
   useUndoShortcuts()
   return null

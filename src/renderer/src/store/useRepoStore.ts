@@ -894,3 +894,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     set({ recentRepos: updated });
   }
 }));
+
+if (typeof window !== 'undefined') {
+  ;(window as any).useRepoStore = useRepoStore;
+}

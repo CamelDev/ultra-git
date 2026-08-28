@@ -12,6 +12,7 @@
   --hover: rgba(255, 255, 255, 0.06);
   --tab-active: var(--bg-primary);
   --tab-inactive: var(--bg-secondary);
+  --tab-default-color: #6b7280;
   --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.2), 0 2px 4px -2px rgb(0 0 0 / 0.2);
   --glass: blur(12px) saturate(180%);
   --glass-bg: rgba(22, 25, 32, 0.7);
@@ -52,6 +53,7 @@
   --hover: rgba(15, 23, 42, 0.05);  /* Soft slate hover overlay */
   --tab-active: var(--bg-primary);
   --tab-inactive: var(--bg-secondary);
+  --tab-default-color: #94a3b8;
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(15, 23, 42, 0.08);
@@ -235,8 +237,8 @@ body {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 3px;
-  background: var(--tab-custom-color, linear-gradient(90deg, var(--accent), var(--accent-light)));
+  height: 6px;
+  background: var(--tab-custom-color, var(--tab-default-color, #6b7280));
 }
 
 .tab.dragging {
@@ -251,6 +253,27 @@ body {
   border-radius: 50%;
   margin-right: 8px;
   flex-shrink: 0;
+  background-color: var(--tab-custom-color, var(--tab-default-color, #6b7280));
+}
+
+.tab-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+  background-color: var(--tab-custom-color, var(--tab-default-color, #6b7280));
+}
+
+.tab-indicator-circle {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+  background-color: transparent !important;
+  border: 1.5px solid var(--tab-custom-color, var(--tab-default-color, #6b7280));
+  box-sizing: border-box;
 }
 
 .tab-title {

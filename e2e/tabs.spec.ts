@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { launchElectronApp } from './helpers/launcher';
 import { GitSandbox } from './helpers/git-sandbox';
 import path from 'path';
+import fs from 'fs';
 
 test.describe('Multi-Repo Tab System', () => {
   let sandbox: GitSandbox;
@@ -311,8 +312,17 @@ test.describe('Multi-Repo Tab System', () => {
       await expect(redSwatch).toBeVisible();
       await redSwatch.click();
 
-      // Verify color dot is visible inside the tab
-      const colorDot = tabs.first().locator('[data-testid="tab-color-dot"]');
+      // Create a stash so the sandbox has stashed changes and triggers the indicator circle
+      await sandbox.createStash('test-stash');
+      await page1.evaluate(() => {
+        const state = (window as any).useRepoStore?.getState?.();
+        if (state && state.repositories.length > 0) {
+          state.refreshRepo(state.repositories[0].id);
+        }
+      });
+
+      // Verify indicator circle is visible inside the tab
+      const colorDot = tabs.first().locator('[data-testid="tab-indicator-circle"]');
       await expect(colorDot).toBeVisible();
 
       // Close the first app instance
@@ -326,7 +336,7 @@ test.describe('Multi-Repo Tab System', () => {
         await expect(tabs2).toHaveCount(1);
         await expect(tabs2.first()).toContainText('My Customized Sandbox');
 
-        const colorDot2 = tabs2.first().locator('[data-testid="tab-color-dot"]');
+        const colorDot2 = tabs2.first().locator('[data-testid="tab-indicator-circle"]');
         await expect(colorDot2).toBeVisible();
 
       } finally {
@@ -453,6 +463,80 @@ test.describe('Multi-Repo Tab System', () => {
       await expect(pushBtn).toBeVisible();
       await expect(pushBtn).toContainText('Push');
       await expect(pushBtn).not.toBeDisabled();
+
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('should render thicker 6px active tab dash and correct dynamic Git status indicators (circle, solid dot, invisible)', async () => {
+    const { app, page } = await launchElectronApp({ disableDefaultTab: true });
+
+    try {
+      // Mock opening sandbox
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath };
+        });
+      }, sandbox.dir);
+
+      const landingOpenBtn = page.locator('[data-testid="landing-open-repo-btn"]');
+      await landingOpenBtn.click();
+
+      const tabs = page.locator('[data-testid="repo-tab"]');
+      await expect(tabs).toHaveCount(1);
+      const firstTab = tabs.first();
+
+      // 1. Verify active tab has class active and dash height is 6px
+      await expect(firstTab).toHaveClass(/active/);
+      const afterHeight = await page.evaluate(() => {
+        const activeTab = document.querySelector('.tab.active');
+        if (!activeTab) return null;
+        const afterStyle = window.getComputedStyle(activeTab, '::after');
+        return afterStyle.height;
+      });
+      expect(afterHeight).toBe('6px');
+
+      // 2. Clean repository state: indicator should be invisible
+      await expect(firstTab.locator('.tab-color-dot')).toHaveCount(0);
+
+      // 3. Uncommitted changes state: indicator should be a circle
+      const dirtyFile = path.join(sandbox.dir, 'uncommitted_test_file.txt');
+      fs.writeFileSync(dirtyFile, 'uncommitted modification');
+      await page.evaluate(async () => {
+        const state = (window as any).useRepoStore?.getState?.();
+        if (state && state.repositories[0]) {
+          await state.refreshRepo(state.repositories[0].id);
+        }
+      });
+      const circleIndicator = firstTab.locator('[data-testid="tab-indicator-circle"]');
+      await expect(circleIndicator).toBeVisible();
+
+      // Clean up uncommitted file and verify stash also shows circle
+      fs.unlinkSync(dirtyFile);
+      await sandbox.createStash('stash-indicator-test');
+      await page.evaluate(async () => {
+        const state = (window as any).useRepoStore?.getState?.();
+        if (state && state.repositories[0]) {
+          await state.refreshRepo(state.repositories[0].id);
+        }
+      });
+      await expect(circleIndicator).toBeVisible();
+
+      // 4. Remote commits to pull state: indicator should be a solid dot
+      await page.evaluate(() => {
+        const state = (window as any).useRepoStore?.getState?.();
+        if (state && state.repositories[0]) {
+          (window as any).useRepoStore.setState({
+            repositories: state.repositories.map((r: any, i: number) =>
+              i === 0 ? { ...r, stashes: [], status: { ...r.status, files: [], behind: 3 } } : r
+            )
+          });
+        }
+      });
+      const solidDotIndicator = firstTab.locator('[data-testid="tab-indicator-dot"]');
+      await expect(solidDotIndicator).toBeVisible();
 
     } finally {
       await app.close();
