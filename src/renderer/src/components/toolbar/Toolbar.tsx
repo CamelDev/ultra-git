@@ -14,7 +14,7 @@ interface ToolbarProps {
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
-  const { getActiveRepo, refreshRepo, identities } = useRepoStore()
+  const { getActiveRepo, refreshRepo, identities, setRepoCommitMessage } = useRepoStore()
   const {
     restoredCommitMessage,
     clearRestoredCommitMessage,
@@ -27,7 +27,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
   } = useUndoStore()
   const { addToast } = useToaster()
   const activeRepo = getActiveRepo()
-  const [commitMessage, setCommitMessage] = useState('')
+  const commitMessage = activeRepo?.commitMessage || ''
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false)
   const [newBranchName, setNewBranchName] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
@@ -47,11 +47,11 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
   const isCurrentRepoWorktree = mainWtPath ? normalizePath(activeRepo.path) !== normalizePath(mainWtPath) : false;
 
   useEffect(() => {
-    if (restoredCommitMessage !== null) {
-      setCommitMessage(restoredCommitMessage)
+    if (restoredCommitMessage !== null && activeRepo) {
+      setRepoCommitMessage(activeRepo.id, restoredCommitMessage)
       clearRestoredCommitMessage()
     }
-  }, [restoredCommitMessage, clearRestoredCommitMessage])
+  }, [restoredCommitMessage, clearRestoredCommitMessage, activeRepo?.id, setRepoCommitMessage])
 
   const handleStageAll = async () => {
     if (!activeRepo) return
@@ -126,7 +126,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
           commitMessage: msg,
           description: `Commit "${msg.slice(0, 30)}${msg.length > 30 ? '...' : ''}"`
         })
-        setCommitMessage('')
+        setRepoCommitMessage(activeRepo.id, '')
         await refreshRepo(activeRepo.id)
       } else {
         console.error('Failed to commit:', res.error)
@@ -400,7 +400,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
                   className="commit-input"
                   placeholder="Commit message..."
                   value={commitMessage}
-                  onChange={(e) => setCommitMessage(e.target.value)}
+                  onChange={(e) => activeRepo && setRepoCommitMessage(activeRepo.id, e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault()

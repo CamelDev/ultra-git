@@ -352,5 +352,56 @@ describe('useRepoStore', () => {
     setRepoPulling(id2, false);
     expect(useRepoStore.getState().repositories.find(r => r.id === id2)?.isPulling).toBe(false);
   });
+
+  it('should isolate commit message drafts per repository and persist to localStorage', async () => {
+    // Clear localStore before testing
+    for (const key in localStore) delete localStore[key];
+
+    const { addRepo, setRepoCommitMessage } = useRepoStore.getState();
+    await addRepo('/repo-a');
+    const idA = useRepoStore.getState().activeId!;
+    await addRepo('/repo-b');
+    const idB = useRepoStore.getState().activeId!;
+
+    expect(useRepoStore.getState().repositories.find(r => r.id === idA)?.commitMessage).toBe('');
+    expect(useRepoStore.getState().repositories.find(r => r.id === idB)?.commitMessage).toBe('');
+
+    // Type commit message for repo A
+    setRepoCommitMessage(idA, 'feat(auth): add google sso login');
+    expect(useRepoStore.getState().repositories.find(r => r.id === idA)?.commitMessage).toBe('feat(auth): add google sso login');
+    expect(useRepoStore.getState().repositories.find(r => r.id === idB)?.commitMessage).toBe('');
+
+    // Type commit message for repo B
+    setRepoCommitMessage(idB, 'fix(ui): fix button overflow in toolbar');
+    expect(useRepoStore.getState().repositories.find(r => r.id === idA)?.commitMessage).toBe('feat(auth): add google sso login');
+    expect(useRepoStore.getState().repositories.find(r => r.id === idB)?.commitMessage).toBe('fix(ui): fix button overflow in toolbar');
+
+    // Verify localStorage has persisted both messages
+    const customizations = JSON.parse(localStore['repo-tab-customizations']);
+    expect(customizations['/repo-a']?.commitMessage).toBe('feat(auth): add google sso login');
+    expect(customizations['/repo-b']?.commitMessage).toBe('fix(ui): fix button overflow in toolbar');
+
+    // Clear message on repo A (e.g. after commit)
+    setRepoCommitMessage(idA, '');
+    expect(useRepoStore.getState().repositories.find(r => r.id === idA)?.commitMessage).toBe('');
+    expect(useRepoStore.getState().repositories.find(r => r.id === idB)?.commitMessage).toBe('fix(ui): fix button overflow in toolbar');
+  });
+
+  it('should restore commit message drafts when initializing repos from localStorage', async () => {
+    // Pre-populate localStorage
+    localStore['repo-tab-customizations'] = JSON.stringify({
+      '/repo-with-draft': {
+        customName: 'Custom Repo',
+        commitMessage: 'WIP: ongoing work on backend refactor'
+      }
+    });
+
+    const { initializeRepos } = useRepoStore.getState();
+    await initializeRepos(['/repo-with-draft'], '/repo-with-draft');
+
+    const state = useRepoStore.getState();
+    const repo = state.repositories[0];
+    expect(repo.commitMessage).toBe('WIP: ongoing work on backend refactor');
+  });
 });
 

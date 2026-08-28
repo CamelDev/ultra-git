@@ -542,5 +542,112 @@ test.describe('Multi-Repo Tab System', () => {
       await app.close();
     }
   });
+
+  test('should isolate commit message state per repository tab and persist across app restart', async () => {
+    // Initialize a second sandbox repo
+    const sandbox2 = new GitSandbox();
+    await sandbox2.init();
+    await sandbox2.createCommit('file2.txt', 'content', 'Initial commit in repo 2');
+
+    // Add uncommitted changes in both sandboxes so the commit section is rendered
+    fs.writeFileSync(path.join(sandbox.dir, 'repo1_change.txt'), 'repo 1 change');
+    fs.writeFileSync(path.join(sandbox2.dir, 'repo2_change.txt'), 'repo 2 change');
+
+    try {
+      const { app, page } = await launchElectronApp({ disableDefaultTab: true });
+
+      try {
+        // Open first repository via landing page
+        await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+          ipcMain.removeHandler('dialog:openDirectory');
+          ipcMain.handle('dialog:openDirectory', async () => ({
+            canceled: false,
+            filePaths: [sandboxPath],
+            path: sandboxPath
+          }));
+        }, sandbox.dir);
+
+        const landingOpenBtn = page.locator('[data-testid="landing-open-repo-btn"]');
+        await expect(landingOpenBtn).toBeVisible();
+        await landingOpenBtn.click();
+
+        const tabs = page.locator('[data-testid="repo-tab"]');
+        await expect(tabs).toHaveCount(1);
+
+        // Open second repository via TitleBar Add button dropdown
+        await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+          ipcMain.removeHandler('dialog:openDirectory');
+          ipcMain.handle('dialog:openDirectory', async () => ({
+            canceled: false,
+            filePaths: [sandboxPath],
+            path: sandboxPath
+          }));
+        }, sandbox2.dir);
+
+        const addBtn = page.locator('[data-testid="add-repo-btn"]');
+        await expect(addBtn).toBeVisible();
+        await addBtn.click();
+
+        const dropdownOpenBtn = page.locator('[data-testid="dropdown-open-repo-btn"]');
+        await expect(dropdownOpenBtn).toBeVisible();
+        await dropdownOpenBtn.click();
+
+        await expect(tabs).toHaveCount(2);
+
+        // Verify active tab is tab 2
+        await expect(tabs.nth(1)).toHaveClass(/active/);
+        const commitInput = page.locator('[data-testid="commit-message-input"]');
+        await expect(commitInput).toHaveValue('');
+
+        // Type commit message in tab 2
+        await commitInput.fill('fix(repo2): second repo commit draft');
+        await expect(commitInput).toHaveValue('fix(repo2): second repo commit draft');
+
+        // Switch to tab 1
+        await tabs.nth(0).click();
+        await expect(tabs.nth(0)).toHaveClass(/active/);
+        await expect(commitInput).toHaveValue('');
+
+        // Type commit message in tab 1
+        await commitInput.fill('feat(repo1): first repo commit draft');
+        await expect(commitInput).toHaveValue('feat(repo1): first repo commit draft');
+
+        // Switch back to tab 2 and verify its draft is intact
+        await tabs.nth(1).click();
+        await expect(tabs.nth(1)).toHaveClass(/active/);
+        await expect(commitInput).toHaveValue('fix(repo2): second repo commit draft');
+
+        // Switch back to tab 1 and verify its draft is intact
+        await tabs.nth(0).click();
+        await expect(tabs.nth(0)).toHaveClass(/active/);
+        await expect(commitInput).toHaveValue('feat(repo1): first repo commit draft');
+
+      } finally {
+        await app.close();
+      }
+
+      // Relaunch the app to verify persistence of both drafts
+      const restarted = await launchElectronApp({ cleanState: false });
+      try {
+        const restartedTabs = restarted.page.locator('[data-testid="repo-tab"]');
+        await expect(restartedTabs).toHaveCount(2);
+
+        const restartedCommitInput = restarted.page.locator('[data-testid="commit-message-input"]');
+        // Currently active tab should have its commit message restored
+        await expect(restartedCommitInput).toHaveValue('feat(repo1): first repo commit draft');
+
+        // Switch to second tab and verify its draft was also restored
+        await restartedTabs.nth(1).click();
+        await expect(restartedTabs.nth(1)).toHaveClass(/active/);
+        await expect(restartedCommitInput).toHaveValue('fix(repo2): second repo commit draft');
+
+      } finally {
+        await restarted.app.close();
+      }
+    } finally {
+      await sandbox2.destroy();
+    }
+  });
 });
+
 
