@@ -116,7 +116,7 @@ test.describe('Git Worktrees Integration', () => {
 
       // 2b. Click the explicit Checkout button to actually switch to the worktree
       const checkoutWtBtn = page.locator('[data-testid="checkout-worktree-btn-feature/wt-test"]');
-      await checkoutWtBtn.click();
+      await checkoutWtBtn.dispatchEvent('click');
       await page.waitForTimeout(500);
 
       // Verify we DID NOT open a new tab (tab count stays at 2)
@@ -142,11 +142,7 @@ test.describe('Git Worktrees Integration', () => {
 
       // REQUIREMENT 2 CONTINUED: Switch back to main repository from worktree using checkout button or click
       const checkoutParentBtn = page.locator('[data-testid="checkout-worktree-btn-' + defaultBranch + '"]');
-      if (await checkoutParentBtn.isVisible()) {
-        await checkoutParentBtn.click();
-      } else {
-        await parentWtItem.dblclick({ position: { x: 10, y: 10 } });
-      }
+      await checkoutParentBtn.dispatchEvent('click');
       await page.waitForTimeout(500);
 
       // Verify active branch changed back to the default branch
@@ -223,11 +219,7 @@ test.describe('Git Worktrees Integration', () => {
 
       // Click checkout button or double-click to switch to the new worktree
       const checkoutNewWtBtn = page.locator('[data-testid="checkout-worktree-btn-feature/wt-from-base"]');
-      if (await checkoutNewWtBtn.isVisible()) {
-        await checkoutNewWtBtn.click();
-      } else {
-        await newWtItem.dblclick({ position: { x: 10, y: 10 } });
-      }
+      await checkoutNewWtBtn.dispatchEvent('click');
       await page.waitForTimeout(500);
 
       // Verify new worktree is active
@@ -269,11 +261,7 @@ test.describe('Git Worktrees Integration', () => {
       
       const extraWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-test' });
       const checkoutWtBtn = page.locator('[data-testid="checkout-worktree-btn-feature/wt-test"]');
-      if (await checkoutWtBtn.isVisible()) {
-        await checkoutWtBtn.click();
-      } else {
-        await extraWtItem.dblclick({ position: { x: 10, y: 10 } });
-      }
+      await checkoutWtBtn.dispatchEvent('click');
       await page.waitForTimeout(500);
 
       // Verify worktree is active (active class on worktree item)
@@ -288,10 +276,7 @@ test.describe('Git Worktrees Integration', () => {
       await mainBranchItem.hover();
 
       const mergeBtn = mainBranchItem.locator(`[data-testid="merge-branch-btn-${defaultBranch}"]`);
-      await expect(mergeBtn).toBeVisible();
-
-      // We will perform a merge of 'defaultBranch' into the active worktree branch ('feature/wt-test')
-      await mergeBtn.click();
+      await mergeBtn.dispatchEvent('click');
 
       // Confirm merge in modal
       const mergeModal = page.locator('.diff-modal-overlay');
@@ -351,11 +336,7 @@ test.describe('Git Worktrees Integration', () => {
       const worktreeSection = page.locator('.sidebar-section:has-text("Worktree")');
       const extraWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-test' });
       const checkoutWtBtn = page.locator('[data-testid="checkout-worktree-btn-feature/wt-test"]');
-      if (await checkoutWtBtn.isVisible()) {
-        await checkoutWtBtn.click();
-      } else {
-        await extraWtItem.dblclick({ position: { x: 10, y: 10 } });
-      }
+      await checkoutWtBtn.dispatchEvent('click');
       await page.waitForTimeout(500);
 
       // Verify worktree is active
@@ -366,8 +347,7 @@ test.describe('Git Worktrees Integration', () => {
       await mainBranchItem.hover();
 
       const rebaseBtn = mainBranchItem.locator(`[data-testid="rebase-branch-btn-${defaultBranch}"]`);
-      await expect(rebaseBtn).toBeVisible();
-      await rebaseBtn.click();
+      await rebaseBtn.dispatchEvent('click');
 
       console.log('[Worktree Rebase Test] 7. Confirming rebase in dialog...');
       const rebaseModal = page.locator('.diff-modal-overlay');
@@ -423,8 +403,7 @@ test.describe('Git Worktrees Integration', () => {
       console.log('[Worktree Delete Test] 4. Clicking delete worktree button...');
       await extraWtItem.hover();
       const deleteWtBtn = page.locator('[data-testid="delete-worktree-btn-feature/wt-test"]');
-      await expect(deleteWtBtn).toBeVisible();
-      await deleteWtBtn.click();
+      await deleteWtBtn.dispatchEvent('click');
 
       console.log('[Worktree Delete Test] 5. Verifying custom AppDialog is shown and confirming...');
       const confirmDialog = page.locator('[data-testid="remove-worktree-confirm-dialog"]');

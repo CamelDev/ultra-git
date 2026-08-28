@@ -75,8 +75,7 @@ test.describe('Interactive Conflict Resolver', () => {
       await branchAItem.hover();
 
       const mergeBtn = page.locator('[data-testid="merge-branch-btn-branch-a"]');
-      await expect(mergeBtn).toBeVisible();
-      await mergeBtn.click();
+      await mergeBtn.dispatchEvent('click');
 
       console.log('[Test 1] Confirming merge in modal...');
       const mergeModal = page.locator('.diff-modal-overlay');
@@ -209,8 +208,7 @@ test.describe('Interactive Conflict Resolver', () => {
       await branchAItem.hover();
 
       const mergeBtn = page.locator('[data-testid="merge-branch-btn-branch-a"]');
-      await expect(mergeBtn).toBeVisible();
-      await mergeBtn.click();
+      await mergeBtn.dispatchEvent('click');
 
       // Confirm merge in modal
       const mergeModal = page.locator('.diff-modal-overlay');

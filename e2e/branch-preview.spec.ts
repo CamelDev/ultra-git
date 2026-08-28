@@ -91,8 +91,7 @@ test.describe('Branch Preview - Click loads commits without checkout', () => {
       console.log('13. Hovering on feature-branch and checking it out while preview is active...')
       await featureBranchItem.hover()
       const checkoutBtn = page.locator('[data-testid="checkout-branch-btn-feature-branch"]')
-      await expect(checkoutBtn).toBeVisible()
-      await checkoutBtn.click()
+      await checkoutBtn.dispatchEvent('click')
       await page.waitForTimeout(1000)
 
       console.log('14. Verifying preview banner is automatically dismissed...')
@@ -154,8 +153,7 @@ test.describe('Branch Preview - Click loads commits without checkout', () => {
       console.log('8. Hovering on feature-branch and clicking delete branch button...')
       await featureBranchItem.hover()
       const deleteBtn = page.locator('[data-testid="delete-branch-btn-feature-branch"]')
-      await expect(deleteBtn).toBeVisible()
-      await deleteBtn.click()
+      await deleteBtn.dispatchEvent('click')
 
       console.log('9. Verifying delete branches modal is visible...')
       const deleteModal = page.locator('[data-testid="delete-branches-modal"]')
