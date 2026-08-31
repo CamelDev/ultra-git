@@ -51,7 +51,6 @@ declare global {
   }
 
   interface UpdateSettings {
-    enabled: boolean
     skippedVersion: string | null
     lastCheckedAt: string | null
   }
@@ -143,7 +142,6 @@ declare global {
       updates: {
         check: () => Promise<{ success: boolean; current?: string; update?: UpdateInfo | null; error?: string }>;
         skipVersion: (version: string) => Promise<{ success: boolean; error?: string }>;
-        setEnabled: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
         getSettings: () => Promise<{ success: boolean; data?: UpdateSettings; error?: string }>;
         onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
       };

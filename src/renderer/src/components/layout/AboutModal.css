@@ -149,9 +149,51 @@
   transition: all 0.15s ease;
 }
 
-.about-check-updates:hover {
+.about-check-updates:hover:not(:disabled) {
   background: var(--accent);
   color: white;
+}
+
+.about-check-updates:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.about-check-updates.has-update-flash {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #ef4444;
+  animation: aboutUpdateFlash 1.5s infinite ease-in-out;
+}
+
+.about-check-updates.has-update-flash:hover:not(:disabled) {
+  background: #ef4444;
+  color: white;
+}
+
+.about-refresh-spin {
+  animation: aboutSpin 1s linear infinite;
+}
+
+@keyframes aboutSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes aboutUpdateFlash {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.3);
+    border-color: #ef4444;
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.85);
+    border-color: #f87171;
+    background: rgba(239, 68, 68, 0.28);
+  }
 }
 
 .about-description {

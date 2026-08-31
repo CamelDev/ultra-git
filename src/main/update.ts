@@ -90,8 +90,6 @@ function httpsGetJson(url: string, timeoutMs: number): Promise<any> {
 // ---------- the check ----------
 export async function checkForUpdates(): Promise<UpdateInfo | null> {
   const settings = readSettings()
-  if (settings.updates?.enabled === false) return null // user opted out
-
   const id = getInstallId()
   const url = `${UPDATE_URL}?v=${encodeURIComponent(app.getVersion())}`
             + `&os=${process.platform}&id=${id}`
@@ -112,8 +110,6 @@ export async function checkForUpdates(): Promise<UpdateInfo | null> {
 // Same as checkForUpdates but also reports whether the server was reached.
 async function queryUpdateServer(): Promise<{ contacted: boolean; update: UpdateInfo | null }> {
   const settings = readSettings()
-  if (settings.updates?.enabled === false) return { contacted: false, update: null }
-
   const id = getInstallId()
   const url = `${UPDATE_URL}?v=${encodeURIComponent(app.getVersion())}`
             + `&os=${process.platform}&id=${id}`
@@ -137,8 +133,12 @@ async function queryUpdateServer(): Promise<{ contacted: boolean; update: Update
 // ---------- IPC ----------
 export function registerUpdateHandlers(getWin: () => BrowserWindow | null) {
   ipcMain.handle('update:check', async () => {
-    const info = await checkForUpdates()
-    return { success: true, current: app.getVersion(), update: info }
+    try {
+      const info = await checkForUpdates()
+      return { success: true, current: app.getVersion(), update: info }
+    } catch (err: any) {
+      return { success: false, current: app.getVersion(), error: err?.message || 'Check failed' }
+    }
   })
 
   ipcMain.handle('update:skipVersion', async (_, version: string) => {
@@ -148,19 +148,11 @@ export function registerUpdateHandlers(getWin: () => BrowserWindow | null) {
     return { success: true }
   })
 
-  ipcMain.handle('update:setEnabled', async (_, enabled: boolean) => {
-    updateSettings(s => {
-      s.updates = { ...(s.updates || {}), enabled: !!enabled }
-    })
-    return { success: true }
-  })
-
   ipcMain.handle('update:getSettings', async () => {
     const settings = readSettings()
     return {
       success: true,
       data: {
-        enabled: settings.updates?.enabled !== false,
         skippedVersion: settings.updates?.skippedVersion ?? null,
         lastCheckedAt: settings.updates?.lastCheckedAt ?? null,
       },

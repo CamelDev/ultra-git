@@ -7,10 +7,13 @@ import pkg from '../../../../../package.json'
 interface AboutModalProps {
   isOpen: boolean
   onClose: () => void
-  onCheckForUpdates?: () => void
+  onCheckForUpdates?: () => Promise<void> | void
+  hasUpdate?: boolean
 }
 
-export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onCheckForUpdates }) => {
+export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onCheckForUpdates, hasUpdate }) => {
+  const [isChecking, setIsChecking] = React.useState(false)
+
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -31,6 +34,16 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onCheck
 
   const handleOpenLink = (url: string) => {
     window.open(url, '_blank')
+  }
+
+  const handleCheckUpdates = async () => {
+    if (isChecking || !onCheckForUpdates) return
+    setIsChecking(true)
+    try {
+      await onCheckForUpdates()
+    } finally {
+      setIsChecking(false)
+    }
   }
 
   return (
@@ -59,11 +72,13 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onCheck
             <p className="about-version">Version {pkg.version}</p>
             {onCheckForUpdates && (
               <button
-                className="about-check-updates"
-                onClick={onCheckForUpdates}
+                className={`about-check-updates ${hasUpdate ? 'has-update-flash' : ''} ${isChecking ? 'is-checking' : ''}`}
+                onClick={handleCheckUpdates}
+                disabled={isChecking}
                 data-testid="about-check-updates-btn"
               >
-                <RefreshCw size={13} /> Check for updates
+                <RefreshCw size={13} className={isChecking ? 'about-refresh-spin' : ''} />
+                {isChecking ? 'Checking for updates...' : hasUpdate ? 'Update Available' : 'Check for updates'}
               </button>
             )}
          

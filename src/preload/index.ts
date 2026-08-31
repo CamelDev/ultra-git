@@ -104,7 +104,6 @@ const api = {
   updates: {
     check: () => ipcRenderer.invoke('update:check'),
     skipVersion: (version: string) => ipcRenderer.invoke('update:skipVersion', version),
-    setEnabled: (enabled: boolean) => ipcRenderer.invoke('update:setEnabled', enabled),
     getSettings: () => ipcRenderer.invoke('update:getSettings'),
     onUpdateAvailable: (callback: (info: any) => void) => {
       const listener = (_event: any, info: any) => callback(info)

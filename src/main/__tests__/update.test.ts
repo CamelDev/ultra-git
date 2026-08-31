@@ -33,7 +33,6 @@ interface UpdateInfo {
 }
 
 interface UpdateSettings {
-  enabled?: boolean;
   skippedVersion?: string | null;
   lastCheckedAt?: string;
 }
@@ -42,9 +41,8 @@ interface UpdateSettings {
 function decideUpdate(
   currentVersion: string,
   serverResponse: { latest?: string; url?: string; publishedAt?: string | null; notes?: string } | null,
-  settings: { updates?: UpdateSettings }
+  settings: { updates?: UpdateSettings } = {}
 ): UpdateInfo | null {
-  if (settings.updates?.enabled === false) return null; // user opted out
   if (!serverResponse?.latest) return null;
   if (compareVersions(serverResponse.latest, currentVersion) <= 0) return null;
   if (serverResponse.latest === settings.updates?.skippedVersion) return null;
@@ -61,9 +59,8 @@ function decideUpdate(
 function decideQuery(
   currentVersion: string,
   serverResponse: { latest?: string; url?: string; publishedAt?: string | null; notes?: string } | null,
-  settings: { updates?: UpdateSettings }
+  settings: { updates?: UpdateSettings } = {}
 ): { contacted: boolean; update: UpdateInfo | null } {
-  if (settings.updates?.enabled === false) return { contacted: false, update: null };
   if (!serverResponse?.latest) return { contacted: false, update: null };
   if (compareVersions(serverResponse.latest, currentVersion) <= 0) return { contacted: true, update: null };
   if (serverResponse.latest === settings.updates?.skippedVersion) return { contacted: true, update: null };
@@ -128,7 +125,7 @@ describe("compareVersions", () => {
 });
 
 describe("decideUpdate (checkForUpdates logic)", () => {
-  const baseSettings = { updates: { enabled: true } };
+  const baseSettings = { updates: {} };
 
   it("returns update info when newer version exists", () => {
     const result = decideUpdate("1.0.10", {
@@ -157,14 +154,7 @@ describe("decideUpdate (checkForUpdates logic)", () => {
 
   it("returns null when version is skipped", () => {
     const result = decideUpdate("1.0.10", { latest: "1.1.0" }, {
-      updates: { enabled: true, skippedVersion: "1.1.0" },
-    });
-    expect(result).toBeNull();
-  });
-
-  it("returns null when updates are disabled", () => {
-    const result = decideUpdate("1.0.10", { latest: "1.1.0" }, {
-      updates: { enabled: false },
+      updates: { skippedVersion: "1.1.0" },
     });
     expect(result).toBeNull();
   });
@@ -177,7 +167,7 @@ describe("decideUpdate (checkForUpdates logic)", () => {
 });
 
 describe("decideQuery (queryUpdateServer logic)", () => {
-  const baseSettings = { updates: { enabled: true } };
+  const baseSettings = { updates: {} };
 
   it("reports contacted=true and update when newer version exists", () => {
     const result = decideQuery("1.0.10", { latest: "1.1.0" }, baseSettings);
@@ -198,17 +188,9 @@ describe("decideQuery (queryUpdateServer logic)", () => {
     expect(result.update).toBeNull();
   });
 
-  it("reports contacted=false when updates disabled", () => {
-    const result = decideQuery("1.0.10", { latest: "1.1.0" }, {
-      updates: { enabled: false },
-    });
-    expect(result.contacted).toBe(false);
-    expect(result.update).toBeNull();
-  });
-
   it("reports contacted=true but no update when version skipped", () => {
     const result = decideQuery("1.0.10", { latest: "1.1.0" }, {
-      updates: { enabled: true, skippedVersion: "1.1.0" },
+      updates: { skippedVersion: "1.1.0" },
     });
     expect(result.contacted).toBe(true);
     expect(result.update).toBeNull();
