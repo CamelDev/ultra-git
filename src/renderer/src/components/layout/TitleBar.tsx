@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, X, Settings, Palette, Pencil, RotateCcw, FolderOpen, Trash2, RefreshCw } from 'lucide-react'
+import { Plus, X, Settings, Palette, Pencil, RotateCcw, FolderOpen, Trash2, RefreshCw, Globe } from 'lucide-react'
 import { useRepoStore, Repository } from '../../store/useRepoStore'
 import logoIcon from '../../assets/icon.png'
 import { IdentitiesModal } from '../details/IdentitiesModal'
@@ -22,26 +22,26 @@ const PRESET_COLORS = [
   '#ec4899', // Pink
 ]
 
-export type TabIndicatorType = 'busy' | 'remote-changes' | 'stashed-or-uncommitted' | 'none'
+export type TabIndicatorType = 'busy' | 'remote-changes' | 'unpushed-commits' | 'synced'
 
 export function getTabIndicatorState(tab: {
   isPushing?: boolean
   isPulling?: boolean
   isFetching?: boolean
-  status?: { behind?: number; files?: any[] } | null
+  status?: { behind?: number; ahead?: number; files?: any[] } | null
+  commits?: any[]
   stashes?: any[]
 }): TabIndicatorType {
   const isRepoBusy = !!(tab.isPushing || tab.isPulling || tab.isFetching)
   if (isRepoBusy) return 'busy'
 
-  const behindCount = tab.status?.behind ?? 0
+  const behindCount = tab.status?.behind ?? (tab.commits?.filter((c: any) => c.syncStatus === 'remote-only').length ?? 0)
   if (behindCount > 0) return 'remote-changes'
 
-  const stashesCount = tab.stashes?.length ?? 0
-  const modifiedFilesCount = tab.status?.files?.length ?? 0
-  if (stashesCount > 0 || modifiedFilesCount > 0) return 'stashed-or-uncommitted'
+  const aheadCount = tab.status?.ahead ?? (tab.commits?.filter((c: any) => c.syncStatus === 'local-only').length ?? 0)
+  if (aheadCount > 0) return 'unpushed-commits'
 
-  return 'none'
+  return 'synced'
 }
 
 const TitleBar: React.FC = () => {
@@ -334,9 +334,8 @@ const TitleBar: React.FC = () => {
                 ? 'Fetching...'
                 : undefined
 
-          const behindCount = tab.status?.behind ?? 0
-          const stashesCount = tab.stashes?.length ?? 0
-          const modifiedFilesCount = tab.status?.files?.length ?? 0
+          const behindCount = tab.status?.behind ?? (tab.commits?.filter((c: any) => c.syncStatus === 'remote-only').length ?? 0)
+          const aheadCount = tab.status?.ahead ?? (tab.commits?.filter((c: any) => c.syncStatus === 'local-only').length ?? 0)
           const indicatorState = getTabIndicatorState(tab)
 
           let indicatorNode: React.ReactNode = null
@@ -352,26 +351,30 @@ const TitleBar: React.FC = () => {
             )
           } else if (indicatorState === 'remote-changes') {
             indicatorNode = (
-              <span 
-                className="tab-color-dot tab-indicator-dot" 
-                style={tab.customColor ? { backgroundColor: tab.customColor } : undefined}
-                data-testid="tab-indicator-dot"
-                data-tooltip={`${behindCount} commit${behindCount === 1 ? '' : 's'} to pull`}
+              <Globe 
+                size={12} 
+                className="tab-indicator-globe" 
+                style={tab.customColor ? { color: tab.customColor } : undefined}
+                data-testid="tab-indicator-globe"
+                data-tooltip={behindCount > 0 ? `${behindCount} commit${behindCount === 1 ? '' : 's'} to pull` : 'Remote changes to pull'}
               />
             )
-          } else if (indicatorState === 'stashed-or-uncommitted') {
-            let tooltip = 'Uncommitted changes'
-            if (stashesCount > 0 && modifiedFilesCount > 0) {
-              tooltip = `Uncommitted changes and ${stashesCount} stash${stashesCount === 1 ? '' : 'es'}`
-            } else if (stashesCount > 0) {
-              tooltip = `${stashesCount} stash${stashesCount === 1 ? '' : 'es'}`
-            }
+          } else if (indicatorState === 'unpushed-commits') {
             indicatorNode = (
               <span 
                 className="tab-color-dot tab-indicator-circle" 
                 style={tab.customColor ? { borderColor: tab.customColor } : undefined}
                 data-testid="tab-indicator-circle"
-                data-tooltip={tooltip}
+                data-tooltip={aheadCount > 0 ? `${aheadCount} unpushed commit${aheadCount === 1 ? '' : 's'}` : 'Unpushed local commits'}
+              />
+            )
+          } else if (indicatorState === 'synced') {
+            indicatorNode = (
+              <span 
+                className="tab-color-dot tab-indicator-dot" 
+                style={tab.customColor ? { backgroundColor: tab.customColor } : undefined}
+                data-testid="tab-indicator-dot"
+                data-tooltip="In sync with remote"
               />
             )
           }

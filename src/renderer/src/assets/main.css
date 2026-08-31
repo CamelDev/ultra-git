@@ -276,6 +276,19 @@ body {
   box-sizing: border-box;
 }
 
+.tab-indicator-globe {
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  color: var(--tab-custom-color, var(--tab-default-color, #6b7280));
+}
+
+.tab-busy-spinner {
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
 .tab-title {
   white-space: nowrap;
 }

@@ -54,8 +54,14 @@ export async function launchElectronApp(options: LaunchOptions = {}): Promise<La
   // NOTE: `--no-lock` bypasses the single-instance lock so multiple isolated
   // app instances can run within the E2E suite. The single-instance behavior
   // itself is covered by e2e/single-instance.spec.ts (which omits this flag).
+  const isHeadful = process.env.ULTRA_GIT_HEADFUL === 'true' || process.env.HEADFUL === 'true';
+  const args = [mainPath, '--no-sandbox', `--user-data-dir=${currentUserDataDir}`, '--no-lock'];
+  if (!isHeadful) {
+    args.push('--headless');
+  }
+
   const app = await electron.launch({
-    args: [mainPath, '--no-sandbox', `--user-data-dir=${currentUserDataDir}`, '--no-lock'],
+    args,
     env
   });
 

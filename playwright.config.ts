@@ -12,5 +12,6 @@ export default defineConfig({
   use: {
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    headless: true,
   },
 });

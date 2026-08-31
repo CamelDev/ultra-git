@@ -23,6 +23,11 @@ let mainWindow: BrowserWindow | null = null
 const skipLock = process.argv.includes('--no-lock')
 const gotTheLock = skipLock ? true : app.requestSingleInstanceLock()
 
+// Detect headless/test mode
+const isTesting = process.env.ULTRA_GIT_TESTING === 'true' || process.env.NODE_ENV === 'test'
+const isHeadful = process.env.ULTRA_GIT_HEADFUL === 'true' || process.env.HEADFUL === 'true'
+const isHeadless = !isHeadful && (isTesting || process.env.ULTRA_GIT_HEADLESS === 'true' || process.env.HEADLESS === 'true' || process.argv.includes('--headless'))
+
 if (!gotTheLock) {
   // Another UltraGIT instance is already running — quit immediately.
   // The running instance will receive the 'second-instance' event below
@@ -34,13 +39,15 @@ if (!gotTheLock) {
     // Restore/focus the existing window, or recreate one if it was closed
     // (macOS keeps the app alive after the last window is closed).
     if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      if (!mainWindow.isVisible()) mainWindow.show()
-      // On macOS, also bring a hidden app (Cmd+H) back to the foreground.
-      if (process.platform === 'darwin') {
-        app.focus({ steal: true })
+      if (!isHeadless) {
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        if (!mainWindow.isVisible()) mainWindow.show()
+        // On macOS, also bring a hidden app (Cmd+H) back to the foreground.
+        if (process.platform === 'darwin') {
+          app.focus({ steal: true })
+        }
+        mainWindow.focus()
       }
-      mainWindow.focus()
     } else if (app.isReady()) {
       createWindow()
     }
@@ -70,7 +77,9 @@ function createWindow(): void {
   })
 
   mainWindow?.on('ready-to-show', () => {
-    mainWindow?.show()
+    if (!isHeadless) {
+      mainWindow?.show()
+    }
   })
 
   mainWindow?.webContents.setWindowOpenHandler((details) => {
