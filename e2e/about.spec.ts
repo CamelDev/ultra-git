@@ -70,4 +70,35 @@ test.describe('About Modal System', () => {
       await app.close();
     }
   });
+
+  test('should click Check for updates button without window dragging or resizing', async () => {
+    const { app, page } = await launchElectronApp({ disableDefaultTab: true });
+
+    try {
+      // 1. Open About Modal via logo
+      const brandLogo = page.locator('[data-testid="brand-logo"]');
+      await brandLogo.click();
+
+      const aboutModal = page.locator('[data-testid="about-modal"]');
+      await expect(aboutModal).toBeVisible();
+
+      // 2. Locate Check for updates button
+      const checkUpdatesBtn = page.locator('[data-testid="about-check-updates-btn"]');
+      await expect(checkUpdatesBtn).toBeVisible();
+      await expect(checkUpdatesBtn).toContainText(/Check for updates|Update Available/);
+
+      // 3. Click Check for updates
+      await checkUpdatesBtn.click();
+
+      // 4. Verify that the button receives the click and modal remains open and stable
+      await expect(aboutModal).toBeVisible();
+
+      // Modal can be closed normally after update check
+      const closeHeaderBtn = page.locator('[data-testid="about-close-btn"]');
+      await closeHeaderBtn.click();
+      await expect(aboutModal).not.toBeVisible();
+    } finally {
+      await app.close();
+    }
+  });
 });

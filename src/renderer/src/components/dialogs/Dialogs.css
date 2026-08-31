@@ -16,6 +16,7 @@
   justify-content: center;
   z-index: 1500; /* Above other modals (diff-modal=1000, about-modal=1200, conflict-resolver=2000) */
   animation: appDialogFadeIn 0.2s ease-out;
+  -webkit-app-region: no-drag;
 }
 
 .app-dialog-content {
@@ -29,6 +30,7 @@
   box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5);
   overflow: hidden;
   animation: appDialogScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-app-region: no-drag;
 }
 
 .app-dialog-header {

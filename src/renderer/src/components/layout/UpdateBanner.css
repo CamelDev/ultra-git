@@ -15,6 +15,7 @@
   width: calc(100vw - 40px);
   backdrop-filter: blur(12px);
   animation: updateBannerSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-app-region: no-drag;
 }
 
 @keyframes updateBannerSlideIn {

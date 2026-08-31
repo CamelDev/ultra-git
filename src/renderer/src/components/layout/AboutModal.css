@@ -11,6 +11,7 @@
   justify-content: center;
   z-index: 1200; /* Higher than TitleBar and dropdowns */
   animation: aboutFadeIn 0.2s ease-out;
+  -webkit-app-region: no-drag;
 }
 
 .about-modal-content {
@@ -24,6 +25,7 @@
   box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5);
   overflow: hidden;
   animation: aboutScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-app-region: no-drag;
 }
 
 /* Glassmorphism styling */
@@ -69,6 +71,7 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  -webkit-app-region: no-drag;
 }
 
 .about-close-btn:hover {
@@ -147,6 +150,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+  -webkit-app-region: no-drag;
 }
 
 .about-check-updates:hover:not(:disabled) {
@@ -259,6 +263,7 @@
   transition: all 0.2s ease;
   width: 100%;
   justify-content: center;
+  -webkit-app-region: no-drag;
 }
 
 .about-link-btn:hover {
@@ -269,6 +274,7 @@
 .about-link-accent {
   color: var(--accent-light);
   cursor: pointer;
+  -webkit-app-region: no-drag;
 }
 
 .about-link-accent:hover {
@@ -282,6 +288,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  -webkit-app-region: no-drag;
 }
 
 .about-made-with {
@@ -302,6 +309,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  -webkit-app-region: no-drag;
 }
 
 .about-footer-close-btn:hover {

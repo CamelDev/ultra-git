@@ -943,6 +943,7 @@ body {
   justify-content: center;
   z-index: 1000;
   animation: fadeIn 0.2s ease-out;
+  -webkit-app-region: no-drag;
 }
 
 .diff-modal-content {
@@ -956,6 +957,7 @@ body {
   box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5);
   overflow: hidden;
   animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-app-region: no-drag;
 }
 
 .diff-modal-header {

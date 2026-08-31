@@ -1,4 +1,5 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { X, Github, Heart, Info, ExternalLink, RefreshCw } from 'lucide-react'
 import './AboutModal.css'
 import logoIcon from '../../assets/icon.png'
@@ -36,7 +37,9 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onCheck
     window.open(url, '_blank')
   }
 
-  const handleCheckUpdates = async () => {
+  const handleCheckUpdates = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
     if (isChecking || !onCheckForUpdates) return
     setIsChecking(true)
     try {
@@ -46,7 +49,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onCheck
     }
   }
 
-  return (
+  return createPortal(
     <div className="about-modal-overlay" onClick={onClose} data-testid="about-modal-overlay">
       <div
         className="about-modal-content glass"
@@ -134,6 +137,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onCheck
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
