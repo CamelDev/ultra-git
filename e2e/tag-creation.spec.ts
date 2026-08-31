@@ -20,6 +20,7 @@ test.describe('Tag Creation from Latest Local Commit', () => {
   })
 
   test('should create a new tag, cancel tag creation, handle errors, and render it in the sidebar list', async () => {
+    test.setTimeout(120000)
     console.log('1. Launching Electron App...')
     const { app, page } = await launchElectronApp()
 

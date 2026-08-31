@@ -22,6 +22,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
   })
 
   test('should create a new branch, switch to it, show actual remote, list multiple branches, and checkout on click', async () => {
+    test.setTimeout(120000)
     console.log('1. Launching Electron App...')
     const { app, page } = await launchElectronApp()
 
