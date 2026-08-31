@@ -349,14 +349,31 @@ test.describe('Git Worktrees Integration', () => {
       const rebaseBtn = mainBranchItem.locator(`[data-testid="rebase-branch-btn-${defaultBranch}"]`);
       await rebaseBtn.dispatchEvent('click');
 
-      console.log('[Worktree Rebase Test] 7. Confirming rebase in dialog...');
+      console.log('[Worktree Rebase Test] 7. Verifying rebase modal opens and dismisses on Escape...');
       const rebaseModal = page.locator('.diff-modal-overlay');
       await expect(rebaseModal).toBeVisible();
-      await page.waitForTimeout(500); // settle scale animation
+      await page.waitForTimeout(300); // settle scale animation
+
+      // Press Escape to dismiss rebase modal with no action
+      await page.keyboard.press('Escape');
+      await expect(rebaseModal).toBeHidden();
+
+      // Verify no rebase occurred yet
+      const wtGitPre = require('simple-git')(wtPath);
+      const preLog = await wtGitPre.log();
+      const preMessages = preLog.all.map((c: any) => c.message);
+      expect(preMessages).not.toContain('Commit in main branch');
+
+      // Re-open rebase modal and confirm
+      console.log('[Worktree Rebase Test] 8. Re-opening rebase modal and confirming...');
+      await rebaseBtn.dispatchEvent('click');
+      await expect(rebaseModal).toBeVisible();
+      await page.waitForTimeout(300);
+
       const confirmRebaseBtn = rebaseModal.locator('[data-testid="confirm-merge-btn"]');
       await confirmRebaseBtn.click();
 
-      console.log('[Worktree Rebase Test] 8. Verifying rebase modal closes...');
+      console.log('[Worktree Rebase Test] 9. Verifying rebase modal closes after confirm...');
       await expect(rebaseModal).toBeHidden();
       await page.waitForTimeout(1000); // wait for git rebase and UI sync
 

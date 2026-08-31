@@ -134,6 +134,20 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
   const [isDeleting, setIsDeleting] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
 
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isDeleting) {
+        e.preventDefault()
+        onClose()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isOpen, isDeleting, onClose])
+
   const activeBranch = activeRepo?.branch || 'main'
   const mainWtPath = activeRepo?.worktrees?.[0]?.path;
 

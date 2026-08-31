@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { GitMerge, GitCommit, X, Loader, AlertTriangle } from "lucide-react"
 
 export type MergeStrategy = "merge" | "no-ff" | "squash"
@@ -42,6 +42,20 @@ export const MergeRebaseModal: React.FC<MergeRebaseModalProps> = ({
   const [strategy, setStrategy] = useState<MergeStrategy>("merge")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isLoading) {
+        e.preventDefault()
+        onClose()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isOpen, isLoading, onClose])
 
   if (!isOpen) return null
 

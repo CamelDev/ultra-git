@@ -368,6 +368,30 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     return () => clearInterval(interval);
   }, [deletingWorktreePath]);
 
+  // Close branch modal on Escape key press
+  React.useEffect(() => {
+    if (!isBranchModalOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsBranchModalOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isBranchModalOpen])
+
+  // Close worktree modal on Escape key press
+  React.useEffect(() => {
+    if (!isWorktreeModalOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsWorktreeModalOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isWorktreeModalOpen])
+
   const handlePopStash = (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
     if (!activeRepo) return

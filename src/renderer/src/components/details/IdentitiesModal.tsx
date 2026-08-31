@@ -56,6 +56,21 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
     }
   }, [isOpen])
 
+  // ESC key to close
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isValidating) {
+        e.preventDefault()
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, isValidating, onClose])
+
   if (!isOpen) return null
 
   const handleBrowseSshKey = async () => {
