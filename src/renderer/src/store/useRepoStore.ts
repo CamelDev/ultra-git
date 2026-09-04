@@ -19,6 +19,17 @@ export interface Identity {
   personalAccessToken?: string;
 }
 
+export interface MergeStatusInfo {
+  isMerge: boolean;
+  isRebase: boolean;
+  isCherryPick?: boolean;
+  inProgress: boolean;
+  currentStep?: number;
+  totalSteps?: number;
+  currentCommitSubject?: string;
+  branchName?: string;
+}
+
 export interface Repository {
   id: string;
   path: string;
@@ -45,6 +56,7 @@ export interface Repository {
   tags?: string[];
   unpushedTags?: string[];
   worktrees?: Array<{ path: string; branch: string; hash: string }>;
+  mergeStatus?: MergeStatusInfo;
 }
 
 export interface RecentRepo {
@@ -480,14 +492,15 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     try {
       const commitLimit = repo.commitLimit || 50;
-      const [statusRes, logRes, stashRes, branchesRes, tagsRes, unpushedTagsRes, worktreesRes] = await Promise.all([
+      const [statusRes, logRes, stashRes, branchesRes, tagsRes, unpushedTagsRes, worktreesRes, mergeStatusRes] = await Promise.all([
         window.api.git.status(repo.path),
         window.api.git.log(repo.path, commitLimit),
         window.api.git.stashList(repo.path),
         window.api.git.getBranches(repo.path),
         window.api.git.getTags(repo.path),
         window.api.git.getUnpushedTags(repo.path),
-        window.api.git.getWorktrees(repo.path)
+        window.api.git.getWorktrees(repo.path),
+        window.api.git.getMergeStatus(repo.path)
       ]);
 
       set((state) => {
@@ -536,6 +549,12 @@ export const useRepoStore = create<RepoState>((set, get) => ({
               tags: tagsRes.success ? tagsRes.data : (r.tags || []),
               unpushedTags: unpushedTagsRes.success ? unpushedTagsRes.data : (r.unpushedTags || []),
               worktrees: wts,
+              mergeStatus: (mergeStatusRes.success && mergeStatusRes.data) ? mergeStatusRes.data : {
+                isMerge: false,
+                isRebase: false,
+                isCherryPick: false,
+                inProgress: false
+              },
               name: mainName,
               error: statusRes.success ? null : (statusRes.error ?? 'Unknown error'),
               isLoading: false

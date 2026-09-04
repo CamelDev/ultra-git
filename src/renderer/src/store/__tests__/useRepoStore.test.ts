@@ -18,6 +18,7 @@ const mockApi = {
     getTags: vi.fn().mockResolvedValue({ success: true, data: [] }),
     getUnpushedTags: vi.fn().mockResolvedValue({ success: true, data: [] }),
     setRepositoryIdentity: vi.fn().mockResolvedValue({ success: true }),
+    getMergeStatus: vi.fn().mockResolvedValue({ success: true, data: { inProgress: false } }),
   },
   app: {
     openDirectory: vi.fn(),

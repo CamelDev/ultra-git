@@ -50,13 +50,16 @@ export type UndoAction =
   | ResetUndoAction
   | DiscardUndoAction
 
+export type DistributiveOmit<T, K extends keyof any> = T extends any ? Omit<T, K> : never
+export type NewUndoAction = DistributiveOmit<UndoAction, 'id' | 'timestamp'>
+
 interface UndoState {
   undoStacks: Record<string, UndoAction[]>
   redoStacks: Record<string, UndoAction[]>
   restoredCommitMessage: string | null
   
   // Actions
-  pushAction: (action: Omit<UndoAction, 'id' | 'timestamp'>) => void
+  pushAction: (action: NewUndoAction) => void
   undo: (repoPath: string, onRefresh: () => Promise<void>) => Promise<{ success: boolean; description?: string; error?: string }>
   redo: (repoPath: string, onRefresh: () => Promise<void>) => Promise<{ success: boolean; description?: string; error?: string }>
   canUndo: (repoPath: string) => boolean

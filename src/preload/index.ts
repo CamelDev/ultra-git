@@ -66,6 +66,7 @@ const api = {
     abortMerge: (repoPath: string) => ipcRenderer.invoke('git:abortMerge', repoPath),
     abortRebase: (repoPath: string) => ipcRenderer.invoke('git:abortRebase', repoPath),
     continueRebase: (repoPath: string) => ipcRenderer.invoke('git:continueRebase', repoPath),
+    skipRebase: (repoPath: string) => ipcRenderer.invoke('git:skipRebase', repoPath),
     getConflictedFiles: (repoPath: string) => ipcRenderer.invoke('git:getConflictedFiles', repoPath),
     getConflictFileDiff: (repoPath: string, filePath: string) =>
       ipcRenderer.invoke('git:getConflictFileDiff', repoPath, filePath),

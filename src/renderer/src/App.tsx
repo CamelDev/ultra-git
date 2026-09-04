@@ -83,6 +83,13 @@ function App() {
     await refreshRepo(activeRepo.id)
   }
 
+  const handleSkipRebase = async () => {
+    if (!activeRepo) return
+    await window.api.git.skipRebase(activeRepo.path)
+    setConflictState({ active: false, isRebase: false, isCherryPick: false, conflictedFiles: [] })
+    await refreshRepo(activeRepo.id)
+  }
+
   // Auto-detect existing conflicts (e.g. from external merge or on app start)
   const conflictedPaths = activeRepo?.status?.conflicted
   useEffect(() => {
@@ -376,7 +383,7 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
         />
 
         <div className="main-content">
-          <Toolbar onMergeConflicts={handleMergeConflicts} />
+          <Toolbar onMergeConflicts={handleMergeConflicts} onOpenConflictResolver={openConflictResolver} />
           {hasActiveChanges && (
             <>
               <ActiveChanges />
@@ -433,6 +440,7 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
                   conflictedFiles={conflictState.conflictedFiles}
                   onAbort={handleAbortMerge}
                   onComplete={handleCompleteMerge}
+                  onSkip={handleSkipRebase}
                   onDismiss={() => setConflictState(s => ({ ...s, active: false }))}
                 />
               </div>

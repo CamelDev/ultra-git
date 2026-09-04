@@ -103,10 +103,24 @@ declare global {
         abortMerge: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         abortRebase: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         continueRebase: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        skipRebase: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         getConflictedFiles: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ path: string; status: string }>; error?: string }>;
         getConflictFileDiff: (repoPath: string, filePath: string) => Promise<{ success: boolean; data?: { raw: string; hunks: Array<{ ours: string; base: string; theirs: string; startLine: number }> }; error?: string }>;
         resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) => Promise<{ success: boolean; error?: string }>;
-        getMergeStatus: (repoPath: string) => Promise<{ success: boolean; data?: { isMerge: boolean; isRebase: boolean; isCherryPick?: boolean; inProgress: boolean }; error?: string }>;
+        getMergeStatus: (repoPath: string) => Promise<{
+          success: boolean;
+          data?: {
+            isMerge: boolean;
+            isRebase: boolean;
+            isCherryPick?: boolean;
+            inProgress: boolean;
+            currentStep?: number;
+            totalSteps?: number;
+            currentCommitSubject?: string;
+            branchName?: string;
+          };
+          error?: string;
+        }>;
         getTags: (repoPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>;
         getUnpushedTags: (repoPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>;
         createTag: (repoPath: string, tagName: string, target?: string) => Promise<{ success: boolean; error?: string }>;
@@ -119,6 +133,10 @@ declare global {
         cherryPick: (repoPath: string, commitHash: string) => Promise<{ success: boolean; data?: { success: boolean; error?: string; hadConflicts?: boolean }; error?: string }>;
         abortCherryPick: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         continueCherryPick: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        undoCommit: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        createSafetySnapshot: (repoPath: string, filePaths?: string[]) => Promise<{ success: boolean; snapshotId?: string; error?: string }>;
+        restoreSafetySnapshot: (repoPath: string, snapshotId: string) => Promise<{ success: boolean; error?: string }>;
+        deleteSafetySnapshot: (repoPath: string, snapshotId: string) => Promise<{ success: boolean; error?: string }>;
       };
       app: {
         openDirectory: () => Promise<{ canceled: boolean; path?: string }>;

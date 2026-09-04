@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react"
-import { AlertTriangle, CheckCircle, FileText, ChevronRight, XCircle, GitMerge, RotateCcw, Check, X } from "lucide-react"
+import { AlertTriangle, CheckCircle, FileText, ChevronRight, XCircle, GitMerge, RotateCcw, Check, X, SkipForward } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 
 interface ConflictedFile {
@@ -25,6 +25,7 @@ interface ConflictResolverProps {
   conflictedFiles: ConflictedFile[]
   onAbort: () => Promise<void>
   onComplete: () => Promise<void>
+  onSkip?: () => Promise<void>
   onDismiss?: () => void
 }
 
@@ -34,6 +35,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
   conflictedFiles,
   onAbort,
   onComplete,
+  onSkip,
   onDismiss
 }) => {
   const { getActiveRepo, refreshRepo } = useRepoStore()
@@ -49,6 +51,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
   const [isLoadingDiff, setIsLoadingDiff] = useState(false)
   const [isAborting, setIsAborting] = useState(false)
   const [isCompleting, setIsCompleting] = useState(false)
+  const [isSkipping, setIsSkipping] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
   const [activeHunk, setActiveHunk] = useState(0)
 
@@ -181,6 +184,16 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
     }
   }
 
+  const handleSkip = async () => {
+    if (!onSkip) return
+    setIsSkipping(true)
+    try {
+      await onSkip()
+    } finally {
+      setIsSkipping(false)
+    }
+  }
+
   const allResolved = conflictedFiles.every(f => resolvedFiles.has(f.path))
   // All hunks in the current file must have a resolution chosen before allowing Apply
   const allHunksResolved = hunks.length > 0 && resolvedHunks.length === hunks.length && resolvedHunks.every(h => !!h.resolution)
@@ -221,7 +234,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
           <button
             className="btn-secondary"
             onClick={handleAbort}
-            disabled={isAborting || isCompleting}
+            disabled={isAborting || isCompleting || isSkipping}
             style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}
             data-testid="abort-merge-btn"
             data-tooltip={`Abort the current ${isRebase ? 'rebase' : isCherryPick ? 'cherry-pick' : 'merge'} process`}
@@ -229,6 +242,19 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
             <XCircle size={13} />
             {isAborting ? "Aborting\u2026" : `Abort ${isRebase ? "Rebase" : isCherryPick ? "Cherry-pick" : "Merge"}`}
           </button>
+          {isRebase && onSkip && (
+            <button
+              className="btn-secondary"
+              onClick={handleSkip}
+              disabled={isAborting || isCompleting || isSkipping}
+              style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}
+              data-testid="skip-rebase-btn"
+              data-tooltip="Skip current commit (git rebase --skip)"
+            >
+              <SkipForward size={13} />
+              {isSkipping ? "Skipping\u2026" : "Skip Commit"}
+            </button>
+          )}
           <div
             data-tooltip={!allResolved ? `Still ${conflictedFiles.filter(f => !resolvedFiles.has(f.path)).length} file(s) to resolve` : "Complete the conflict resolution and commit changes"}
             style={{ display: "inline-flex" }}
@@ -236,7 +262,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
             <button
               className="btn-primary"
               onClick={handleComplete}
-              disabled={!allResolved || isCompleting || isAborting}
+              disabled={!allResolved || isCompleting || isAborting || isSkipping}
               style={{
                 display: "flex",
                 alignItems: "center",

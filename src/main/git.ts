@@ -28,6 +28,17 @@ export type PullBlocker =
   | 'CHERRY_PICK_IN_PROGRESS'
   | 'FETCH_FAILED';
 
+export interface MergeStatus {
+  isMerge: boolean;
+  isRebase: boolean;
+  isCherryPick: boolean;
+  inProgress: boolean;
+  currentStep?: number;
+  totalSteps?: number;
+  currentCommitSubject?: string;
+  branchName?: string;
+}
+
 /** Result of the read-only pre-pull analysis. */
 export interface PullPlan {
   ok: boolean;
@@ -1561,6 +1572,12 @@ export const gitService = {
     return { success: true };
   },
 
+  skipRebase: async (repoPath: string) => {
+    const git = getGitInstance(repoPath);
+    await git.raw(['rebase', '--skip']);
+    return { success: true };
+  },
+
   getConflictedFiles: async (repoPath: string): Promise<ConflictedFile[]> => {
     const git = getGitInstance(repoPath);
     // --porcelain=v1 gives XY STATUS lines, UU = both modified conflict
@@ -1644,11 +1661,12 @@ export const gitService = {
     return { success: true };
   },
 
-  getMergeStatus: async (repoPath: string) => {
+  getMergeStatus: async (repoPath: string): Promise<MergeStatus> => {
     const git = getGitInstance(repoPath);
     let gitDir: string;
     try {
       gitDir = (await git.raw(['rev-parse', '--git-dir'])).trim();
+      if (!gitDir) gitDir = '.git';
     } catch (e) {
       gitDir = '.git';
     }
@@ -1666,7 +1684,70 @@ export const gitService = {
     try { await fs.promises.access(rebaseMergePath); isRebase = true; } catch { /* not rebase-merge */ }
     try { await fs.promises.access(cherryPickHeadPath); isCherryPick = true; } catch { /* not a cherry-pick */ }
 
-    return { isMerge, isRebase, isCherryPick, inProgress: isMerge || isRebase || isCherryPick };
+    let currentStep: number | undefined;
+    let totalSteps: number | undefined;
+    let currentCommitSubject: string | undefined;
+    let branchName: string | undefined;
+
+    const readFileSafe = async (p: string): Promise<string | null> => {
+      try {
+        return await fs.promises.readFile(p, 'utf8');
+      } catch {
+        return null;
+      }
+    };
+
+    if (isRebase) {
+      // Check rebase-merge
+      const endRaw = await readFileSafe(join(rebaseMergePath, 'end'));
+      if (endRaw) {
+        totalSteps = parseInt(endRaw.trim(), 10) || undefined;
+        const doneRaw = await readFileSafe(join(rebaseMergePath, 'done'));
+        if (doneRaw !== null) {
+          const doneLines = doneRaw.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
+          currentStep = doneLines.length;
+          if (currentStep === 0) currentStep = 1;
+        }
+        const msgRaw = await readFileSafe(join(rebaseMergePath, 'msg'));
+        if (msgRaw) {
+          currentCommitSubject = msgRaw.split('\n')[0].trim();
+        }
+        const headNameRaw = await readFileSafe(join(rebaseMergePath, 'head-name'));
+        if (headNameRaw) {
+          branchName = headNameRaw.trim().replace(/^refs\/heads\//, '');
+        }
+      } else {
+        // Check rebase-apply
+        const nextRaw = await readFileSafe(join(rebaseApplyPath, 'next'));
+        const lastRaw = await readFileSafe(join(rebaseApplyPath, 'last'));
+        if (nextRaw) currentStep = parseInt(nextRaw.trim(), 10) || undefined;
+        if (lastRaw) totalSteps = parseInt(lastRaw.trim(), 10) || undefined;
+        const msgRaw = await readFileSafe(join(rebaseApplyPath, 'msg'));
+        if (msgRaw) {
+          currentCommitSubject = msgRaw.split('\n')[0].trim();
+        }
+        const headNameRaw = await readFileSafe(join(rebaseApplyPath, 'head-name'));
+        if (headNameRaw) {
+          branchName = headNameRaw.trim().replace(/^refs\/heads\//, '');
+        }
+      }
+    } else if (isMerge || isCherryPick) {
+      const mergeMsgRaw = await readFileSafe(join(gitResolvedPath, 'MERGE_MSG'));
+      if (mergeMsgRaw) {
+        currentCommitSubject = mergeMsgRaw.split('\n')[0].trim();
+      }
+    }
+
+    return {
+      isMerge,
+      isRebase,
+      isCherryPick,
+      inProgress: isMerge || isRebase || isCherryPick,
+      currentStep,
+      totalSteps,
+      currentCommitSubject,
+      branchName
+    };
   },
 
   getTags: async (repoPath: string): Promise<string[]> => {

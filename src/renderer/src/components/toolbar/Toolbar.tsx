@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package, Undo2, Redo2 } from 'lucide-react'
+import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package, Undo2, Redo2, GitMerge, AlertTriangle, SkipForward, XCircle } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { useUndoStore } from '../../store/useUndoStore'
 import { useToaster } from '../toaster/ToasterContext'
@@ -11,9 +11,10 @@ const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$
 
 interface ToolbarProps {
   onMergeConflicts?: (conflictedFiles: Array<{ path: string; status: string }>, isRebase: boolean, isCherryPick?: boolean) => void
+  onOpenConflictResolver?: () => void
 }
 
-const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResolver }) => {
   const { getActiveRepo, refreshRepo, identities, setRepoCommitMessage } = useRepoStore()
   const {
     restoredCommitMessage,
@@ -41,6 +42,11 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
   const files = activeRepo?.status?.files as any[] || []
   const stagedFiles = files.filter((f) => f.index !== ' ' && f.index !== '?')
   const unstagedFiles = files.filter((f) => f.working_dir !== ' ' || f.index === '?')
+
+  const mergeStatus = activeRepo?.mergeStatus
+  const isOpInProgress = !!mergeStatus?.inProgress
+  const conflictedFiles = (activeRepo?.status?.conflicted || []) as any[]
+  const hasConflicts = conflictedFiles.length > 0
 
   const isIdentityRequiredAndMissing = !!(activeRepo && identities.length > 1 && !activeRepo.identityId)
   const mainWtPath = activeRepo?.worktrees?.[0]?.path;
@@ -133,6 +139,96 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
       }
     } catch (err) {
       console.error('Error committing changes:', err)
+    }
+  }
+
+  const handleContinueRebase = async () => {
+    if (!activeRepo) return
+    try {
+      const res = await window.api.git.continueRebase(activeRepo.path)
+      if (res.success) {
+        addToast({ variant: 'success', title: 'Rebase Advanced', message: 'Rebase continued successfully.' })
+        await refreshRepo(activeRepo.id)
+      } else {
+        addToast({ variant: 'error', title: 'Continue Failed', message: res.error || 'Failed to continue rebase.' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Continue Failed', message: err.message || 'An error occurred.' })
+    }
+  }
+
+  const handleSkipRebase = async () => {
+    if (!activeRepo) return
+    try {
+      const res = await window.api.git.skipRebase(activeRepo.path)
+      if (res.success) {
+        addToast({ variant: 'info', title: 'Commit Skipped', message: 'Skipped commit and advanced rebase.' })
+        await refreshRepo(activeRepo.id)
+      } else {
+        addToast({ variant: 'error', title: 'Skip Failed', message: res.error || 'Failed to skip commit.' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Skip Failed', message: err.message || 'An error occurred.' })
+    }
+  }
+
+  const handleAbortRebase = async () => {
+    if (!activeRepo) return
+    try {
+      const res = await window.api.git.abortRebase(activeRepo.path)
+      if (res.success) {
+        addToast({ variant: 'info', title: 'Rebase Aborted', message: 'Rebase aborted and repository restored.' })
+        await refreshRepo(activeRepo.id)
+      } else {
+        addToast({ variant: 'error', title: 'Abort Failed', message: res.error || 'Failed to abort rebase.' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Abort Failed', message: err.message || 'An error occurred.' })
+    }
+  }
+
+  const handleAbortMerge = async () => {
+    if (!activeRepo) return
+    try {
+      const res = await window.api.git.abortMerge(activeRepo.path)
+      if (res.success) {
+        addToast({ variant: 'info', title: 'Merge Aborted', message: 'Merge aborted and repository restored.' })
+        await refreshRepo(activeRepo.id)
+      } else {
+        addToast({ variant: 'error', title: 'Abort Failed', message: res.error || 'Failed to abort merge.' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Abort Failed', message: err.message || 'An error occurred.' })
+    }
+  }
+
+  const handleContinueCherryPick = async () => {
+    if (!activeRepo) return
+    try {
+      const res = await window.api.git.continueCherryPick(activeRepo.path)
+      if (res.success) {
+        addToast({ variant: 'success', title: 'Cherry-pick Continued', message: 'Cherry-pick completed successfully.' })
+        await refreshRepo(activeRepo.id)
+      } else {
+        addToast({ variant: 'error', title: 'Continue Failed', message: res.error || 'Failed to continue cherry-pick.' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Continue Failed', message: err.message || 'An error occurred.' })
+    }
+  }
+
+  const handleAbortCherryPick = async () => {
+    if (!activeRepo) return
+    try {
+      const res = await window.api.git.abortCherryPick(activeRepo.path)
+      if (res.success) {
+        addToast({ variant: 'info', title: 'Cherry-pick Aborted', message: 'Cherry-pick aborted.' })
+        await refreshRepo(activeRepo.id)
+      } else {
+        addToast({ variant: 'error', title: 'Abort Failed', message: res.error || 'Failed to abort cherry-pick.' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Abort Failed', message: err.message || 'An error occurred.' })
     }
   }
 
@@ -352,83 +448,210 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts }) => {
 
       {activeRepo && (
         <div className="toolbar-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {files.length > 0 && (
-            <>
-              <button
-                className="btn-primary btn-icon"
-                onClick={handleStageAll}
-                disabled={unstagedFiles.length === 0}
-                style={{ opacity: unstagedFiles.length === 0 ? 0.5 : 1, cursor: unstagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
-                data-tooltip="Stage all unstaged changes"
-              >
-                <Plus size={16} />
-                <span className="sr-only">Stage all</span>
-              </button>
-              <button
-                className="btn-secondary btn-icon"
-                onClick={handleUnstageAll}
-                disabled={stagedFiles.length === 0}
-                style={{ opacity: stagedFiles.length === 0 ? 0.5 : 1, cursor: stagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
-                data-tooltip="Unstage all staged changes"
-              >
-                <Minus size={16} />
-                <span className="sr-only">Unstage all</span>
-              </button>
-              <button
-                className="btn-stash btn-icon"
-                onClick={handleStashAll}
-                disabled={files.length === 0}
-                style={{ opacity: files.length === 0 ? 0.5 : 1, cursor: files.length === 0 ? 'not-allowed' : 'pointer' }}
-                data-tooltip="Stash all uncommitted changes (staged and unstaged)"
-                data-testid="stash-all-btn"
-              >
-                <Package size={16} />
-                <span className="sr-only">Stash all</span>
-              </button>
-
-              <div className="commit-section" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                {isIdentityRequiredAndMissing && (
-                  <span 
-                    style={{ color: '#f59e0b', fontSize: '11px', fontWeight: 600, marginRight: '8px' }}
-                    data-testid="identity-missing-warning"
+          {isOpInProgress ? (
+            <div className="operation-in-progress-toolbar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {files.length > 0 && (
+                <>
+                  <button
+                    className="btn-primary btn-icon"
+                    onClick={handleStageAll}
+                    disabled={unstagedFiles.length === 0}
+                    style={{ opacity: unstagedFiles.length === 0 ? 0.5 : 1, cursor: unstagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
+                    data-tooltip="Stage all unstaged changes"
                   >
-                    Select identity in log sync panel
-                  </span>
-                )}
-                <input
-                  type="text"
-                  className="commit-input"
-                  placeholder="Commit message..."
-                  value={commitMessage}
-                  onChange={(e) => activeRepo && setRepoCommitMessage(activeRepo.id, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      handleCommit()
-                    }
-                  }}
-                  disabled={isIdentityRequiredAndMissing}
-                  style={{
-                    opacity: isIdentityRequiredAndMissing ? 0.6 : 1,
-                    cursor: isIdentityRequiredAndMissing ? 'not-allowed' : 'text'
-                  }}
-                  data-testid="commit-message-input"
-                />
+                    <Plus size={16} />
+                    <span className="sr-only">Stage all</span>
+                  </button>
+                  <button
+                    className="btn-secondary btn-icon"
+                    onClick={handleUnstageAll}
+                    disabled={stagedFiles.length === 0}
+                    style={{ opacity: stagedFiles.length === 0 ? 0.5 : 1, cursor: stagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
+                    data-tooltip="Unstage all staged changes"
+                  >
+                    <Minus size={16} />
+                    <span className="sr-only">Unstage all</span>
+                  </button>
+                </>
+              )}
+
+              <div 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '6px', 
+                  padding: '4px 8px', 
+                  borderRadius: '4px', 
+                  backgroundColor: hasConflicts ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                  color: hasConflicts ? '#f87171' : '#fbbf24',
+                  fontSize: '11.5px',
+                  fontWeight: 600
+                }}
+              >
+                <AlertTriangle size={13} />
+                <span>
+                  {mergeStatus?.isRebase
+                    ? `Rebasing${mergeStatus.currentStep && mergeStatus.totalSteps ? ` (${mergeStatus.currentStep}/${mergeStatus.totalSteps})` : ''}`
+                    : mergeStatus?.isCherryPick
+                    ? 'Cherry-picking'
+                    : 'Merging'}
+                </span>
+              </div>
+
+              {hasConflicts ? (
                 <button
                   className="btn-primary"
-                  onClick={handleCommit}
-                  disabled={commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing}
-                  style={{ 
-                    opacity: (commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing) ? 0.5 : 1, 
-                    cursor: (commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing) ? 'not-allowed' : 'pointer' 
+                  onClick={() => {
+                    if (onOpenConflictResolver) {
+                      onOpenConflictResolver()
+                    } else if (onMergeConflicts) {
+                      window.api.git.getConflictedFiles(activeRepo.path).then(res => {
+                        onMergeConflicts(res.data || [], !!mergeStatus?.isRebase, !!mergeStatus?.isCherryPick)
+                      })
+                    }
                   }}
-                  data-testid="commit-btn"
-                  data-tooltip={isIdentityRequiredAndMissing ? "Please select a Git identity to enable committing" : undefined}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '11.5px',
+                    backgroundColor: '#ef4444',
+                    borderColor: '#dc2626'
+                  }}
+                  data-testid="toolbar-resolve-conflicts-btn"
                 >
-                  Commit
+                  <AlertTriangle size={13} />
+                  Resolve Conflicts ({conflictedFiles.length})
                 </button>
-              </div>
-            </>
+              ) : (
+                <button
+                  className="btn-primary"
+                  onClick={mergeStatus?.isRebase ? handleContinueRebase : mergeStatus?.isCherryPick ? handleContinueCherryPick : handleCommit}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '11.5px',
+                    backgroundColor: '#10b981',
+                    borderColor: '#059669'
+                  }}
+                  data-testid="toolbar-continue-btn"
+                >
+                  <GitMerge size={13} />
+                  {mergeStatus?.isRebase ? 'Continue Rebase' : mergeStatus?.isCherryPick ? 'Continue Cherry-pick' : 'Commit Merge'}
+                </button>
+              )}
+
+              {mergeStatus?.isRebase && (
+                <button
+                  className="btn-secondary"
+                  onClick={handleSkipRebase}
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px' }}
+                  data-tooltip="Skip current commit (git rebase --skip)"
+                  data-testid="toolbar-skip-btn"
+                >
+                  <SkipForward size={13} />
+                  Skip Commit
+                </button>
+              )}
+
+              <button
+                className="btn-secondary"
+                onClick={mergeStatus?.isRebase ? handleAbortRebase : mergeStatus?.isCherryPick ? handleAbortCherryPick : handleAbortMerge}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  fontSize: '11.5px',
+                  color: '#f87171',
+                  borderColor: 'rgba(239, 68, 68, 0.4)'
+                }}
+                data-tooltip={`Abort ${mergeStatus?.isRebase ? 'rebase' : mergeStatus?.isCherryPick ? 'cherry-pick' : 'merge'} and restore previous state`}
+                data-testid="toolbar-abort-btn"
+              >
+                <XCircle size={13} />
+                Abort
+              </button>
+            </div>
+          ) : (
+            files.length > 0 && (
+              <>
+                <button
+                  className="btn-primary btn-icon"
+                  onClick={handleStageAll}
+                  disabled={unstagedFiles.length === 0}
+                  style={{ opacity: unstagedFiles.length === 0 ? 0.5 : 1, cursor: unstagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
+                  data-tooltip="Stage all unstaged changes"
+                >
+                  <Plus size={16} />
+                  <span className="sr-only">Stage all</span>
+                </button>
+                <button
+                  className="btn-secondary btn-icon"
+                  onClick={handleUnstageAll}
+                  disabled={stagedFiles.length === 0}
+                  style={{ opacity: stagedFiles.length === 0 ? 0.5 : 1, cursor: stagedFiles.length === 0 ? 'not-allowed' : 'pointer' }}
+                  data-tooltip="Unstage all staged changes"
+                >
+                  <Minus size={16} />
+                  <span className="sr-only">Unstage all</span>
+                </button>
+                <button
+                  className="btn-stash btn-icon"
+                  onClick={handleStashAll}
+                  disabled={files.length === 0}
+                  style={{ opacity: files.length === 0 ? 0.5 : 1, cursor: files.length === 0 ? 'not-allowed' : 'pointer' }}
+                  data-tooltip="Stash all uncommitted changes (staged and unstaged)"
+                  data-testid="stash-all-btn"
+                >
+                  <Package size={16} />
+                  <span className="sr-only">Stash all</span>
+                </button>
+
+                <div className="commit-section" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {isIdentityRequiredAndMissing && (
+                    <span 
+                      style={{ color: '#f59e0b', fontSize: '11px', fontWeight: 600, marginRight: '8px' }}
+                      data-testid="identity-missing-warning"
+                    >
+                      Select identity in log sync panel
+                    </span>
+                  )}
+                  <input
+                    type="text"
+                    className="commit-input"
+                    placeholder="Commit message..."
+                    value={commitMessage}
+                    onChange={(e) => activeRepo && setRepoCommitMessage(activeRepo.id, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleCommit()
+                      }
+                    }}
+                    disabled={isIdentityRequiredAndMissing}
+                    style={{
+                      opacity: isIdentityRequiredAndMissing ? 0.6 : 1,
+                      cursor: isIdentityRequiredAndMissing ? 'not-allowed' : 'text'
+                    }}
+                    data-testid="commit-message-input"
+                  />
+                  <button
+                    className="btn-primary"
+                    onClick={handleCommit}
+                    disabled={commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing}
+                    style={{ 
+                      opacity: (commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing) ? 0.5 : 1, 
+                      cursor: (commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing) ? 'not-allowed' : 'pointer' 
+                    }}
+                    data-testid="commit-btn"
+                    data-tooltip={isIdentityRequiredAndMissing ? "Please select a Git identity to enable committing" : undefined}
+                  >
+                    Commit
+                  </button>
+                </div>
+              </>
+            )
           )}
         </div>
       )}

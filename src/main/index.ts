@@ -670,6 +670,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:skipRebase', async (_, repoPath) => {
+    try {
+      const data = await gitService.skipRebase(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:getConflictedFiles', async (_, repoPath) => {
     try {
       const data = await gitService.getConflictedFiles(repoPath)

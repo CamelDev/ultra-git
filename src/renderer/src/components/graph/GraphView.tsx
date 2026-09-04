@@ -615,15 +615,152 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
             }
             return
           }
-          case 'MERGE_IN_PROGRESS':
-            await showPullResultDialog('Merge In Progress', 'A merge is already in progress in this repository. Resolve it (or abort it) before pulling new changes.', 'warning')
+          case 'MERGE_IN_PROGRESS': {
+            const cfRes = await window.api.git.getConflictedFiles(targetRepo.path)
+            const conflicts = cfRes.success && cfRes.data ? cfRes.data : []
+            if (conflicts.length > 0) {
+              const action = await showPullResultDialog(
+                'Merge In Progress',
+                `A merge is in progress with ${conflicts.length} conflicted file(s). You can resolve the conflicts now or abort the merge.`,
+                'warning',
+                [
+                  { label: 'Resolve Conflicts', value: 'resolve', variant: 'primary' },
+                  { label: 'Abort Merge', value: 'abort', variant: 'danger' },
+                  { label: 'Cancel', value: 'cancel', variant: 'secondary' }
+                ]
+              )
+              if (action === 'resolve') {
+                if (onOpenConflictResolver) onOpenConflictResolver()
+              } else if (action === 'abort') {
+                await handlePullAbort('merge')
+              }
+            } else {
+              const action = await showPullResultDialog(
+                'Merge In Progress',
+                'A merge is in progress in this repository. All conflicts are resolved or staged. Would you like to commit the merge or abort it?',
+                'warning',
+                [
+                  { label: 'Commit Merge', value: 'commit', variant: 'primary' },
+                  { label: 'Abort Merge', value: 'abort', variant: 'danger' },
+                  { label: 'Cancel', value: 'cancel', variant: 'secondary' }
+                ]
+              )
+              if (action === 'commit') {
+                const res = await window.api.git.commit(targetRepo.path, 'Merge commit')
+                if (res.success) {
+                  addToast({ variant: 'success', title: 'Merge Committed', message: 'Merge commit completed.' })
+                  await refreshRepo(targetRepo.id)
+                } else {
+                  addToast({ variant: 'error', title: 'Commit Failed', message: res.error || 'Failed to commit merge.' })
+                }
+              } else if (action === 'abort') {
+                await handlePullAbort('merge')
+              }
+            }
             return
-          case 'REBASE_IN_PROGRESS':
-            await showPullResultDialog('Rebase In Progress', 'A rebase is already in progress in this repository. Finish it (or abort it) before pulling new changes.', 'warning')
+          }
+          case 'REBASE_IN_PROGRESS': {
+            const cfRes = await window.api.git.getConflictedFiles(targetRepo.path)
+            const conflicts = cfRes.success && cfRes.data ? cfRes.data : []
+            if (conflicts.length > 0) {
+              const action = await showPullResultDialog(
+                'Rebase In Progress',
+                `A rebase is in progress with ${conflicts.length} conflicted file(s). You can resolve the conflicts now or abort the rebase.`,
+                'warning',
+                [
+                  { label: 'Resolve Conflicts', value: 'resolve', variant: 'primary' },
+                  { label: 'Abort Rebase', value: 'abort', variant: 'danger' },
+                  { label: 'Cancel', value: 'cancel', variant: 'secondary' }
+                ]
+              )
+              if (action === 'resolve') {
+                if (onOpenConflictResolver) onOpenConflictResolver()
+              } else if (action === 'abort') {
+                await handlePullAbort('rebase')
+              }
+            } else {
+              const ms = targetRepo.mergeStatus
+              const stepInfo = ms?.currentStep && ms?.totalSteps ? ` (Step ${ms.currentStep} of ${ms.totalSteps})` : ''
+              const commitInfo = ms?.currentCommitSubject ? `\n\nCommit: ${ms.currentCommitSubject}` : ''
+              const action = await showPullResultDialog(
+                'Rebase In Progress',
+                `A rebase is currently in progress${stepInfo}.${commitInfo}\n\nAll conflicts are resolved or staged. Would you like to continue the rebase, skip this commit, or abort?`,
+                'warning',
+                [
+                  { label: 'Continue Rebase', value: 'continue', variant: 'primary' },
+                  { label: 'Skip Commit', value: 'skip', variant: 'secondary' },
+                  { label: 'Abort Rebase', value: 'abort', variant: 'danger' },
+                  { label: 'Cancel', value: 'cancel', variant: 'secondary' }
+                ]
+              )
+              if (action === 'continue') {
+                const res = await window.api.git.continueRebase(targetRepo.path)
+                if (res.success) {
+                  addToast({ variant: 'success', title: 'Rebase Advanced', message: 'Rebase continued successfully.' })
+                  await refreshRepo(targetRepo.id)
+                } else {
+                  addToast({ variant: 'error', title: 'Continue Failed', message: res.error || 'Failed to continue rebase.' })
+                }
+              } else if (action === 'skip') {
+                const res = await window.api.git.skipRebase(targetRepo.path)
+                if (res.success) {
+                  addToast({ variant: 'info', title: 'Commit Skipped', message: 'Skipped commit and advanced rebase.' })
+                  await refreshRepo(targetRepo.id)
+                } else {
+                  addToast({ variant: 'error', title: 'Skip Failed', message: res.error || 'Failed to skip commit.' })
+                }
+              } else if (action === 'abort') {
+                await handlePullAbort('rebase')
+              }
+            }
             return
-          case 'CHERRY_PICK_IN_PROGRESS':
-            await showPullResultDialog('Cherry-pick In Progress', 'A cherry-pick is already in progress in this repository. Finish it (or abort it) before pulling new changes.', 'warning')
+          }
+          case 'CHERRY_PICK_IN_PROGRESS': {
+            const cfRes = await window.api.git.getConflictedFiles(targetRepo.path)
+            const conflicts = cfRes.success && cfRes.data ? cfRes.data : []
+            if (conflicts.length > 0) {
+              const action = await showPullResultDialog(
+                'Cherry-pick In Progress',
+                `A cherry-pick is in progress with ${conflicts.length} conflicted file(s). You can resolve the conflicts now or abort the cherry-pick.`,
+                'warning',
+                [
+                  { label: 'Resolve Conflicts', value: 'resolve', variant: 'primary' },
+                  { label: 'Abort Cherry-pick', value: 'abort', variant: 'danger' },
+                  { label: 'Cancel', value: 'cancel', variant: 'secondary' }
+                ]
+              )
+              if (action === 'resolve') {
+                if (onOpenConflictResolver) onOpenConflictResolver()
+              } else if (action === 'abort') {
+                await window.api.git.abortCherryPick(targetRepo.path)
+                await refreshRepo(targetRepo.id)
+              }
+            } else {
+              const action = await showPullResultDialog(
+                'Cherry-pick In Progress',
+                'A cherry-pick is in progress. All conflicts are resolved or staged. Would you like to continue the cherry-pick or abort it?',
+                'warning',
+                [
+                  { label: 'Continue Cherry-pick', value: 'continue', variant: 'primary' },
+                  { label: 'Abort Cherry-pick', value: 'abort', variant: 'danger' },
+                  { label: 'Cancel', value: 'cancel', variant: 'secondary' }
+                ]
+              )
+              if (action === 'continue') {
+                const res = await window.api.git.continueCherryPick(targetRepo.path)
+                if (res.success) {
+                  addToast({ variant: 'success', title: 'Cherry-pick Continued', message: 'Cherry-pick completed.' })
+                  await refreshRepo(targetRepo.id)
+                } else {
+                  addToast({ variant: 'error', title: 'Continue Failed', message: res.error || 'Failed to continue cherry-pick.' })
+                }
+              } else if (action === 'abort') {
+                await window.api.git.abortCherryPick(targetRepo.path)
+                await refreshRepo(targetRepo.id)
+              }
+            }
             return
+          }
           case 'FETCH_FAILED':
             await showPullResultDialog('Fetch Failed', `Could not reach the remote repository to check for new changes.\n\n${plan.detail || ''}`, 'error')
             return
@@ -1653,52 +1790,194 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         </div>
       )}
       
-      {activeRepo?.status?.conflicted?.length > 0 && (
-        <div
-          className="pull-conflict-banner"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 16px',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
-            fontSize: '12px',
-            color: '#f87171',
-            fontWeight: 500,
-            flexShrink: 0
-          }}
-          data-testid="pull-conflict-banner"
-        >
-          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-          <span>
-            Merge conflicts detected in {activeRepo?.status?.conflicted?.length} file(s).
-          </span>
-          {onOpenConflictResolver && (
-            <button
-              onClick={onOpenConflictResolver}
-              data-tooltip="Open the conflict resolution helper"
-              style={{
-                marginLeft: '8px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '4px 10px',
-                backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: '4px',
-                color: '#f87171',
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-              data-testid="open-conflict-resolver-btn"
-            >
-              Resolve Conflicts <ArrowRight size={11} />
-            </button>
-          )}
-        </div>
-      )}
+      {(activeRepo?.mergeStatus?.inProgress || (activeRepo?.status?.conflicted && activeRepo.status.conflicted.length > 0)) && (() => {
+        const ms = activeRepo?.mergeStatus
+        const isRebase = !!ms?.isRebase
+        const isCherryPick = !!ms?.isCherryPick
+        const conflictedCount = activeRepo?.status?.conflicted?.length || 0
+        const hasConflicts = conflictedCount > 0
+
+        const opName = isRebase ? 'Rebase' : isCherryPick ? 'Cherry-pick' : 'Merge'
+        let detailsText = ''
+        if (isRebase) {
+          const stepText = ms?.currentStep && ms?.totalSteps ? `commit ${ms.currentStep} of ${ms.totalSteps}` : 'in progress'
+          const subject = ms?.currentCommitSubject ? `: ${ms.currentCommitSubject}` : ''
+          detailsText = `Rebasing ${stepText}${subject}`
+        } else if (isCherryPick) {
+          detailsText = `Cherry-pick in progress${ms?.currentCommitSubject ? `: ${ms.currentCommitSubject}` : ''}`
+        } else {
+          detailsText = `Merge in progress${ms?.branchName ? ` (${ms.branchName})` : ''}`
+        }
+
+        const handleBannerContinue = async () => {
+          if (!activeRepo) return
+          if (isRebase) {
+            const res = await window.api.git.continueRebase(activeRepo.path)
+            if (res.success) {
+              addToast({ variant: 'success', title: 'Rebase Advanced', message: 'Rebase continued successfully.' })
+              await refreshRepo(activeRepo.id)
+            } else {
+              addToast({ variant: 'error', title: 'Continue Failed', message: res.error || 'Failed to continue rebase.' })
+            }
+          } else if (isCherryPick) {
+            const res = await window.api.git.continueCherryPick(activeRepo.path)
+            if (res.success) {
+              addToast({ variant: 'success', title: 'Cherry-pick Continued', message: 'Cherry-pick completed.' })
+              await refreshRepo(activeRepo.id)
+            } else {
+              addToast({ variant: 'error', title: 'Continue Failed', message: res.error || 'Failed to continue cherry-pick.' })
+            }
+          } else {
+            const res = await window.api.git.commit(activeRepo.path, 'Merge commit')
+            if (res.success) {
+              addToast({ variant: 'success', title: 'Merge Committed', message: 'Merge completed.' })
+              await refreshRepo(activeRepo.id)
+            } else {
+              addToast({ variant: 'error', title: 'Commit Failed', message: res.error || 'Failed to commit merge.' })
+            }
+          }
+        }
+
+        const handleBannerSkip = async () => {
+          if (!activeRepo) return
+          const res = await window.api.git.skipRebase(activeRepo.path)
+          if (res.success) {
+            addToast({ variant: 'info', title: 'Commit Skipped', message: 'Skipped current commit.' })
+            await refreshRepo(activeRepo.id)
+          } else {
+            addToast({ variant: 'error', title: 'Skip Failed', message: res.error || 'Failed to skip commit.' })
+          }
+        }
+
+        const handleBannerAbort = async () => {
+          if (!activeRepo) return
+          if (isRebase) {
+            await handlePullAbort('rebase')
+          } else if (isCherryPick) {
+            await window.api.git.abortCherryPick(activeRepo.path)
+            addToast({ variant: 'info', title: 'Cherry-pick Aborted', message: 'Cherry-pick operation was aborted.' })
+            await refreshRepo(activeRepo.id)
+          } else {
+            await handlePullAbort('merge')
+          }
+        }
+
+        return (
+          <div
+            className="pull-conflict-banner"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              padding: '8px 16px',
+              backgroundColor: hasConflicts ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+              borderBottom: hasConflicts ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(245, 158, 11, 0.25)',
+              fontSize: '12px',
+              color: hasConflicts ? '#f87171' : '#fbbf24',
+              fontWeight: 500,
+              flexShrink: 0,
+              flexWrap: 'wrap'
+            }}
+            data-testid="pull-conflict-banner"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+              <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+              <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {detailsText}
+              </span>
+              <span style={{ opacity: 0.85, fontSize: '11px', flexShrink: 0 }}>
+                {hasConflicts ? `— ${conflictedCount} file(s) with conflicts` : '— All conflicts resolved / staged'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              {hasConflicts && onOpenConflictResolver && (
+                <button
+                  onClick={onOpenConflictResolver}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 10px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    borderRadius: '4px',
+                    color: '#f87171',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                  data-testid="open-conflict-resolver-btn"
+                >
+                  Resolve Conflicts <ArrowRight size={11} />
+                </button>
+              )}
+              {!hasConflicts && (
+                <button
+                  onClick={handleBannerContinue}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 10px',
+                    backgroundColor: '#10b981',
+                    border: '1px solid #059669',
+                    borderRadius: '4px',
+                    color: '#ffffff',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                  data-testid="continue-operation-btn"
+                >
+                  Continue {opName}
+                </button>
+              )}
+              {isRebase && (
+                <button
+                  onClick={handleBannerSkip}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 10px',
+                    backgroundColor: 'var(--bg-tertiary, #2a2a2a)',
+                    border: '1px solid var(--border, #444)',
+                    borderRadius: '4px',
+                    color: 'var(--text-primary, #eee)',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                  data-testid="skip-commit-btn"
+                >
+                  Skip Commit
+                </button>
+              )}
+              <button
+                onClick={handleBannerAbort}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '4px 10px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '4px',
+                  color: '#f87171',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                data-testid="abort-operation-btn"
+              >
+                Abort {opName}
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Sticky column headers */}
       <div
