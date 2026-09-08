@@ -42,6 +42,10 @@ export function watchDirectory(dirPath: string, onChange: () => void): void {
           normalized === 'dist' ||
           normalized.startsWith('out/') ||
           normalized === 'out' ||
+          normalized.startsWith('test-results/') ||
+          normalized === 'test-results' ||
+          normalized.startsWith('playwright-report/') ||
+          normalized === 'playwright-report' ||
           normalized.endsWith('.log');
 
         if (isIgnored) {

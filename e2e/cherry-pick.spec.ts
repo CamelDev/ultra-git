@@ -32,6 +32,12 @@ test.describe('Cherry Pick Feature', () => {
     const { app, page } = await launchElectronApp()
 
     try {
+      console.log('2.5. Clearing localStorage...')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
       console.log('3. Registering sandbox repo in app...')
       await app.evaluate(async ({ ipcMain }, repoPath) => {
         ipcMain.removeHandler('dialog:openDirectory')
@@ -109,6 +115,12 @@ test.describe('Cherry Pick Feature', () => {
     const { app, page } = await launchElectronApp()
 
     try {
+      console.log('4.5. Clearing localStorage...')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
       console.log('5. Registering sandbox repo in app...')
       await app.evaluate(async ({ ipcMain }, repoPath) => {
         ipcMain.removeHandler('dialog:openDirectory')
@@ -143,7 +155,9 @@ test.describe('Cherry Pick Feature', () => {
 
       console.log('10. Verifying Conflict Resolver modal is opened...')
       await page.waitForTimeout(1000)
-      const conflictTitle = page.locator('span:has-text("Cherry-pick in progress")')
+      const conflictResolver = page.locator('[data-testid="conflict-resolver"]')
+      await expect(conflictResolver).toBeVisible()
+      const conflictTitle = conflictResolver.locator('span:has-text("Cherry-pick in progress")')
       await expect(conflictTitle).toBeVisible()
 
       console.log('11. Clicking Abort Cherry-pick button...')
@@ -154,7 +168,7 @@ test.describe('Cherry Pick Feature', () => {
 
       console.log('12. Verifying Conflict Resolver is closed...')
       await page.waitForTimeout(1000)
-      await expect(conflictTitle).not.toBeVisible()
+      await expect(conflictResolver).not.toBeVisible()
 
       // Verify Git status is clean (or has no merge/cherry-pick head)
       const isCherryPickHeadGone = !fs.existsSync(path.join(sandbox.dir, '.git', 'CHERRY_PICK_HEAD'))
@@ -167,7 +181,7 @@ test.describe('Cherry Pick Feature', () => {
 
   test('should allow cherry picking a commit from another worktree', async () => {
     console.log('1. Setting up a second worktree...')
-    const wtDir = path.join(__dirname, '../../test-results', `wt-${Date.now()}`)
+    const wtDir = path.join(sandbox.dir, '../', `wt-${Date.now()}`)
     await sandbox.git.raw(['worktree', 'add', '-b', 'wt-branch', wtDir])
 
     // Create a commit inside the worktree directory
@@ -183,6 +197,12 @@ test.describe('Cherry Pick Feature', () => {
     const { app, page } = await launchElectronApp()
 
     try {
+      console.log('2.5. Clearing localStorage...')
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
       console.log('3. Registering sandbox repo in app...')
       await app.evaluate(async ({ ipcMain }, repoPath) => {
         ipcMain.removeHandler('dialog:openDirectory')

@@ -1887,7 +1887,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 {detailsText}
               </span>
               <span style={{ opacity: 0.85, fontSize: '11px', flexShrink: 0 }}>
-                {hasConflicts ? `— ${conflictedCount} file(s) with conflicts` : '— All conflicts resolved / staged'}
+                {hasConflicts ? `— ${isRebase ? 'Rebase' : isCherryPick ? 'Cherry-pick' : 'Merge'} conflicts detected in ${conflictedCount} file(s)` : '— All conflicts resolved / staged'}
               </span>
             </div>
 
