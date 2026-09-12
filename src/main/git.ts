@@ -949,7 +949,15 @@ export const gitService = {
         try {
           return await runGitApply(['--ignore-space-change']);
         } catch (retryErr2: any) {
-          throw new Error(retryErr2.message || retryErr.message || err.message);
+          try {
+            return await runGitApply(['-C1', '--ignore-whitespace']);
+          } catch (retryErr3: any) {
+            try {
+              return await runGitApply(['-C0', '--ignore-whitespace']);
+            } catch (retryErr4: any) {
+              throw new Error(retryErr4.message || retryErr3.message || retryErr2.message || retryErr.message || err.message);
+            }
+          }
         }
       }
     }

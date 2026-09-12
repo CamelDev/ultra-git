@@ -4,101 +4,7 @@ import * as path from 'path'
 import { execFile } from 'child_process'
 import simpleGit from 'simple-git'
 import { gitService } from '../git'
-import { buildHunksFromDiffItems, buildHunkPatch, DiffItem } from '../../renderer/src/utils/patchBuilder'
-
-function computeDiff(beforeContent: string = '', afterContent: string = ''): DiffItem[] {
-  const safeBefore = beforeContent || ''
-  const safeAfter = afterContent || ''
-  const beforeLines = safeBefore === '' ? [] : safeBefore.split(/\r?\n/)
-  const afterLines = safeAfter === '' ? [] : safeAfter.split(/\r?\n/)
-
-  let prefixCount = 0
-  while (
-    prefixCount < beforeLines.length &&
-    prefixCount < afterLines.length &&
-    beforeLines[prefixCount] === afterLines[prefixCount]
-  ) {
-    prefixCount++
-  }
-
-  let suffixCount = 0
-  while (
-    suffixCount < beforeLines.length - prefixCount &&
-    suffixCount < afterLines.length - prefixCount &&
-    beforeLines[beforeLines.length - 1 - suffixCount] === afterLines[afterLines.length - 1 - suffixCount]
-  ) {
-    suffixCount++
-  }
-
-  const midBefore = beforeLines.slice(prefixCount, beforeLines.length - suffixCount)
-  const midAfter = afterLines.slice(prefixCount, afterLines.length - suffixCount)
-
-  const db: number[][] = Array(midBefore.length + 1)
-    .fill(null)
-    .map(() => Array(midAfter.length + 1).fill(0))
-
-  for (let i = 1; i <= midBefore.length; i++) {
-    for (let j = 1; j <= midAfter.length; j++) {
-      if (midBefore[i - 1] === midAfter[j - 1]) {
-        db[i][j] = db[i - 1][j - 1] + 1
-      } else {
-        db[i][j] = Math.max(db[i - 1][j], db[i][j - 1])
-      }
-    }
-  }
-
-  let i = midBefore.length
-  let j = midAfter.length
-  const midDiff: DiffItem[] = []
-
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && midBefore[i - 1] === midAfter[j - 1]) {
-      midDiff.unshift({
-        type: 'normal',
-        beforeLine: midBefore[i - 1],
-        afterLine: midAfter[j - 1],
-        beforeNum: prefixCount + i,
-        afterNum: prefixCount + j
-      })
-      i--
-      j--
-    } else if (j > 0 && (i === 0 || db[i][j - 1] >= db[i - 1][j])) {
-      midDiff.unshift({
-        type: 'add',
-        afterLine: midAfter[j - 1],
-        afterNum: prefixCount + j
-      })
-      j--
-    } else {
-      midDiff.unshift({
-        type: 'delete',
-        beforeLine: midBefore[i - 1],
-        beforeNum: prefixCount + i
-      })
-      i--
-    }
-  }
-
-  const prefixDiff: DiffItem[] = beforeLines.slice(0, prefixCount).map((line, idx) => ({
-    type: 'normal',
-    beforeLine: line,
-    afterLine: line,
-    beforeNum: idx + 1,
-    afterNum: idx + 1
-  }))
-
-  const suffixDiff: DiffItem[] = beforeLines
-    .slice(beforeLines.length - suffixCount)
-    .map((line, idx) => ({
-      type: 'normal',
-      beforeLine: line,
-      afterLine: line,
-      beforeNum: beforeLines.length - suffixCount + idx + 1,
-      afterNum: afterLines.length - suffixCount + idx + 1
-    }))
-
-  return [...prefixDiff, ...midDiff, ...suffixDiff]
-}
+import { buildHunksFromDiffItems, buildHunkPatch, computeDiff, DiffItem } from '../../renderer/src/utils/patchBuilder'
 
 function applyPatchExecFile(repoPath: string, patch: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -626,6 +532,180 @@ describe('Git Patch Discard Tests', () => {
     }
 
     console.log('EOF newline diff stage error:', error ? error.message : 'NONE')
+    expect(error).toBeNull()
+  })
+
+  test('Discard hunk on file with trailing newline when white line is added at line 1', async () => {
+    const git = simpleGit(tmpDir)
+    const filePath = 'CLAUDE.md'
+    const fullPath = path.join(tmpDir, filePath)
+
+    // Initial content with standard POSIX trailing newline
+    const initialContent = '# Project\nSome description\n'
+    fs.writeFileSync(fullPath, initialContent)
+    await git.add(filePath)
+    await git.commit('initial')
+
+    // Added white/empty line at line 1
+    const modifiedContent = '\n# Project\nSome description\n'
+    fs.writeFileSync(fullPath, modifiedContent)
+
+    const before = await git.show([`:${filePath}`])
+    const after = fs.readFileSync(fullPath, 'utf8')
+
+    const diffItems = computeDiff(before, after)
+    const hunks = buildHunksFromDiffItems(diffItems)
+
+    expect(hunks.length).toBe(1)
+    const patch = buildHunkPatch(filePath, hunks[0], 'discard')
+
+    let error: any = null
+    try {
+      await gitService.applyPatch(tmpDir, patch, { reverse: true })
+    } catch (err) {
+      error = err
+    }
+
+    expect(error).toBeNull()
+    const contentAfterDiscard = fs.readFileSync(fullPath, 'utf8')
+    expect(contentAfterDiscard).toBe(initialContent)
+  })
+
+  test('Discard hunk on file with trailing newline when white line is deleted at line 1', async () => {
+    const git = simpleGit(tmpDir)
+    const filePath = 'CLAUDE_del.md'
+    const fullPath = path.join(tmpDir, filePath)
+
+    // Initial content with white line at line 1
+    const initialContent = '\n# Project\nSome description\n'
+    fs.writeFileSync(fullPath, initialContent)
+    await git.add(filePath)
+    await git.commit('initial')
+
+    // White line removed
+    const modifiedContent = '# Project\nSome description\n'
+    fs.writeFileSync(fullPath, modifiedContent)
+
+    const before = await git.show([`:${filePath}`])
+    const after = fs.readFileSync(fullPath, 'utf8')
+
+    const diffItems = computeDiff(before, after)
+    const hunks = buildHunksFromDiffItems(diffItems)
+
+    expect(hunks.length).toBe(1)
+    const patch = buildHunkPatch(filePath, hunks[0], 'discard')
+
+    let error: any = null
+    try {
+      await gitService.applyPatch(tmpDir, patch, { reverse: true })
+    } catch (err) {
+      error = err
+    }
+
+    expect(error).toBeNull()
+    const contentAfterDiscard = fs.readFileSync(fullPath, 'utf8')
+    expect(contentAfterDiscard).toBe(initialContent)
+  })
+
+  test('Discard hunk on file with CRLF line endings', async () => {
+    const git = simpleGit(tmpDir)
+    const filePath = 'CLAUDE_crlf.md'
+    const fullPath = path.join(tmpDir, filePath)
+
+    // CRLF content
+    const initialContent = '# Book API\r\nSome description\r\n'
+    fs.writeFileSync(fullPath, initialContent)
+    await git.add(filePath)
+    await git.commit('initial')
+
+    // Added white line at line 1 in CRLF
+    const modifiedContent = '\r\n# Book API\r\nSome description\r\n'
+    fs.writeFileSync(fullPath, modifiedContent)
+
+    const before = await git.show([`:${filePath}`])
+    const after = fs.readFileSync(fullPath, 'utf8')
+
+    const diffItems = computeDiff(before, after)
+    const hunks = buildHunksFromDiffItems(diffItems)
+
+    expect(hunks.length).toBe(1)
+    const patch = buildHunkPatch(filePath, hunks[0], 'discard')
+
+    let error: any = null
+    try {
+      await gitService.applyPatch(tmpDir, patch, { reverse: true })
+    } catch (err) {
+      error = err
+    }
+
+    expect(error).toBeNull()
+  })
+
+  test('Discard hunk for pure whitespace change', async () => {
+    const git = simpleGit(tmpDir)
+    const filePath = 'CLAUDE_ws.md'
+    const fullPath = path.join(tmpDir, filePath)
+
+    const initialContent = '# Project\nLine 2\n'
+    fs.writeFileSync(fullPath, initialContent)
+    await git.add(filePath)
+    await git.commit('initial')
+
+    // Trailing spaces added to line 1
+    const modifiedContent = '# Project  \nLine 2\n'
+    fs.writeFileSync(fullPath, modifiedContent)
+
+    const before = await git.show([`:${filePath}`])
+    const after = fs.readFileSync(fullPath, 'utf8')
+
+    const diffItems = computeDiff(before, after)
+    const hunks = buildHunksFromDiffItems(diffItems)
+
+    expect(hunks.length).toBe(1)
+    const patch = buildHunkPatch(filePath, hunks[0], 'discard')
+
+    let error: any = null
+    try {
+      await gitService.applyPatch(tmpDir, patch, { reverse: true })
+    } catch (err) {
+      error = err
+    }
+
+    expect(error).toBeNull()
+    const contentAfterDiscard = fs.readFileSync(fullPath, 'utf8')
+    expect(contentAfterDiscard).toBe(initialContent)
+  })
+
+  test('Discard hunk 2 first on file with multiple hunks and trailing newlines', async () => {
+    const git = simpleGit(tmpDir)
+    const filePath = 'CLAUDE_multi.md'
+    const fullPath = path.join(tmpDir, filePath)
+
+    const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`)
+    fs.writeFileSync(fullPath, lines.join('\n') + '\n')
+    await git.add(filePath)
+    await git.commit('initial')
+
+    const modifiedLines = ['Top added 1', 'Top added 2', ...lines]
+    modifiedLines[16] = 'Line 15 changed'
+    fs.writeFileSync(fullPath, modifiedLines.join('\n') + '\n')
+
+    const before = await git.show([`:${filePath}`])
+    const after = fs.readFileSync(fullPath, 'utf8')
+
+    const diffItems = computeDiff(before, after)
+    const hunks = buildHunksFromDiffItems(diffItems)
+
+    expect(hunks.length).toBe(2)
+    const patch = buildHunkPatch(filePath, hunks[1], 'discard')
+
+    let error: any = null
+    try {
+      await gitService.applyPatch(tmpDir, patch, { reverse: true })
+    } catch (err) {
+      error = err
+    }
+
     expect(error).toBeNull()
   })
 })

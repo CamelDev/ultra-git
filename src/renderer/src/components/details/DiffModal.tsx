@@ -22,7 +22,9 @@ import {
   buildHunksFromDiffItems,
   buildHunkPatch,
   buildSelectedLinesPatch,
-  DiffHunk
+  computeDiff,
+  DiffHunk,
+  DiffItem
 } from '../../utils/patchBuilder'
 import { useRepoStore } from '../../store/useRepoStore'
 import { useToaster } from '../toaster/ToasterContext'
@@ -55,14 +57,6 @@ interface DiffModalProps {
   initialViewMode?: 'chunks' | 'full' | 'preview'
 }
 
-interface DiffItem {
-  diffIndex?: number
-  type: 'normal' | 'add' | 'delete'
-  beforeLine?: string
-  afterLine?: string
-  beforeNum?: number
-  afterNum?: number
-}
 
 interface CharSpan {
   text: string
@@ -352,111 +346,7 @@ function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
   return rows
 }
 
-function computeDiff(beforeContent: string = '', afterContent: string = ''): DiffItem[] {
-  const safeBefore = beforeContent || ''
-  const safeAfter = afterContent || ''
-  const beforeLines = safeBefore === '' ? [] : safeBefore.split(/\r?\n/)
-  const afterLines = safeAfter === '' ? [] : safeAfter.split(/\r?\n/)
 
-  let prefixCount = 0
-  while (
-    prefixCount < beforeLines.length &&
-    prefixCount < afterLines.length &&
-    beforeLines[prefixCount] === afterLines[prefixCount]
-  ) {
-    prefixCount++
-  }
-
-  let suffixCount = 0
-  while (
-    suffixCount < beforeLines.length - prefixCount &&
-    suffixCount < afterLines.length - prefixCount &&
-    beforeLines[beforeLines.length - 1 - suffixCount] === afterLines[afterLines.length - 1 - suffixCount]
-  ) {
-    suffixCount++
-  }
-
-  const midBefore = beforeLines.slice(prefixCount, beforeLines.length - suffixCount)
-  const midAfter = afterLines.slice(prefixCount, afterLines.length - suffixCount)
-
-  const db: number[][] = Array(midBefore.length + 1)
-    .fill(null)
-    .map(() => Array(midAfter.length + 1).fill(0))
-
-  for (let i = 1; i <= midBefore.length; i++) {
-    for (let j = 1; j <= midAfter.length; j++) {
-      if (midBefore[i - 1] === midAfter[j - 1]) {
-        db[i][j] = db[i - 1][j - 1] + 1
-      } else {
-        db[i][j] = Math.max(db[i - 1][j], db[i][j - 1])
-      }
-    }
-  }
-
-  let i = midBefore.length
-  let j = midAfter.length
-  const midDiff: DiffItem[] = []
-
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && midBefore[i - 1] === midAfter[j - 1]) {
-      midDiff.unshift({
-        type: 'normal',
-        beforeLine: midBefore[i - 1],
-        afterLine: midAfter[j - 1],
-        beforeNum: prefixCount + i,
-        afterNum: prefixCount + j
-      })
-      i--
-      j--
-    } else if (j > 0 && (i === 0 || db[i][j - 1] >= db[i - 1][j])) {
-      midDiff.unshift({
-        type: 'add',
-        afterLine: midAfter[j - 1],
-        afterNum: prefixCount + j
-      })
-      j--
-    } else {
-      midDiff.unshift({
-        type: 'delete',
-        beforeLine: midBefore[i - 1],
-        beforeNum: prefixCount + i
-      })
-      i--
-    }
-  }
-
-  const diff: DiffItem[] = []
-  for (let k = 0; k < prefixCount; k++) {
-    diff.push({
-      type: 'normal',
-      beforeLine: beforeLines[k],
-      afterLine: beforeLines[k],
-      beforeNum: k + 1,
-      afterNum: k + 1
-    })
-  }
-
-  diff.push(...midDiff)
-
-  for (let k = 0; k < suffixCount; k++) {
-    const idxBefore = beforeLines.length - suffixCount + k
-    const idxAfter = afterLines.length - suffixCount + k
-    diff.push({
-      type: 'normal',
-      beforeLine: beforeLines[idxBefore],
-      afterLine: afterLines[idxAfter],
-      beforeNum: idxBefore + 1,
-      afterNum: idxAfter + 1
-    })
-  }
-
-  // Attach diffIndex to every item
-  diff.forEach((item, idx) => {
-    item.diffIndex = idx
-  })
-
-  return diff
-}
 
 export const DiffModal: React.FC<DiffModalProps> = ({
   isOpen,

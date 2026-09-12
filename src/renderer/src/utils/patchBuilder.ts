@@ -1,4 +1,5 @@
 export interface DiffItem {
+  diffIndex?: number
   type: 'normal' | 'add' | 'delete'
   beforeLine?: string
   afterLine?: string
@@ -23,6 +24,131 @@ export interface DiffHunk {
   newStart: number
   newCount: number
   lines: DiffLine[]
+}
+
+/**
+ * Splits file content into lines handling POSIX trailing newlines and CRLF/LF endings.
+ * If the content ends with a newline, the terminating newline is stripped so that
+ * an extra phantom empty line is not created at EOF.
+ */
+export function splitLines(content: string): string[] {
+  if (!content) return []
+  const hasTrailingNewline = content.endsWith('\n')
+  const stripped = hasTrailingNewline
+    ? (content.endsWith('\r\n') ? content.slice(0, -2) : content.slice(0, -1))
+    : content
+  if (stripped === '') {
+    return ['']
+  }
+  return stripped.split(/\r?\n/)
+}
+
+/**
+ * Computes line-by-line diff using LCS with prefix and suffix optimization.
+ */
+export function computeDiff(beforeContent: string = '', afterContent: string = ''): DiffItem[] {
+  const safeBefore = beforeContent || ''
+  const safeAfter = afterContent || ''
+  const beforeLines = splitLines(safeBefore)
+  const afterLines = splitLines(safeAfter)
+
+  let prefixCount = 0
+  while (
+    prefixCount < beforeLines.length &&
+    prefixCount < afterLines.length &&
+    beforeLines[prefixCount] === afterLines[prefixCount]
+  ) {
+    prefixCount++
+  }
+
+  let suffixCount = 0
+  while (
+    suffixCount < beforeLines.length - prefixCount &&
+    suffixCount < afterLines.length - prefixCount &&
+    beforeLines[beforeLines.length - 1 - suffixCount] === afterLines[afterLines.length - 1 - suffixCount]
+  ) {
+    suffixCount++
+  }
+
+  const midBefore = beforeLines.slice(prefixCount, beforeLines.length - suffixCount)
+  const midAfter = afterLines.slice(prefixCount, afterLines.length - suffixCount)
+
+  const db: number[][] = Array(midBefore.length + 1)
+    .fill(null)
+    .map(() => Array(midAfter.length + 1).fill(0))
+
+  for (let i = 1; i <= midBefore.length; i++) {
+    for (let j = 1; j <= midAfter.length; j++) {
+      if (midBefore[i - 1] === midAfter[j - 1]) {
+        db[i][j] = db[i - 1][j - 1] + 1
+      } else {
+        db[i][j] = Math.max(db[i - 1][j], db[i][j - 1])
+      }
+    }
+  }
+
+  let i = midBefore.length
+  let j = midAfter.length
+  const midDiff: DiffItem[] = []
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && midBefore[i - 1] === midAfter[j - 1]) {
+      midDiff.unshift({
+        type: 'normal',
+        beforeLine: midBefore[i - 1],
+        afterLine: midAfter[j - 1],
+        beforeNum: prefixCount + i,
+        afterNum: prefixCount + j
+      })
+      i--
+      j--
+    } else if (j > 0 && (i === 0 || db[i][j - 1] >= db[i - 1][j])) {
+      midDiff.unshift({
+        type: 'add',
+        afterLine: midAfter[j - 1],
+        afterNum: prefixCount + j
+      })
+      j--
+    } else {
+      midDiff.unshift({
+        type: 'delete',
+        beforeLine: midBefore[i - 1],
+        beforeNum: prefixCount + i
+      })
+      i--
+    }
+  }
+
+  const diff: DiffItem[] = []
+  for (let k = 0; k < prefixCount; k++) {
+    diff.push({
+      type: 'normal',
+      beforeLine: beforeLines[k],
+      afterLine: beforeLines[k],
+      beforeNum: k + 1,
+      afterNum: k + 1
+    })
+  }
+
+  diff.push(...midDiff)
+
+  for (let k = 0; k < suffixCount; k++) {
+    const idxBefore = beforeLines.length - suffixCount + k
+    const idxAfter = afterLines.length - suffixCount + k
+    diff.push({
+      type: 'normal',
+      beforeLine: beforeLines[idxBefore],
+      afterLine: afterLines[idxAfter],
+      beforeNum: idxBefore + 1,
+      afterNum: idxAfter + 1
+    })
+  }
+
+  diff.forEach((item, idx) => {
+    item.diffIndex = idx
+  })
+
+  return diff
 }
 
 /**
