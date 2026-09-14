@@ -277,10 +277,33 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:add', async (_, repoPath, filePath) => {
+  ipcMain.handle('git:add', async (_, repoPath, filePath, force) => {
     try {
-      await gitService.add(repoPath, filePath)
+      await gitService.add(repoPath, filePath, force)
       return { success: true }
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message,
+        isIgnoredTracked: !!error.isIgnoredTracked,
+        files: error.files
+      }
+    }
+  })
+
+  ipcMain.handle('git:untrack', async (_, repoPath, filePath) => {
+    try {
+      await gitService.untrack(repoPath, filePath)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:addToGitignore', async (_, repoPath, pattern) => {
+    try {
+      const data = await gitService.addToGitignore(repoPath, pattern)
+      return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
     }

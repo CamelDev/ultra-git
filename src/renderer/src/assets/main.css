@@ -1790,6 +1790,68 @@ mark.diff-search-highlight.active {
   color: #f87171;
 }
 
+.action-btn.untrack-btn:hover {
+  background-color: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.action-btn.ignore-btn:hover {
+  background-color: rgba(139, 92, 246, 0.15);
+  border-color: #8b5cf6;
+  color: #a78bfa;
+}
+
+/* File Context Menu */
+.file-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  padding: 4px;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.file-context-menu-item:hover {
+  background-color: var(--hover);
+}
+
+.file-context-menu-item.danger:hover {
+  background-color: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.file-context-menu-item.warning:hover {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.file-context-menu-divider {
+  height: 1px;
+  background-color: var(--border);
+  margin: 4px 0;
+}
+
 /* Active changes resizer */
 .active-changes-resizer {
   height: 4px;

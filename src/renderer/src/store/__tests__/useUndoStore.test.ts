@@ -22,7 +22,8 @@ describe('useUndoStore', () => {
           resetToCommit: mock(async () => ({ success: true })),
           createSafetySnapshot: mock(async () => ({ success: true, snapshotId: 'snap_test_123' })),
           restoreSafetySnapshot: mock(async () => ({ success: true })),
-          deleteSafetySnapshot: mock(async () => ({ success: true }))
+          deleteSafetySnapshot: mock(async () => ({ success: true })),
+          untrack: mock(async () => ({ success: true }))
         }
       }
     } as any
@@ -132,6 +133,33 @@ describe('useUndoStore', () => {
     const undoRes = await useUndoStore.getState().undo(repoPath, async () => {})
     expect(undoRes.success).toBe(true)
     expect(window.api.git.restoreSafetySnapshot).toHaveBeenCalledWith(repoPath, 'snap_discard_999')
+  })
+
+  it('should handle UNTRACK undo and redo', async () => {
+    const repoPath = '/path/to/repo'
+    useUndoStore.getState().pushAction({
+      type: 'UNTRACK',
+      repoPath,
+      files: ['.run/config.xml'],
+      description: 'Untrack ".run/config.xml"'
+    })
+
+    expect(useUndoStore.getState().canUndo(repoPath)).toBe(true)
+    expect(useUndoStore.getState().canRedo(repoPath)).toBe(false)
+
+    // Undo untrack (should reset files to index)
+    const undoRes = await useUndoStore.getState().undo(repoPath, async () => {})
+    expect(undoRes.success).toBe(true)
+    expect(window.api.git.reset).toHaveBeenCalledWith(repoPath, ['.run/config.xml'])
+    expect(useUndoStore.getState().canUndo(repoPath)).toBe(false)
+    expect(useUndoStore.getState().canRedo(repoPath)).toBe(true)
+
+    // Redo untrack (should re-untrack files)
+    const redoRes = await useUndoStore.getState().redo(repoPath, async () => {})
+    expect(redoRes.success).toBe(true)
+    expect(window.api.git.untrack).toHaveBeenCalledWith(repoPath, ['.run/config.xml'])
+    expect(useUndoStore.getState().canUndo(repoPath)).toBe(true)
+    expect(useUndoStore.getState().canRedo(repoPath)).toBe(false)
   })
 
   it('should isolate undo/redo stacks per repository', () => {

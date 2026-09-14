@@ -25,7 +25,9 @@ const api = {
     getCommitFiles: (repoPath: string, commitHash: string) => ipcRenderer.invoke('git:getCommitFiles', repoPath, commitHash),
     getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => 
       ipcRenderer.invoke('git:getCommitFileDiff', repoPath, commitHash, filePath, oldPath, status),
-    add: (repoPath: string, filePath: string | string[]) => ipcRenderer.invoke('git:add', repoPath, filePath),
+    add: (repoPath: string, filePath: string | string[], force?: boolean) => ipcRenderer.invoke('git:add', repoPath, filePath, force),
+    untrack: (repoPath: string, filePath: string | string[]) => ipcRenderer.invoke('git:untrack', repoPath, filePath),
+    addToGitignore: (repoPath: string, pattern: string) => ipcRenderer.invoke('git:addToGitignore', repoPath, pattern),
     reset: (repoPath: string, filePath: string | string[]) => ipcRenderer.invoke('git:reset', repoPath, filePath),
     applyPatch: (repoPath: string, patch: string, options?: { cached?: boolean; reverse?: boolean }) =>
       ipcRenderer.invoke('git:applyPatch', repoPath, patch, options),

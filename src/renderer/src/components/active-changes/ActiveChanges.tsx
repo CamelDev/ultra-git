@@ -1,10 +1,72 @@
 import React, { useState, useEffect } from 'react'
-import { FileText, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react'
+import { FileText, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw, Trash2, EyeOff, MoreVertical } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { useUndoStore } from '../../store/useUndoStore'
 import { useToaster } from '../toaster/ToasterContext'
 import { DiffModal } from '../details/DiffModal'
 import { AppDialog } from '../dialogs/AppDialog'
+
+function getIgnoreOptions(filePath: string): Array<{ label: string; value: string; desc: string }> {
+  const options: Array<{ label: string; value: string; desc: string }> = []
+
+  // 1. Exact file path
+  options.push({
+    label: 'Exact file path',
+    value: filePath,
+    desc: `Ignore only "${filePath}"`
+  })
+
+  const fileName = filePath.split('/').pop() || filePath
+
+  // 2. File name only (if in subfolder)
+  if (filePath.includes('/')) {
+    options.push({
+      label: 'File name (any directory)',
+      value: fileName,
+      desc: `Ignore any file named "${fileName}" anywhere`
+    })
+  }
+
+  // 3. Extension (e.g. *.xml or *.run.xml)
+  const parts = fileName.split('.')
+  if (parts.length > 1) {
+    const ext = parts[parts.length - 1]
+    options.push({
+      label: `All .${ext} files`,
+      value: `*.${ext}`,
+      desc: `Ignore all files ending with ".${ext}"`
+    })
+    if (parts.length > 2) {
+      const compoundExt = parts.slice(parts.length - 2).join('.')
+      options.push({
+        label: `All .${compoundExt} files`,
+        value: `*.${compoundExt}`,
+        desc: `Ignore all files ending with ".${compoundExt}"`
+      })
+    }
+  }
+
+  // 4. Directory (if in subfolder)
+  if (filePath.includes('/')) {
+    const segments = filePath.split('/')
+    const parentFolder = segments.slice(0, segments.length - 1).join('/') + '/'
+    options.push({
+      label: 'Parent directory',
+      value: parentFolder,
+      desc: `Ignore the entire "${parentFolder}" directory`
+    })
+    if (segments.length > 2) {
+      const topFolder = segments[0] + '/'
+      options.push({
+        label: 'Top-level directory',
+        value: topFolder,
+        desc: `Ignore the entire "${topFolder}" directory`
+      })
+    }
+  }
+
+  return options
+}
 
 export const ActiveChanges: React.FC = () => {
   const { getActiveRepo, refreshRepo, identities } = useRepoStore()
@@ -25,11 +87,47 @@ export const ActiveChanges: React.FC = () => {
 
   const [discardTarget, setDiscardTarget] = useState<{ filePaths: string[]; isStaged: boolean } | null>(null)
 
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    filePath: string
+    isStaged: boolean
+    isTracked: boolean
+    isIgnoredTracked: boolean
+  } | null>(null)
+
+  const [ignoreModal, setIgnoreModal] = useState<{
+    filePath: string
+    isTracked: boolean
+    options: Array<{ label: string; value: string; desc: string }>
+    selectedPattern: string
+    customValue: string
+    alsoUntrack: boolean
+  } | null>(null)
+
+  const [stagingConflict, setStagingConflict] = useState<{
+    files: string[]
+  } | null>(null)
+
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null)
+    const handleContextMenuKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null)
+    }
+    window.addEventListener('click', handleClickOutside)
+    window.addEventListener('keydown', handleContextMenuKeyDown)
+    return () => {
+      window.removeEventListener('click', handleClickOutside)
+      window.removeEventListener('keydown', handleContextMenuKeyDown)
+    }
+  }, [])
+
   if (!activeRepo || !activeRepo.status || !activeRepo.status.files) {
     return null
   }
 
   const files = activeRepo.status.files as any[]
+  const ignoredTrackedSet = new Set((activeRepo.status as any)?.ignoredTrackedFiles || [])
 
   // Staged files: index is not space (' ') and not untracked ('?')
   const stagedFiles = files.filter((f) => f.index !== ' ' && f.index !== '?')
@@ -76,9 +174,9 @@ export const ActiveChanges: React.FC = () => {
     return null
   }
 
-  const handleStageFile = async (filePath: string) => {
+  const handleStageFile = async (filePath: string, force = false) => {
     try {
-      const res = await window.api.git.add(activeRepo.path, filePath)
+      const res = await window.api.git.add(activeRepo.path, filePath, force)
       if (res.success) {
         useUndoStore.getState().pushAction({
           type: 'STAGE',
@@ -92,6 +190,10 @@ export const ActiveChanges: React.FC = () => {
           return next
         })
         await refreshRepo(activeRepo.id)
+      } else if (res.isIgnoredTracked) {
+        setStagingConflict({
+          files: res.files && res.files.length > 0 ? res.files : [filePath]
+        })
       } else {
         addToast({ variant: 'error', title: 'Stage Failed', message: res.error || 'Failed to stage file' })
       }
@@ -124,11 +226,11 @@ export const ActiveChanges: React.FC = () => {
     }
   }
 
-  const handleBatchStage = async () => {
+  const handleBatchStage = async (force = false) => {
     const paths = Array.from(selectedUnstaged)
     if (paths.length === 0) return
     try {
-      const res = await window.api.git.add(activeRepo.path, paths)
+      const res = await window.api.git.add(activeRepo.path, paths, force)
       if (res.success) {
         useUndoStore.getState().pushAction({
           type: 'STAGE',
@@ -139,11 +241,113 @@ export const ActiveChanges: React.FC = () => {
         setSelectedUnstaged(new Set())
         await refreshRepo(activeRepo.id)
         addToast({ variant: 'success', title: 'Staged', message: `Staged ${paths.length} file(s)` })
+      } else if (res.isIgnoredTracked) {
+        setStagingConflict({
+          files: res.files && res.files.length > 0 ? res.files : paths
+        })
       } else {
         addToast({ variant: 'error', title: 'Batch Stage Failed', message: res.error || 'Failed to stage selected files' })
       }
     } catch (err: any) {
       addToast({ variant: 'error', title: 'Batch Stage Error', message: err.message || 'Error staging selected files' })
+    }
+  }
+
+  const handleUntrackFile = async (filePath: string | string[]) => {
+    const paths = Array.isArray(filePath) ? filePath : [filePath]
+    if (paths.length === 0) return
+    try {
+      const res = await window.api.git.untrack(activeRepo.path, paths)
+      if (res.success) {
+        useUndoStore.getState().pushAction({
+          type: 'UNTRACK',
+          repoPath: activeRepo.path,
+          files: paths,
+          description: paths.length === 1 ? `Untrack "${paths[0]}"` : `Untrack ${paths.length} files`
+        })
+        setSelectedUnstaged((prev) => {
+          const next = new Set(prev)
+          paths.forEach((p) => next.delete(p))
+          return next
+        })
+        setSelectedStaged((prev) => {
+          const next = new Set(prev)
+          paths.forEach((p) => next.delete(p))
+          return next
+        })
+        await refreshRepo(activeRepo.id)
+        addToast({
+          variant: 'success',
+          title: 'Untracked from Git',
+          message:
+            paths.length === 1
+              ? `Untracked "${paths[0]}" (kept on disk)`
+              : `Untracked ${paths.length} files (kept on disk)`
+        })
+      } else {
+        addToast({ variant: 'error', title: 'Untrack Failed', message: res.error || 'Failed to untrack file' })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Untrack Error', message: err.message || 'Error untracking file' })
+    }
+  }
+
+  const openIgnoreDialog = (filePath: string, isTracked: boolean) => {
+    const options = getIgnoreOptions(filePath)
+    setIgnoreModal({
+      filePath,
+      isTracked,
+      options,
+      selectedPattern: options[0]?.value || filePath,
+      customValue: '',
+      alsoUntrack: isTracked
+    })
+  }
+
+  const handleConfirmAddToGitignore = async () => {
+    if (!ignoreModal) return
+    const pattern =
+      ignoreModal.selectedPattern === '__custom__'
+        ? ignoreModal.customValue.trim()
+        : ignoreModal.selectedPattern.trim()
+
+    if (!pattern) {
+      addToast({ variant: 'error', title: 'Invalid Pattern', message: 'Please specify a pattern to ignore' })
+      return
+    }
+
+    try {
+      const res = await window.api.git.addToGitignore(activeRepo.path, pattern)
+      if (res.success) {
+        if (ignoreModal.isTracked && ignoreModal.alsoUntrack) {
+          await window.api.git.untrack(activeRepo.path, ignoreModal.filePath)
+          useUndoStore.getState().pushAction({
+            type: 'UNTRACK',
+            repoPath: activeRepo.path,
+            files: [ignoreModal.filePath],
+            description: `Untrack "${ignoreModal.filePath}"`
+          })
+        }
+        await refreshRepo(activeRepo.id)
+        addToast({
+          variant: 'success',
+          title: 'Added to .gitignore',
+          message: res.data?.alreadyExisted
+            ? `"${pattern}" was already in .gitignore`
+            : `Added "${pattern}" to .gitignore${
+                ignoreModal.isTracked && ignoreModal.alsoUntrack ? ' and untracked file' : ''
+              }`
+        })
+        setIgnoreModal(null)
+      } else {
+        addToast({
+          variant: 'error',
+          title: 'Failed to Update .gitignore',
+          message: res.error || 'Could not update .gitignore'
+        })
+      }
+    } catch (err: any) {
+      addToast({ variant: 'error', title: 'Error', message: err.message || 'Error updating .gitignore' })
     }
   }
 
@@ -313,7 +517,7 @@ export const ActiveChanges: React.FC = () => {
                 </button>
                 <button
                   className="action-btn stage-btn"
-                  onClick={handleBatchStage}
+                  onClick={() => handleBatchStage()}
                   data-tooltip={`Stage ${selectedUnstaged.size} selected files`}
                   data-testid="batch-stage-btn"
                   style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 8px' }}
@@ -333,6 +537,8 @@ export const ActiveChanges: React.FC = () => {
               unstagedFiles.map((file, index) => {
                 const statusChar = file.working_dir === ' ' && file.index === '?' ? '?' : file.working_dir
                 const isSelected = selectedUnstaged.has(file.path)
+                const isIgnoredTracked = ignoredTrackedSet.has(file.path)
+                const isTracked = file.index !== '?'
                 return (
                   <div
                     key={`unstaged-${file.path}`}
@@ -348,6 +554,18 @@ export const ActiveChanges: React.FC = () => {
                           isStaged: false
                         })
                       }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        filePath: file.path,
+                        isStaged: false,
+                        isTracked,
+                        isIgnoredTracked
+                      })
                     }}
                   >
                     <input
@@ -374,9 +592,63 @@ export const ActiveChanges: React.FC = () => {
                     >
                       {file.path}
                     </span>
+
+                    {isIgnoredTracked && (
+                      <span
+                        className="tracked-ignored-badge"
+                        data-tooltip="Tracked in Git, but matches .gitignore. Untrack to stop seeing changes."
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          color: '#f59e0b',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          marginRight: '6px',
+                          flexShrink: 0
+                        }}
+                      >
+                        <AlertTriangle size={10} />
+                        <span>Tracked · Ignored</span>
+                      </span>
+                    )}
+
                     <span className={`file-status ${getStatusClass(statusChar)}`}>
                       {statusChar}
                     </span>
+
+                    {isIgnoredTracked && (
+                      <button
+                        className="action-btn untrack-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleUntrackFile(file.path)
+                        }}
+                        data-tooltip="Untrack file from Git (keep on disk)"
+                        data-testid={`untrack-btn-${file.path}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: '3px' }}
+                      >
+                        <EyeOff size={11} />
+                        <span>Untrack</span>
+                      </button>
+                    )}
+
+                    <button
+                      className="action-btn ignore-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openIgnoreDialog(file.path, isTracked)
+                      }}
+                      data-tooltip="Add to .gitignore"
+                      data-testid={`ignore-btn-${file.path}`}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <EyeOff size={12} />
+                    </button>
+
                     <button
                       className="action-btn reset-btn"
                       onClick={(e) => {
@@ -398,6 +670,7 @@ export const ActiveChanges: React.FC = () => {
                     </button>
                     <button
                       className="action-btn stage-btn"
+                      data-testid={`stage-btn-${file.path}`}
                       onClick={(e) => {
                         e.stopPropagation()
                         if (isSelected && selectedUnstaged.size > 1) {
@@ -481,6 +754,7 @@ export const ActiveChanges: React.FC = () => {
               stagedFiles.map((file, index) => {
                 const oldPath = getRenamedOldPath(file.path)
                 const isSelected = selectedStaged.has(file.path)
+                const isIgnoredTracked = ignoredTrackedSet.has(file.path)
                 return (
                   <div
                     key={`staged-${file.path}`}
@@ -497,6 +771,18 @@ export const ActiveChanges: React.FC = () => {
                           isStaged: true
                         })
                       }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        filePath: file.path,
+                        isStaged: true,
+                        isTracked: true,
+                        isIgnoredTracked
+                      })
                     }}
                   >
                     <input
@@ -527,6 +813,18 @@ export const ActiveChanges: React.FC = () => {
                       {file.index}
                     </span>
                     <button
+                      className="action-btn ignore-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openIgnoreDialog(file.path, true)
+                      }}
+                      data-tooltip="Add to .gitignore"
+                      data-testid={`ignore-btn-staged-${file.path}`}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <EyeOff size={12} />
+                    </button>
+                    <button
                       className="action-btn reset-btn"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -547,6 +845,7 @@ export const ActiveChanges: React.FC = () => {
                     </button>
                     <button
                       className="action-btn unstage-btn"
+                      data-testid={`unstage-btn-${file.path}`}
                       onClick={(e) => {
                         e.stopPropagation()
                         if (isSelected && selectedStaged.size > 1) {
@@ -673,6 +972,274 @@ export const ActiveChanges: React.FC = () => {
           }
         }}
         onCancel={() => setDiscardTarget(null)}
+      />
+
+      {/* File right-click context menu */}
+      {contextMenu && (
+        <div
+          className="file-context-menu"
+          style={{
+            top: `${Math.min(contextMenu.y, window.innerHeight - 180)}px`,
+            left: `${Math.min(contextMenu.x, window.innerWidth - 220)}px`
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {!contextMenu.isStaged ? (
+            <button
+              className="file-context-menu-item"
+              onClick={() => {
+                handleStageFile(contextMenu.filePath)
+                setContextMenu(null)
+              }}
+            >
+              <ArrowRight size={13} />
+              <span>Stage changes</span>
+            </button>
+          ) : (
+            <button
+              className="file-context-menu-item"
+              onClick={() => {
+                handleUnstageFile(contextMenu.filePath)
+                setContextMenu(null)
+              }}
+            >
+              <ArrowLeft size={13} />
+              <span>Unstage changes</span>
+            </button>
+          )}
+
+          <button
+            className="file-context-menu-item danger"
+            onClick={() => {
+              handleDiscardChanges(contextMenu.filePath, contextMenu.isStaged)
+              setContextMenu(null)
+            }}
+          >
+            <RotateCcw size={13} />
+            <span>Discard changes</span>
+          </button>
+
+          <div className="file-context-menu-divider" />
+
+          {contextMenu.isTracked && (
+            <button
+              className="file-context-menu-item warning"
+              onClick={() => {
+                handleUntrackFile(contextMenu.filePath)
+                setContextMenu(null)
+              }}
+            >
+              <EyeOff size={13} />
+              <span>Untrack (keep on disk)</span>
+            </button>
+          )}
+
+          <button
+            className="file-context-menu-item"
+            onClick={() => {
+              openIgnoreDialog(contextMenu.filePath, contextMenu.isTracked)
+              setContextMenu(null)
+            }}
+          >
+            <EyeOff size={13} />
+            <span>Add to .gitignore...</span>
+          </button>
+        </div>
+      )}
+
+      {/* Add to .gitignore dialog */}
+      <AppDialog
+        isOpen={ignoreModal !== null}
+        title="Add to .gitignore"
+        variant="info"
+        icon={<EyeOff size={16} />}
+        testId="add-gitignore-dialog"
+        actions={[
+          { label: 'Cancel', value: 'cancel', variant: 'secondary' },
+          { label: 'Add to .gitignore', value: 'add', variant: 'primary', setsBusy: true }
+        ]}
+        onResolve={async (val) => {
+          if (val === 'add') {
+            await handleConfirmAddToGitignore()
+          } else {
+            setIgnoreModal(null)
+          }
+        }}
+        onCancel={() => setIgnoreModal(null)}
+        message={
+          ignoreModal && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Choose a rule pattern to add to <code>.gitignore</code> for <strong>{ignoreModal.filePath}</strong>:
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {ignoreModal.options.map((opt) => (
+                  <label
+                    key={opt.value}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                      padding: '6px 8px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      backgroundColor: ignoreModal.selectedPattern === opt.value ? 'var(--hover)' : 'transparent',
+                      border: '1px solid',
+                      borderColor: ignoreModal.selectedPattern === opt.value ? 'var(--accent)' : 'transparent'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="ignore-pattern"
+                      checked={ignoreModal.selectedPattern === opt.value}
+                      onChange={() => setIgnoreModal({ ...ignoreModal, selectedPattern: opt.value })}
+                      style={{ marginTop: '3px' }}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--text-primary)' }}>
+                        <code>{opt.value}</code>
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        {opt.desc}
+                      </span>
+                    </div>
+                  </label>
+                ))}
+
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '8px',
+                    padding: '6px 8px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    backgroundColor: ignoreModal.selectedPattern === '__custom__' ? 'var(--hover)' : 'transparent',
+                    border: '1px solid',
+                    borderColor: ignoreModal.selectedPattern === '__custom__' ? 'var(--accent)' : 'transparent'
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="ignore-pattern"
+                    checked={ignoreModal.selectedPattern === '__custom__'}
+                    onChange={() => setIgnoreModal({ ...ignoreModal, selectedPattern: '__custom__' })}
+                    style={{ marginTop: '3px' }}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                    <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                      Custom pattern
+                    </span>
+                    <input
+                      type="text"
+                      value={ignoreModal.customValue}
+                      onChange={(e) =>
+                        setIgnoreModal({
+                          ...ignoreModal,
+                          selectedPattern: '__custom__',
+                          customValue: e.target.value
+                        })
+                      }
+                      placeholder="e.g. *.log or /build/"
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        borderRadius: '4px',
+                        border: '1px solid var(--border)',
+                        backgroundColor: 'var(--bg-primary)',
+                        color: 'var(--text-primary)',
+                        outline: 'none',
+                        width: '100%',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                </label>
+              </div>
+
+              {ignoreModal.isTracked && (
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '8px',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    cursor: 'pointer',
+                    marginTop: '4px'
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={ignoreModal.alsoUntrack}
+                    onChange={(e) => setIgnoreModal({ ...ignoreModal, alsoUntrack: e.target.checked })}
+                    style={{ marginTop: '3px' }}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      Untrack from Git (keep file on disk)
+                    </span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      This file is already tracked by Git. Untracking stages its removal from repository tracking while preserving your physical file.
+                    </span>
+                  </div>
+                </label>
+              )}
+            </div>
+          )
+        }
+      />
+
+      {/* Staging Conflict dialog */}
+      <AppDialog
+        isOpen={stagingConflict !== null}
+        title="Tracked File Matches .gitignore"
+        variant="warning"
+        icon={<AlertTriangle size={16} />}
+        testId="staging-conflict-dialog"
+        actions={[
+          { label: 'Cancel', value: 'cancel', variant: 'secondary' },
+          { label: 'Force Stage', value: 'force', variant: 'secondary', setsBusy: true },
+          { label: 'Untrack & Keep on Disk', value: 'untrack', variant: 'primary', setsBusy: true }
+        ]}
+        onResolve={async (val) => {
+          if (!stagingConflict) return
+          const filesToHandle = stagingConflict.files
+          setStagingConflict(null)
+          if (val === 'untrack') {
+            await handleUntrackFile(filesToHandle)
+          } else if (val === 'force') {
+            if (filesToHandle.length === 1) {
+              await handleStageFile(filesToHandle[0], true)
+            } else {
+              await handleBatchStage(true)
+            }
+          }
+        }}
+        onCancel={() => setStagingConflict(null)}
+        message={
+          stagingConflict && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <p style={{ margin: 0, lineHeight: 1.5, fontSize: '13px' }}>
+                {stagingConflict.files.length === 1 ? (
+                  <>
+                    <strong>{stagingConflict.files[0]}</strong> is tracked in Git history, but matches a pattern in <code>.gitignore</code>.
+                  </>
+                ) : (
+                  <>
+                    <strong>{stagingConflict.files.length} selected files</strong> match patterns in <code>.gitignore</code>, but are tracked in Git history.
+                  </>
+                )}
+              </p>
+              <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '12px', lineHeight: 1.4 }}>
+                Git prevents standard staging of ignored files to avoid accidental commits. You can untrack the file to respect .gitignore without deleting your local copy, or force stage if you really intend to commit it.
+              </p>
+            </div>
+          )
+        }
       />
     </div>
   )

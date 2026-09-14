@@ -192,7 +192,33 @@ const getGitBuffer = (repoPath: string, args: string[]): Promise<Buffer | null> 
 export const gitService = {
   status: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
-    return await git.status();
+    const statusResult = await git.status();
+    const files = statusResult.files || [];
+    const trackedFiles = files.filter((f) => f.index !== '?');
+    let ignoredTrackedFiles: string[] = [];
+
+    if (trackedFiles.length > 0) {
+      const paths = trackedFiles.map((f) => f.path);
+      const chunkSize = 200;
+      for (let i = 0; i < paths.length; i += chunkSize) {
+        const chunk = paths.slice(i, i + chunkSize);
+        try {
+          const output = await git.raw(['check-ignore', '--no-index', '--', ...chunk]);
+          const matched = output
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean);
+          ignoredTrackedFiles.push(...matched);
+        } catch {
+          // git check-ignore exits with 1 when no paths match
+        }
+      }
+    }
+
+    return {
+      ...statusResult,
+      ignoredTrackedFiles
+    };
   },
 
   log: async (repoPath: string, maxCount = 50) => {
@@ -903,9 +929,60 @@ export const gitService = {
     };
   },
 
-  add: async (repoPath: string, filePath: string | string[]) => {
+  add: async (repoPath: string, filePath: string | string[], force = false) => {
     const git = getGitInstance(repoPath);
-    return await git.add(filePath);
+    const files = Array.isArray(filePath) ? filePath : [filePath];
+    if (files.length === 0) return;
+    if (force) {
+      return await git.raw(['add', '-f', '--', ...files]);
+    }
+    try {
+      return await git.add(files);
+    } catch (err: any) {
+      const msg = err.message || '';
+      if (
+        msg.includes('ignored by one of your .gitignore files') ||
+        msg.includes('Use -f if you really want to add them')
+      ) {
+        const error: any = new Error(msg);
+        error.isIgnoredTracked = true;
+        error.files = files;
+        throw error;
+      }
+      throw err;
+    }
+  },
+
+  untrack: async (repoPath: string, filePath: string | string[]) => {
+    const git = getGitInstance(repoPath);
+    const files = Array.isArray(filePath) ? filePath : [filePath];
+    if (files.length === 0) return;
+    return await git.raw(['rm', '--cached', '-r', '--', ...files]);
+  },
+
+  addToGitignore: async (repoPath: string, pattern: string) => {
+    const trimmed = pattern.trim();
+    if (!trimmed) {
+      throw new Error('Pattern cannot be empty');
+    }
+    const gitignorePath = join(repoPath, '.gitignore');
+    let content = '';
+    if (fs.existsSync(gitignorePath)) {
+      content = fs.readFileSync(gitignorePath, 'utf8');
+    }
+
+    const lines = content.split('\n');
+    const alreadyExists = lines.some((line) => line.trim() === trimmed);
+    if (!alreadyExists) {
+      let newContent = content;
+      if (newContent.length > 0 && !newContent.endsWith('\n')) {
+        newContent += '\n';
+      }
+      newContent += `${trimmed}\n`;
+      fs.writeFileSync(gitignorePath, newContent, 'utf8');
+    }
+
+    return { pattern: trimmed, alreadyExisted: alreadyExists };
   },
 
   reset: async (repoPath: string, filePath: string | string[]) => {
