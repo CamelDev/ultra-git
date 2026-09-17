@@ -36,4 +36,17 @@ describe('ordinary partial patch transactions', () => {
     await expect(partialPatchService.apply(repo, 'stage', [{ path: 'file.txt', hunkId: diff.hunks[0].id, generation: diff.generation }], diff.generation)).rejects.toBeInstanceOf(PartialPatchError)
     expect((await simpleGit(repo).diff(['--cached']))).toBe('')
   })
+
+  test('stages only selected changed lines using canonical line identities', async () => {
+    const file = path.join(repo, 'file.txt'); fs.writeFileSync(file, 'one changed\ntwo\nthree changed\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\n')
+    const diff = await partialPatchService.getPartialDiff(repo, 'file.txt', 'stage')
+    const hunk = diff.hunks[0]
+    const changed = hunk.lines.findIndex(line => line.startsWith('+'))
+    expect(changed).toBeGreaterThanOrEqual(0)
+    const tx = await partialPatchService.apply(repo, 'stage', [{ path: 'file.txt', hunkId: hunk.id, lineIds: [hunk.lineIds![changed]], generation: diff.generation }], diff.generation)
+    const staged = await simpleGit(repo).diff(['--cached'])
+    expect(staged).toContain('+one changed')
+    expect(staged).not.toContain('+three changed')
+    await partialPatchService.undo(tx.transactionId)
+  })
 })

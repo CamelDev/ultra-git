@@ -110,6 +110,8 @@ export interface PartialHunk {
   oldCount: number
   newStart: number
   newCount: number
+  /** Stable identities for changed lines, aligned with `lines`. */
+  lineIds?: string[]
 }
 export interface PartialDiff {
   repository: string
@@ -119,7 +121,7 @@ export interface PartialDiff {
   hunks: PartialHunk[]
   binary: boolean
 }
-export interface PartialSelection { path: string; hunkId: string; generation: string }
+export interface PartialSelection { path: string; hunkId: string; generation: string; lineIds?: string[] }
 export interface PartialTransactionResult {
   transactionId: string
   generation: string

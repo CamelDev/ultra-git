@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type UndoActionType = 'STAGE' | 'UNSTAGE' | 'COMMIT' | 'RESET' | 'DISCARD' | 'UNTRACK'
+export type UndoActionType = 'STAGE' | 'UNSTAGE' | 'COMMIT' | 'RESET' | 'DISCARD' | 'UNTRACK' | 'PARTIAL'
 
 export interface BaseUndoAction {
   id: string
@@ -48,6 +48,11 @@ export interface UntrackUndoAction extends BaseUndoAction {
   files: string[]
 }
 
+export interface PartialUndoAction extends BaseUndoAction {
+  type: 'PARTIAL'
+  transactionId: string
+}
+
 export type UndoAction =
   | StageUndoAction
   | UnstageUndoAction
@@ -55,6 +60,7 @@ export type UndoAction =
   | ResetUndoAction
   | DiscardUndoAction
   | UntrackUndoAction
+  | PartialUndoAction
 
 export type DistributiveOmit<T, K extends keyof any> = T extends any ? Omit<T, K> : never
 export type NewUndoAction = DistributiveOmit<UndoAction, 'id' | 'timestamp'>
@@ -221,6 +227,12 @@ export const useUndoStore = create<UndoState>((set, get) => ({
           errorMsg = res.error
           break
         }
+        case 'PARTIAL': {
+          const res = await window.api.git.undoPartialTransaction(action.transactionId)
+          success = res.success
+          errorMsg = res.error
+          break
+        }
       }
 
       if (success) {
@@ -305,6 +317,12 @@ export const useUndoStore = create<UndoState>((set, get) => ({
         }
         case 'UNTRACK': {
           const res = await window.api.git.untrack(repoPath, action.files)
+          success = res.success
+          errorMsg = res.error
+          break
+        }
+        case 'PARTIAL': {
+          const res = await window.api.git.redoPartialTransaction(action.transactionId)
           success = res.success
           errorMsg = res.error
           break

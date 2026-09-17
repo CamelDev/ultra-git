@@ -20,8 +20,6 @@ import {
 } from 'lucide-react'
 import {
   buildHunksFromDiffItems,
-  buildHunkPatch,
-  buildSelectedLinesPatch,
   computeDiff,
   DiffHunk,
   DiffItem
@@ -31,6 +29,8 @@ import { getFullFilePath } from '../../utils/pathUtils'
 import { useToaster } from '../toaster/ToasterContext'
 import { MarkdownDiffView } from './MarkdownDiffView'
 import { ImageDiffView } from './ImageDiffView'
+import { useUndoStore } from '../../store/useUndoStore'
+import type { PartialDiff, PartialPatchTarget, PartialSelection } from '../../../../shared/conflicts'
 
 export interface DiffFileItem {
   path: string
@@ -368,12 +368,14 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 }) => {
   const { getActiveRepo, refreshRepo } = useRepoStore()
   const { addToast } = useToaster()
+  const { pushAction, undo, redo, canUndo, canRedo, getUndoDescription, getRedoDescription } = useUndoStore()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [diffItems, setDiffItems] = useState<DiffItem[]>([])
   const [rawBefore, setRawBefore] = useState<string>('')
   const [rawAfter, setRawAfter] = useState<string>('')
   const [isBinary, setIsBinary] = useState(false)
+  const [partialDiff, setPartialDiff] = useState<PartialDiff | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
   // File navigation state
@@ -446,7 +448,30 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const currentIsStaged = activeFile?.isStaged ?? isStaged
   const currentIsUntracked = activeFile?.isUntracked ?? false
 
+  // Canonical hunk metadata is owned by the main process. The renderer only
+  // keeps stable IDs and never constructs mutation patches.
+  useEffect(() => {
+    let cancelled = false
+    if (!isOpen || !isActiveChange || isStash || !currentFilePath || currentFilePath === 'No file selected') {
+      setPartialDiff(null)
+      return
+    }
+    const target: PartialPatchTarget = currentIsStaged ? 'unstage' : 'stage'
+    window.api.git.getPartialDiff(repoPath, currentFilePath, target).then((res) => {
+      if (!cancelled) setPartialDiff(res.success && res.data ? res.data : null)
+    }).catch(() => { if (!cancelled) setPartialDiff(null) })
+    return () => { cancelled = true }
+  }, [isOpen, isActiveChange, isStash, currentFilePath, currentIsStaged, repoPath])
+
   const effectiveRepoPath = repoPath || getActiveRepo()?.path || ''
+  const undoPartial = async () => {
+    const res = await undo(effectiveRepoPath, async () => { const active = getActiveRepo(); if (active) await refreshRepo(active.id); loadDiffContent() })
+    if (!res.success) addToast({ variant: 'error', title: 'Undo unavailable', message: res.error || 'The transaction expired' })
+  }
+  const redoPartial = async () => {
+    const res = await redo(effectiveRepoPath, async () => { const active = getActiveRepo(); if (active) await refreshRepo(active.id); loadDiffContent() })
+    if (!res.success) addToast({ variant: 'error', title: 'Redo unavailable', message: res.error || 'The transaction expired' })
+  }
   const fullDiskPath = useMemo(() => {
     return getFullFilePath(effectiveRepoPath, currentFilePath)
   }, [effectiveRepoPath, currentFilePath])
@@ -764,25 +789,35 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     selectedStashFile
   ])
 
-  // Patch application handler
-  const handleApplyPatch = async (
-    patch: string,
-    options?: { cached?: boolean; reverse?: boolean },
-    successMsg?: string
-  ) => {
+  const selectedCanonical = (selectedHunks: DiffHunk[], lineIndices?: Set<number>): PartialSelection[] => {
+    if (!partialDiff) return []
+    return selectedHunks.flatMap((hunk) => {
+      const canonical = partialDiff.hunks[hunk.hunkIndex]
+      if (!canonical) return []
+      const lineIds = lineIndices
+        ? hunk.lines.flatMap((line, index) => lineIndices.has(line.indexInDiff) ? [canonical.lineIds?.[index]].filter(Boolean) as string[] : [])
+        : undefined
+      return [{ path: currentFilePath, hunkId: canonical.id, generation: partialDiff.generation, ...(lineIds?.length ? { lineIds } : {}) }]
+    })
+  }
+
+  const applyPartial = async (target: PartialPatchTarget, selections: PartialSelection[], successMsg: string) => {
+    if (selections.length === 0) return
     setActionLoading(true)
     try {
-      const res = await window.api.git.applyPatch(repoPath, patch, options)
-      if (res.success) {
+      const res = await window.api.git.applyPartialPatchTransaction(repoPath, target, selections, partialDiff?.generation || '')
+      if (res.success && res.data) {
         setSelectedLineIndices(new Set())
+        pushAction({ type: 'PARTIAL', repoPath, transactionId: res.data.transactionId, description: successMsg })
         const activeRepo = getActiveRepo()
         if (activeRepo) {
           await refreshRepo(activeRepo.id)
         }
-        addToast({ variant: 'success', title: 'Success', message: successMsg || 'Changes applied successfully' })
+        addToast({ variant: 'success', title: 'Success', message: successMsg })
         loadDiffContent()
       } else {
-        addToast({ variant: 'error', title: 'Apply Failed', message: res.error || 'Failed to apply changes' })
+        addToast({ variant: 'error', title: res.error === 'STALE_DIFF' ? 'Diff Changed' : 'Apply Failed', message: res.error || 'Failed to apply changes' })
+        if (res.error === 'STALE_DIFF') loadDiffContent()
       }
     } catch (err: any) {
       addToast({ variant: 'error', title: 'Apply Error', message: err.message || 'Error applying changes' })
@@ -791,15 +826,12 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     }
   }
 
-  // Hunk Staging / Unstaging / Discarding
   const handleStageHunk = async (hunk: DiffHunk) => {
-    const patch = buildHunkPatch(currentFilePath, hunk, 'stage')
-    await handleApplyPatch(patch, { cached: true }, 'Chunk staged successfully')
+    await applyPartial('stage', selectedCanonical([hunk]), 'Chunk staged successfully')
   }
 
   const handleUnstageHunk = async (hunk: DiffHunk) => {
-    const patch = buildHunkPatch(currentFilePath, hunk, 'unstage')
-    await handleApplyPatch(patch, { cached: true, reverse: true }, 'Chunk unstaged successfully')
+    await applyPartial('unstage', selectedCanonical([hunk]), 'Chunk unstaged successfully')
   }
 
   const handleDiscardHunk = (hunk: DiffHunk) => {
@@ -810,38 +842,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       confirmText: 'Discard Chunk',
       onConfirm: async () => {
         setConfirmDialog(null)
-        setActionLoading(true)
-        try {
-          if (currentIsStaged) {
-            const patch = buildHunkPatch(currentFilePath, hunk, 'unstage')
-            const res1 = await window.api.git.applyPatch(repoPath, patch, { cached: true, reverse: true })
-            if (!res1.success) {
-              addToast({ variant: 'error', title: 'Discard Chunk Failed', message: `Failed to unstage chunk: ${res1.error}` })
-              return
-            }
-            const res2 = await window.api.git.applyPatch(repoPath, patch, { reverse: true })
-            if (!res2.success) {
-              addToast({ variant: 'error', title: 'Discard Chunk Failed', message: `Failed to discard chunk: ${res2.error}` })
-              return
-            }
-          } else {
-            const patch = buildHunkPatch(currentFilePath, hunk, 'discard')
-            const res = await window.api.git.applyPatch(repoPath, patch, { reverse: true })
-            if (!res.success) {
-              addToast({ variant: 'error', title: 'Discard Chunk Failed', message: `Failed to discard chunk: ${res.error}` })
-              return
-            }
-          }
-          setSelectedLineIndices(new Set())
-          const activeRepo = getActiveRepo()
-          if (activeRepo) await refreshRepo(activeRepo.id)
-          addToast({ variant: 'success', title: 'Chunk Discarded', message: 'Chunk discarded successfully' })
-          loadDiffContent()
-        } catch (err: any) {
-          addToast({ variant: 'error', title: 'Discard Chunk Error', message: err.message || 'Error discarding chunk' })
-        } finally {
-          setActionLoading(false)
-        }
+        await applyPartial(currentIsStaged ? 'staged-discard' : 'discard', selectedCanonical([hunk]), 'Chunk discarded successfully')
       }
     })
   }
@@ -849,24 +850,12 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   // Line Staging / Unstaging / Discarding
   const handleStageSelectedLines = async () => {
     if (selectedLineIndices.size === 0) return
-    for (const hunk of hunks) {
-      const hasSelected = hunk.lines.some((l) => selectedLineIndices.has(l.indexInDiff))
-      if (hasSelected) {
-        const patch = buildSelectedLinesPatch(currentFilePath, hunk, selectedLineIndices, 'stage')
-        await handleApplyPatch(patch, { cached: true }, 'Selected lines staged')
-      }
-    }
+    await applyPartial('stage', selectedCanonical(hunks.filter(h => h.lines.some(l => selectedLineIndices.has(l.indexInDiff))), selectedLineIndices), 'Selected lines staged')
   }
 
   const handleUnstageSelectedLines = async () => {
     if (selectedLineIndices.size === 0) return
-    for (const hunk of hunks) {
-      const hasSelected = hunk.lines.some((l) => selectedLineIndices.has(l.indexInDiff))
-      if (hasSelected) {
-        const patch = buildSelectedLinesPatch(currentFilePath, hunk, selectedLineIndices, 'unstage')
-        await handleApplyPatch(patch, { cached: true, reverse: true }, 'Selected lines unstaged')
-      }
-    }
+    await applyPartial('unstage', selectedCanonical(hunks.filter(h => h.lines.some(l => selectedLineIndices.has(l.indexInDiff))), selectedLineIndices), 'Selected lines unstaged')
   }
 
   const handleDiscardSelectedLines = () => {
@@ -878,43 +867,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       confirmText: 'Discard Lines',
       onConfirm: async () => {
         setConfirmDialog(null)
-        setActionLoading(true)
-        try {
-          for (const hunk of hunks) {
-            const hasSelected = hunk.lines.some((l) => selectedLineIndices.has(l.indexInDiff))
-            if (hasSelected) {
-              if (currentIsStaged) {
-                const patch = buildSelectedLinesPatch(currentFilePath, hunk, selectedLineIndices, 'unstage')
-                const res1 = await window.api.git.applyPatch(repoPath, patch, { cached: true, reverse: true })
-                if (!res1.success) {
-                  addToast({ variant: 'error', title: 'Discard Lines Failed', message: `Failed to unstage lines: ${res1.error}` })
-                  return
-                }
-                const res2 = await window.api.git.applyPatch(repoPath, patch, { reverse: true })
-                if (!res2.success) {
-                  addToast({ variant: 'error', title: 'Discard Lines Failed', message: `Failed to discard lines: ${res2.error}` })
-                  return
-                }
-              } else {
-                const patch = buildSelectedLinesPatch(currentFilePath, hunk, selectedLineIndices, 'discard')
-                const res = await window.api.git.applyPatch(repoPath, patch, { reverse: true })
-                if (!res.success) {
-                  addToast({ variant: 'error', title: 'Discard Lines Failed', message: `Failed to discard lines: ${res.error}` })
-                  return
-                }
-              }
-            }
-          }
-          setSelectedLineIndices(new Set())
-          const activeRepo = getActiveRepo()
-          if (activeRepo) await refreshRepo(activeRepo.id)
-          addToast({ variant: 'success', title: 'Lines Discarded', message: 'Selected lines discarded' })
-          loadDiffContent()
-        } catch (err: any) {
-          addToast({ variant: 'error', title: 'Discard Lines Error', message: err.message || 'Error discarding lines' })
-        } finally {
-          setActionLoading(false)
-        }
+        await applyPartial(currentIsStaged ? 'staged-discard' : 'discard', selectedCanonical(hunks.filter(h => h.lines.some(l => selectedLineIndices.has(l.indexInDiff))), selectedLineIndices), 'Selected lines discarded')
       }
     })
   }
@@ -1572,6 +1525,17 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                     <span>Unstage File</span>
                   </button>
                 )
+              )}
+
+              {isActiveChange && !isStash && (canUndo(effectiveRepoPath) || canRedo(effectiveRepoPath)) && (
+                <div className="diff-transaction-actions" aria-label="Partial transaction history">
+                  <button className="diff-file-action-btn" onClick={() => void undoPartial()} disabled={!canUndo(effectiveRepoPath) || actionLoading} title={getUndoDescription(effectiveRepoPath) || 'Undo transaction'} data-testid="partial-undo-btn">
+                    <RotateCcw size={13} /><span>Undo</span>
+                  </button>
+                  <button className="diff-file-action-btn" onClick={() => void redoPartial()} disabled={!canRedo(effectiveRepoPath) || actionLoading} title={getRedoDescription(effectiveRepoPath) || 'Redo transaction'} data-testid="partial-redo-btn">
+                    <RotateCcw size={13} /><span>Redo</span>
+                  </button>
+                </div>
               )}
 
               {/* Search Toggle Button */}

@@ -39,14 +39,43 @@ async function exclusive<T>(repo: string, fn: () => Promise<T>) {
 function parseHunks(raw: string, file: string, generation: string): PartialHunk[] {
   const lines = raw.split('\n'), out: PartialHunk[] = []
   let header = '', body: string[] = []
-  const flush = () => { if (!header) return; const m = header.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/) ; if (!m) return; const oldStart = Number(m[1]), oldCount = Number(m[2] || 1), newStart = Number(m[3]), newCount = Number(m[4] || 1); out.push({ id: digest(`${generation}:${file}:${out.length}:${header}:${body.join('\n')}`), path: file, header, lines: body, oldStart, oldCount, newStart, newCount }); body = [] }
+  const flush = () => { if (!header) return; const m = header.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/) ; if (!m) return; const oldStart = Number(m[1]), oldCount = Number(m[2] || 1), newStart = Number(m[3]), newCount = Number(m[4] || 1); const id = digest(`${generation}:${file}:${out.length}:${header}:${body.join('\n')}`); out.push({ id, path: file, header, lines: body, lineIds: body.map((line, index) => digest(`${id}:${index}:${line}`)), oldStart, oldCount, newStart, newCount }); body = [] }
   for (const line of lines) { if (line.startsWith('@@ ')) { flush(); header = line } else if (header) body.push(line) }
   flush(); return out
 }
-function patchFor(raw: string, selected: PartialHunk[]) {
+function patchFor(raw: string, selected: Array<{ hunk: PartialHunk; lineIds?: string[] }>) {
   const first = raw.split('\n').findIndex(x => x.startsWith('diff --git ')); if (first < 0) throw new PartialPatchError('STALE_DIFF', 'Diff no longer exists')
   const prefix = raw.split('\n').slice(first).filter(x => x.startsWith('diff --git ') || x.startsWith('index ') || x.startsWith('--- ') || x.startsWith('+++ ')).slice(0, 4)
-  return `${prefix.join('\n')}\n${selected.map(h => `${h.header}\n${h.lines.join('\n')}`).join('\n')}\n`
+  const chunks = selected.map(({ hunk, lineIds }) => {
+    if (!lineIds || lineIds.length === 0) return `${hunk.header}\n${hunk.lines.join('\n')}`
+    const wanted = new Set(lineIds), ids = hunk.lineIds || []
+    const chunks: string[] = []
+    for (let index = 0, oldOffset = 0, newOffset = 0; index < hunk.lines.length;) {
+      if (hunk.lines[index].startsWith(' ')) { oldOffset++; newOffset++; index++; continue }
+      const start = index
+      while (index < hunk.lines.length && !hunk.lines[index].startsWith(' ')) index++
+      const group = hunk.lines.slice(start, index)
+      const groupIds = ids.slice(start, index)
+      if (groupIds.some(id => wanted.has(id))) {
+        const before: string[] = []
+        let cursor = start - 1
+        while (cursor >= 0 && hunk.lines[cursor].startsWith(' ')) { before.unshift(hunk.lines[cursor]); cursor-- }
+        const after: string[] = []
+        cursor = index
+        while (cursor < hunk.lines.length && hunk.lines[cursor].startsWith(' ')) { after.push(hunk.lines[cursor]); cursor++ }
+        const lines = [...before, ...group, ...after]
+        let oldCount = 0, newCount = 0
+        for (const line of lines) { if (line[0] !== '+') oldCount++; if (line[0] !== '-') newCount++ }
+        const oldStart = hunk.oldStart + oldOffset - before.length
+        const newStart = hunk.newStart + newOffset - before.length
+        chunks.push(`@@ -${Math.max(1, oldStart)},${oldCount} +${Math.max(1, newStart)},${newCount} @@\n${lines.join('\n')}`)
+      }
+      for (const line of group) { if (line[0] !== '+') oldOffset++; if (line[0] !== '-') newOffset++ }
+    }
+    if (chunks.length === 0) throw new PartialPatchError('PREFLIGHT_FAILED', 'Selection does not contain changed lines')
+    return chunks.join('\n')
+  })
+  return `${prefix.join('\n')}\n${chunks.join('\n')}\n`
 }
 async function rawDiff(repo: string, file: string, target: PartialPatchTarget) {
   const args = ['diff', '--binary', '--full-index', '--no-ext-diff', '--unified=3']
@@ -83,7 +112,7 @@ export const partialPatchService = {
     if (typeof generation !== 'string' || generation.length === 0) throw new PartialPatchError('STALE_DIFF', 'Missing diff generation')
     const grouped = new Map<string, PartialSelection[]>(); for (const s of selections) { safePath(repo, s.path); grouped.set(s.path, [...(grouped.get(s.path) || []), s]) }
     const diffs: Array<{ diff: PartialDiff; raw: string; chosen: PartialHunk[] }> = []
-    for (const [file, selected] of grouped) { const raw = await rawDiff(repo, file, target), actual = digest(raw); if (selected.some(x => x.generation !== actual)) throw new PartialPatchError('STALE_DIFF', 'The diff changed; refresh before applying'); const d = { repository: fs.realpathSync(repo), path: file, target, generation: actual, hunks: parseHunks(raw, file, actual), binary: /Binary files/.test(raw) }; const ids = new Set(selected.map(x => x.hunkId)); const chosen = d.hunks.filter(x => ids.has(x.id)); if (chosen.length !== selected.length) throw new PartialPatchError('STALE_DIFF', 'A selected hunk is stale or ambiguous'); if (d.binary) throw new PartialPatchError('PREFLIGHT_FAILED', 'Binary files do not support partial selection'); diffs.push({ diff: d, raw, chosen }) }
+    for (const [file, selected] of grouped) { const raw = await rawDiff(repo, file, target), actual = digest(raw); if (selected.some(x => x.generation !== actual)) throw new PartialPatchError('STALE_DIFF', 'The diff changed; refresh before applying'); const d = { repository: fs.realpathSync(repo), path: file, target, generation: actual, hunks: parseHunks(raw, file, actual), binary: /Binary files/.test(raw) }; const byId = new Map(d.hunks.map(x => [x.id, x])); const chosen = selected.map(x => { const hunk = byId.get(x.hunkId); if (!hunk) throw new PartialPatchError('STALE_DIFF', 'A selected hunk is stale or ambiguous'); return { hunk, lineIds: x.lineIds } }); if (d.binary) throw new PartialPatchError('PREFLIGHT_FAILED', 'Binary files do not support partial selection'); diffs.push({ diff: d, raw, chosen }) }
     const files = [...grouped.keys()], before = await snapshot(repo, files)
     try {
       for (const item of diffs) { const patch = patchFor(item.raw, item.chosen); if (Buffer.byteLength(patch) > MAX_PATCH_BYTES) throw new PartialPatchError('PREFLIGHT_FAILED', 'Patch is too large'); const args = ['apply', '--whitespace=nowarn', '--recount']; if (target === 'stage' || target === 'unstage') args.push('--cached'); if (target === 'unstage' || target === 'discard' || target === 'staged-discard') args.push('--reverse'); if (target === 'staged-discard') await git(repo, ['reset', 'HEAD', '--', item.diff.path]); await git(repo, [...args, '-'], patch) }
