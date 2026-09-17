@@ -93,7 +93,17 @@ async function readStore(repo: string): Promise<Store> {
 async function writeStore(repo: string, store: Store): Promise<void> {
   const file = await storePath(repo); fs.mkdirSync(path.dirname(file), { recursive: true }); const temp = `${file}.${randomUUID()}.tmp`; const value = JSON.stringify(store)
   if (Buffer.byteLength(value) > MAX_RECORD_BYTES) throw new Error('Resolution record store exceeds size limit')
-  fs.writeFileSync(temp, value, { mode: 0o600 }); fs.renameSync(temp, file)
+  fs.writeFileSync(temp, value, { mode: 0o600 });
+  try {
+    fs.renameSync(temp, file)
+  } catch (err: any) {
+    if (err?.code === 'EXDEV' || err?.code === 'EPERM') {
+      fs.copyFileSync(temp, file);
+      try { fs.unlinkSync(temp); } catch { /* ignore */ }
+    } else {
+      throw err;
+    }
+  }
 }
 
 export const conflictCandidateService = {

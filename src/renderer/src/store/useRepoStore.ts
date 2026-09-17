@@ -256,7 +256,10 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     if (!repo || !path || !session.generation) return session;
     try {
       const response = await window.api.git.getConflictCandidates(repo.path, path, session.generation);
-      if (!response.success) throw new Error(response.error || 'Unable to load resolution candidates');
+      if (!response.success) {
+        if (response.code === 'STALE_OID') return session;
+        throw new Error(response.error || 'Unable to load resolution candidates');
+      }
       const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'candidates', path, candidates: response.data || [] });
       set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
       return next;

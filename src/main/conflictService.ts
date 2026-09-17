@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from 'crypto'
 import fs from 'fs'
-import os from 'os'
 import path from 'path'
 import { execFile, spawn } from 'child_process'
 import { promisify } from 'util'
@@ -74,8 +73,36 @@ export const conflictService = {
     const snap = await snapshot(repo); if (snap.generation !== expectedGeneration) throw new ConflictServiceError('STALE_GENERATION', 'Conflict operation has advanced'); const doc = await conflictService.getDocument(repo, file, expectedGeneration); if (doc.isBinary) throw new ConflictServiceError('UNSUPPORTED_CONFLICT', 'Binary conflicts require file-level replacement');
     const choices: Record<string, any> = {}; for (const region of doc.regions) { const selected = selections.find(x => x.regionId === region.id); if (!selected) throw new ConflictServiceError('STALE_REGION', 'Every conflict region must be resolved'); validateRegionSelection(region, expectedGeneration, selected); choices[region.id] = selected }
     const result = composeConflictResult(doc, choices); const bytes = Buffer.from(result); if (bytes.length > MAX_BYTES) throw new ConflictServiceError('SIZE_LIMIT', 'Resolved file exceeds size limit'); const full = safePath(repo, file); const undo = path.join(repo, '.git', 'ultra-git-conflict-undo', randomUUID()); fs.mkdirSync(undo, { recursive: true }); const old = fs.existsSync(full) ? fs.readFileSync(full) : null; const oldStages = (await stages(repo)).filter(x => x.file === file); fs.writeFileSync(path.join(undo, 'worktree'), old ?? Buffer.alloc(0)); fs.writeFileSync(path.join(undo, 'metadata.json'), JSON.stringify({ existed: !!old, stages: oldStages }));
-    try { const temp = path.join(os.tmpdir(), `ultra-git-resolution-${randomUUID()}`); fs.writeFileSync(temp, bytes); fs.renameSync(temp, full); await run(repo, ['add', '--', file]); const remaining = (await stages(repo)).some(x => x.file === file); if (remaining) throw new ConflictServiceError('POSTCONDITION_FAILED', 'Git did not stage a complete resolution'); const after = await snapshot(repo); const token = randomUUID(); undoEntries.set(token, { repo: fs.realpathSync(repo), generation: after.generation, path: file, snapshot: { dir: undo, resultHash: hash(bytes) } }); return { token, snapshot: after } }
-    catch (e) { await restore(repo, file, undo); throw e }
+    const dir = path.dirname(full);
+    fs.mkdirSync(dir, { recursive: true });
+    const temp = path.join(dir, `.${path.basename(full)}.${randomUUID()}.tmp`);
+    try {
+      fs.writeFileSync(temp, bytes);
+      try {
+        fs.renameSync(temp, full);
+      } catch (err: any) {
+        if (err?.code === 'EXDEV' || err?.code === 'EPERM') {
+          fs.copyFileSync(temp, full);
+          try { fs.unlinkSync(temp); } catch { /* ignore */ }
+        } else {
+          throw err;
+        }
+      }
+      await run(repo, ['add', '--', file]);
+      const remaining = (await stages(repo)).some(x => x.file === file);
+      if (remaining) throw new ConflictServiceError('POSTCONDITION_FAILED', 'Git did not stage a complete resolution');
+      const after = await snapshot(repo);
+      const token = randomUUID();
+      undoEntries.set(token, { repo: fs.realpathSync(repo), generation: after.generation, path: file, snapshot: { dir: undo, resultHash: hash(bytes) } });
+      return { token, snapshot: after }
+    }
+    catch (e) {
+      if (fs.existsSync(temp)) {
+        try { fs.unlinkSync(temp); } catch { /* ignore */ }
+      }
+      await restore(repo, file, undo);
+      throw e;
+    }
   }),
   undo: async (token: string) => { const entry = undoEntries.get(token); if (!entry) throw new ConflictServiceError('UNDO_EXPIRED', 'Undo Resolution has expired'); return mutate(entry.repo, async () => { const snap = await snapshot(entry.repo); if (snap.generation !== entry.generation) throw new ConflictServiceError('UNDO_EXPIRED', 'Operation has advanced'); await restore(entry.repo, entry.path, entry.snapshot.dir); undoEntries.delete(token); return snapshot(entry.repo) }) },
   continue: async (repo: string) => mutate(repo, async () => { const s = await snapshot(repo); if (s.phase === 'conflicted') throw new ConflictServiceError('PREFLIGHT_FAILED', 'Resolve all conflicts before continuing'); await run(repo, ['-c', 'core.editor=true', s.kind === 'rebase' ? 'rebase' : s.kind === 'cherry-pick' ? 'cherry-pick' : 'merge', s.kind === 'rebase' ? '--continue' : '--continue']); return snapshot(repo) }),
