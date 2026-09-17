@@ -95,7 +95,7 @@ export function conflictSessionReducer(state: ConflictSession, action: ConflictS
       return { ...state, snapshot: action.snapshot, generation: action.snapshot.generation, activePath: path, activeRegionId: replacing ? null : state.activeRegionId, drafts: replacing ? {} : state.drafts, undo: replacing ? null : state.undo, externalChange: false, pending: null, error: null }
     }
     case 'document': {
-      if (!sameGeneration(state, action.document.generation) || action.document.repoId !== state.repoId) return state
+      if (!sameGeneration(state, action.document.generation) || (action.document.repoId !== state.repoId && action.document.repoId !== state.snapshot?.repoId)) return state
       const previous = state.drafts[action.document.path]
       const draft = previous && !state.externalChange ? { ...previous, document: action.document } : draftFor(action.document)
       return { ...state, drafts: { ...state.drafts, [action.document.path]: draft }, activePath: action.document.path, activeRegionId: draft.document.regions[0]?.id ?? null, externalChange: false, error: null }
@@ -146,8 +146,11 @@ export function conflictSessionReducer(state: ConflictSession, action: ConflictS
     case 'action-start': return { ...state, pending: action.action, error: null }
     case 'action-result': {
       const snapshot = action.result.snapshot
-      const replacing = state.generation !== null && state.generation !== snapshot.generation
-      return { ...state, snapshot, generation: snapshot.generation, drafts: replacing ? {} : state.drafts, activePath: snapshot.nextConflict ?? state.activePath, activeRegionId: replacing ? null : state.activeRegionId, undo: replacing ? null : state.undo, externalChange: false, pending: null, error: action.result.error?.message ?? null }
+      const updatedDrafts = { ...state.drafts }
+      for (const [p, d] of Object.entries(updatedDrafts)) {
+        if (d.dirty) updatedDrafts[p] = { ...d, dirty: false }
+      }
+      return { ...state, snapshot, generation: snapshot.generation, drafts: updatedDrafts, activePath: snapshot.nextConflict ?? state.activePath, activeRegionId: null, undo: state.undo, externalChange: false, pending: null, error: action.result.error?.message ?? null }
     }
     case 'undo-expired': return { ...state, undo: null, error: 'Undo Resolution is no longer available because the operation advanced or the file changed.' }
     case 'error': return { ...state, pending: null, error: action.message }

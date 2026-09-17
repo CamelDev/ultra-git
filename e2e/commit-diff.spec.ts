@@ -137,6 +137,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       await expect(copyLeftBtn).toContainText('Copied Old!')
 
       // Click Copy New button and verify button status feedback
+      await copyRightBtn.click()
       await expect(copyRightBtn).toContainText('Copied New!')
 
       // Verify copy full file path button copies full path on disk

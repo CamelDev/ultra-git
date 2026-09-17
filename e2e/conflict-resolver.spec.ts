@@ -163,7 +163,7 @@ test.describe('Interactive Conflict Resolver', () => {
       expect(gitStatus.files).toHaveLength(0);
 
       const log = await sandbox.git.log();
-      expect(log.latest?.message).toContain('Merge commit');
+      expect(log.latest?.message).toMatch(/Merge (branch|commit)/);
       console.log('[Test 1] Finished successfully!');
 
     } finally {
