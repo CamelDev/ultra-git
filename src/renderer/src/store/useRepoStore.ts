@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { conflictSessionReducer, createConflictSession, type ConflictSession } from './conflictSession'
+import type { OperationActionResult, RegionChoice } from '../../../shared/conflicts'
 
 export interface StashEntry {
   index: number;
@@ -74,6 +76,7 @@ interface RepoState {
   previewCommits: any[];
   previewCommitLimit: number;
   isLoadingPreview: boolean;
+  conflictSessions: Record<string, ConflictSession>;
   
   // Actions
   addRepo: (path: string) => Promise<void>;
@@ -106,9 +109,21 @@ interface RepoState {
   removeIdentity: (id: string) => void;
   updateIdentity: (identity: Identity) => void;
   setRepoIdentity: (repoId: string, identityId: string | undefined) => Promise<void>;
+  getConflictSession: (repoId: string) => ConflictSession;
+  loadConflictSnapshot: (repoId: string) => Promise<ConflictSession | null>;
+  loadConflictDocument: (repoId: string, filePath: string) => Promise<ConflictSession | null>;
+  chooseConflictRegion: (repoId: string, filePath: string, regionId: string, choice: RegionChoice, selected?: string) => void;
+  editConflictResult: (repoId: string, filePath: string, result: string) => void;
+  applyConflictResolution: (repoId: string, filePath?: string) => Promise<ConflictSession | null>;
+  undoConflictResolution: (repoId: string) => Promise<ConflictSession | null>;
+  continueConflictOperation: (repoId: string) => Promise<ConflictSession | null>;
+  skipConflictOperation: (repoId: string) => Promise<ConflictSession | null>;
+  abortConflictOperation: (repoId: string) => Promise<ConflictSession | null>;
+  runConflictOperation: (repoId: string, operation: 'continue' | 'skip' | 'abort') => Promise<ConflictSession | null>;
 }
 
 const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '').replace(/^\/private\/var\//, '/var/');
+const conflictRequestSeq = new Map<string, number>();
 
 const saveToLocalStorage = (repositories: Repository[], activeId: string | null) => {
   try {
@@ -176,6 +191,121 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   previewCommits: [],
   previewCommitLimit: 50,
   isLoadingPreview: false,
+  conflictSessions: {},
+
+  getConflictSession: (repoId: string) => get().conflictSessions[repoId] ?? createConflictSession(repoId),
+
+  loadConflictSnapshot: async (repoId: string) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    if (!repo) return null;
+    const seq = (conflictRequestSeq.get(repoId) ?? 0) + 1;
+    conflictRequestSeq.set(repoId, seq);
+    const current = get().getConflictSession(repoId);
+    set({ conflictSessions: { ...get().conflictSessions, [repoId]: conflictSessionReducer(current, { type: 'action-start', action: 'load' }) } });
+    try {
+      const response = await window.api.git.conflictSnapshot(repo.path);
+      if (conflictRequestSeq.get(repoId) !== seq) return get().getConflictSession(repoId);
+      if (!response.success || !response.data) throw new Error(response.error || 'Unable to load conflict operation');
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'snapshot', snapshot: response.data });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    } catch (error: any) {
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'error', message: error?.message || 'Unable to load conflict operation' });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    }
+  },
+
+  loadConflictDocument: async (repoId: string, filePath: string) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    const session = get().getConflictSession(repoId);
+    if (!repo || !session.generation) return null;
+    try {
+      const response = await window.api.git.conflictDocument(repo.path, filePath, session.generation);
+      if (!response.success || !response.data) throw new Error(response.error || 'Unable to load conflict document');
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'document', document: response.data });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    } catch (error: any) {
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'error', message: error?.message || 'Unable to load conflict document' });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    }
+  },
+
+  chooseConflictRegion: (repoId, filePath, regionId, choice, selected) => {
+    const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'choose-region', path: filePath, regionId, choice, selected });
+    set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+  },
+
+  editConflictResult: (repoId, filePath, result) => {
+    const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'edit-result', path: filePath, result });
+    set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+  },
+
+  applyConflictResolution: async (repoId, filePath) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    const session = get().getConflictSession(repoId);
+    const path = filePath || session.activePath;
+    const draft = path ? session.drafts[path] : undefined;
+    if (!repo || !path || !draft || !session.generation) return session;
+    const selections = draft.document.regions.map(region => ({ documentGeneration: session.generation!, regionId: region.id, choice: region.choice, selected: region.selected }));
+    const started = conflictSessionReducer(session, { type: 'action-start', action: 'apply' });
+    set({ conflictSessions: { ...get().conflictSessions, [repoId]: started } });
+    try {
+      const response = await window.api.git.applyConflictResolution(repo.path, path, selections, session.generation);
+      if (!response.success || !response.data) throw new Error(response.error || 'Unable to apply conflict resolution');
+      const result = response.data as OperationActionResult & { token?: string };
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'action-result', result });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: { ...next, undo: result.token ? { token: result.token, generation: result.snapshot.generation } : next.undo } } });
+      return get().getConflictSession(repoId);
+    } catch (error: any) {
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'error', message: error?.message || 'Unable to apply conflict resolution' });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    }
+  },
+
+  undoConflictResolution: async (repoId) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    const session = get().getConflictSession(repoId);
+    if (!repo || !session.undo) return session;
+    try {
+      const response = await window.api.git.undoConflictResolution(session.undo.token);
+      if (!response.success || !response.data) throw new Error(response.error || 'Undo Resolution is no longer available');
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'action-result', result: response.data });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: { ...next, undo: null } } });
+      return get().getConflictSession(repoId);
+    } catch (error: any) {
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'undo-expired' });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    }
+  },
+
+  runConflictOperation: async (repoId, operation) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    const session = get().getConflictSession(repoId);
+    if (!repo) return session;
+    const started = conflictSessionReducer(session, { type: 'action-start', action: operation });
+    set({ conflictSessions: { ...get().conflictSessions, [repoId]: started } });
+    try {
+      const response = operation === 'continue'
+        ? await window.api.git.continueConflictOperation(repo.path)
+        : operation === 'skip' ? await window.api.git.skipConflictOperation(repo.path) : await window.api.git.abortConflictOperation(repo.path);
+      if (!response.success || !response.data) throw new Error(response.error || `Unable to ${operation} conflict operation`);
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'action-result', result: response.data });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    } catch (error: any) {
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'error', message: error?.message || `Unable to ${operation} conflict operation` });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    }
+  },
+  continueConflictOperation: async (repoId) => get().runConflictOperation(repoId, 'continue'),
+  skipConflictOperation: async (repoId) => get().runConflictOperation(repoId, 'skip'),
+  abortConflictOperation: async (repoId) => get().runConflictOperation(repoId, 'abort'),
 
   getActiveRepo: () => {
     const { repositories, activeId } = get();

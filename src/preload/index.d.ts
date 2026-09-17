@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { ConflictDocument, OperationActionResult, OperationSnapshot, ResolutionSelection } from '../shared/conflicts'
 
 // Types for IPC responses
 export type IpcResponse<T = any> = {
@@ -58,6 +59,13 @@ declare global {
         createSafetySnapshot: (repoPath: string, filePaths?: string[]) => Promise<IpcResponse<void> & { snapshotId?: string }>;
         restoreSafetySnapshot: (repoPath: string, snapshotId: string) => Promise<IpcResponse<void>>;
         deleteSafetySnapshot: (repoPath: string, snapshotId: string) => Promise<{ success: boolean }>;
+        conflictSnapshot: (repoPath: string) => Promise<IpcResponse<OperationSnapshot>>;
+        conflictDocument: (repoPath: string, filePath: string, generation: string) => Promise<IpcResponse<ConflictDocument>>;
+        applyConflictResolution: (repoPath: string, filePath: string, selections: ResolutionSelection[], generation: string) => Promise<IpcResponse<OperationActionResult & { token?: string }>>;
+        undoConflictResolution: (token: string) => Promise<IpcResponse<OperationActionResult>>;
+        continueConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;
+        skipConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;
+        abortConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;
       },
       app: {
         openDirectory: () => Promise<{ canceled: boolean, path?: string }>;
