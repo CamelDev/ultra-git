@@ -80,6 +80,17 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
     }
   }, [selectedFile, loadFileDiff])
 
+  useEffect(() => {
+    if (!onDismiss) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onDismiss()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onDismiss])
+
   const resolveHunk = (index: number, resolution: "ours" | "theirs" | "both") => {
     const hunk = hunks[index]
     let content = ""

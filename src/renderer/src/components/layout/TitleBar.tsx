@@ -177,7 +177,7 @@ const TitleBar: React.FC = () => {
 
 
 
-  // Handle outside clicks to close settings dropdown
+  // Handle outside clicks and Escape to close settings dropdown
   useEffect(() => {
     if (!isSettingsOpen) return
     const handleClickOutside = (event: MouseEvent) => {
@@ -188,9 +188,16 @@ const TitleBar: React.FC = () => {
         setIsSettingsOpen(false)
       }
     }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsSettingsOpen(false)
+      }
+    }
     document.addEventListener('mousedown', handleClickOutside)
+    window.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [isSettingsOpen])
 
@@ -242,7 +249,7 @@ const TitleBar: React.FC = () => {
     removeRecentRepo(repoPath)
   }
 
-  // Handle outside clicks to close add repo dropdown
+  // Handle outside clicks and Escape to close add repo dropdown
   useEffect(() => {
     if (!isAddRepoDropdownOpen) return
     const handleClickOutside = (event: MouseEvent) => {
@@ -253,13 +260,20 @@ const TitleBar: React.FC = () => {
         setIsAddRepoDropdownOpen(false)
       }
     }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsAddRepoDropdownOpen(false)
+      }
+    }
     document.addEventListener('mousedown', handleClickOutside)
+    window.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [isAddRepoDropdownOpen])
 
-  // Handle outside clicks to close tab settings popover
+  // Handle outside clicks and Escape to close tab settings popover
   useEffect(() => {
     if (!tabSettingsTabId) return
     const handleClickOutside = (event: MouseEvent) => {
@@ -268,9 +282,16 @@ const TitleBar: React.FC = () => {
         setTabSettingsTabId(null)
       }
     }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTabSettingsTabId(null)
+      }
+    }
     document.addEventListener('mousedown', handleClickOutside)
+    window.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [tabSettingsTabId])
 

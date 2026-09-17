@@ -363,11 +363,18 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         setShowPushDropdown(false)
       }
     }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowPushDropdown(false)
+      }
+    }
     if (showPushDropdown) {
       document.addEventListener('mousedown', handleClickOutside)
+      window.addEventListener('keydown', handleKeyDown)
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [showPushDropdown])
 
@@ -377,11 +384,18 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
         setShowPullDropdown(false)
       }
     }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowPullDropdown(false)
+      }
+    }
     if (showPullDropdown) {
       document.addEventListener('mousedown', handleClickOutside)
+      window.addEventListener('keydown', handleKeyDown)
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [showPullDropdown])
 
@@ -1128,6 +1142,61 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isTagModalOpen])
+
+  useEffect(() => {
+    if (!isRemoteModalOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsRemoteModalOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isRemoteModalOpen])
+
+  useEffect(() => {
+    if (!isUpstreamModalOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsUpstreamModalOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isUpstreamModalOpen])
+
+  useEffect(() => {
+    if (!isBranchModalOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsBranchModalOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isBranchModalOpen])
+
+  useEffect(() => {
+    if (!isResetModalOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsResetModalOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isResetModalOpen])
+
+  useEffect(() => {
+    if (!isSquashModalOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSquashModalOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isSquashModalOpen])
 
   const handlePush = async (force?: boolean) => {
     const targetRepo = activeRepo
