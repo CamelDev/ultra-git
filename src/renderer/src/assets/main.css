@@ -1671,6 +1671,63 @@ mark.diff-search-highlight.active {
   padding: 8px 0;
 }
 
+.folder-item {
+  min-height: 30px;
+  padding-right: 20px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.folder-item:hover {
+  background-color: var(--hover);
+}
+
+.folder-expand-button,
+.folder-name {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.folder-expand-button {
+  width: 18px;
+  height: 22px;
+  justify-content: flex-start;
+  margin-right: 2px;
+}
+
+.folder-icon {
+  margin-right: 6px;
+  color: var(--accent-light);
+  flex-shrink: 0;
+}
+
+.folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  font-weight: 600;
+}
+
+.folder-file-count {
+  margin-left: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.tree-file > .file-item {
+  margin-left: 10px;
+}
+
 .active-changes-footer {
   padding: 8px 20px;
   border-top: 1px solid var(--border);
@@ -1776,6 +1833,10 @@ mark.diff-search-highlight.active {
 }
 
 .file-item:hover .action-btn {
+  opacity: 1;
+}
+
+.column-header .action-btn {
   opacity: 1;
 }
 
@@ -1908,6 +1969,12 @@ mark.diff-search-highlight.active {
   background-color: var(--btn-stash-hover-bg);
   color: var(--btn-stash-hover-color);
   border-color: var(--btn-stash-hover-border);
+}
+
+.btn-stash[aria-pressed='true'] {
+  background-color: var(--accent);
+  border-color: var(--accent-light);
+  color: #ffffff;
 }
 
 /* Stash list items in sidebar */
@@ -3746,5 +3813,3 @@ mark.diff-search-highlight.active {
   color: var(--text-primary);
   font-weight: 600;
 }
-
-

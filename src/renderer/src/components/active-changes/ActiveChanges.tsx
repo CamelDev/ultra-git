@@ -1,10 +1,139 @@
 import React, { useState, useEffect } from 'react'
-import { FileText, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw, Trash2, EyeOff, MoreVertical } from 'lucide-react'
+import { FileText, Folder, ChevronRight, ChevronDown, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw, Trash2, EyeOff, MoreVertical } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { useUndoStore } from '../../store/useUndoStore'
 import { useToaster } from '../toaster/ToasterContext'
 import { DiffModal } from '../details/DiffModal'
 import { AppDialog } from '../dialogs/AppDialog'
+
+type ChangeFile = { path: string; index: string; working_dir: string; [key: string]: any }
+
+type FileTreeFolder = {
+  name: string
+  path: string
+  folders: Map<string, FileTreeFolder>
+  files: ChangeFile[]
+}
+
+const buildFileTree = (files: ChangeFile[]): FileTreeFolder => {
+  const root: FileTreeFolder = { name: '', path: '', folders: new Map(), files: [] }
+
+  for (const file of files) {
+    const segments = file.path.split('/').filter(Boolean)
+    const fileName = segments.pop()
+    if (!fileName) continue
+
+    let folder = root
+    for (const segment of segments) {
+      let child = folder.folders.get(segment)
+      if (!child) {
+        child = {
+          name: segment,
+          path: folder.path ? `${folder.path}/${segment}` : segment,
+          folders: new Map(),
+          files: []
+        }
+        folder.folders.set(segment, child)
+      }
+      folder = child
+    }
+    folder.files.push(file)
+  }
+
+  return root
+}
+
+const getFolderFiles = (folder: FileTreeFolder): ChangeFile[] => [
+  ...folder.files,
+  ...Array.from(folder.folders.values()).flatMap(getFolderFiles)
+]
+
+type FileTreeProps = {
+  files: ChangeFile[]
+  selectedPaths: Set<string>
+  treeMode: boolean
+  panel: 'staged' | 'unstaged'
+  collapsedFolders: Set<string>
+  onToggleFolder: (folderId: string) => void
+  onToggleFolderSelection: (files: ChangeFile[]) => void
+  renderFile: (file: ChangeFile, index: number) => React.ReactNode
+}
+
+const FileTree: React.FC<FileTreeProps> = ({
+  files,
+  selectedPaths,
+  treeMode,
+  panel,
+  collapsedFolders,
+  onToggleFolder,
+  onToggleFolderSelection,
+  renderFile
+}) => {
+  if (!treeMode) return <>{files.map((file, index) => renderFile(file, index))}</>
+
+  const tree = buildFileTree(files)
+
+  const renderFolder = (folder: FileTreeFolder, depth: number): React.ReactNode => {
+    const folderFiles = getFolderFiles(folder)
+    const selectedCount = folderFiles.filter((file) => selectedPaths.has(file.path)).length
+    const folderId = `${panel}:${folder.path}`
+    const isExpanded = !collapsedFolders.has(folderId)
+
+    return (
+      <React.Fragment key={folderId}>
+        <div className="folder-item" style={{ paddingLeft: `${20 + depth * 16}px` }}>
+          <button
+            type="button"
+            className="folder-expand-button"
+            onClick={() => onToggleFolder(folderId)}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${folder.path}`}
+            data-testid={`folder-toggle-${panel}-${folder.path}`}
+          >
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+          <input
+            type="checkbox"
+            className="file-select-checkbox"
+            checked={selectedCount === folderFiles.length}
+            ref={(element) => {
+              if (element) element.indeterminate = selectedCount > 0 && selectedCount < folderFiles.length
+            }}
+            onClick={(event) => event.stopPropagation()}
+            onChange={() => onToggleFolderSelection(folderFiles)}
+            aria-label={`Select ${folder.path}`}
+            data-testid={`folder-checkbox-${panel}-${folder.path}`}
+          />
+          <Folder size={14} className="folder-icon" />
+          <button
+            type="button"
+            className="folder-name"
+            onClick={() => onToggleFolder(folderId)}
+            data-testid={`folder-name-${panel}-${folder.path}`}
+          >
+            {folder.name} <span className="folder-file-count">({folderFiles.length})</span>
+          </button>
+        </div>
+        {isExpanded && (
+          <>
+            {Array.from(folder.folders.values())
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((child) => renderFolder(child, depth + 1))}
+            {folder.files
+              .slice()
+              .sort((a, b) => a.path.localeCompare(b.path))
+              .map((file) => (
+                <div className="tree-file" style={{ paddingLeft: `${depth * 16}px` }} key={file.path}>
+                  {renderFile(file, files.indexOf(file))}
+                </div>
+              ))}
+          </>
+        )}
+      </React.Fragment>
+    )
+  }
+
+  return <>{Array.from(tree.folders.values()).sort((a, b) => a.name.localeCompare(b.name)).map((folder) => renderFolder(folder, 0))}{tree.files.slice().sort((a, b) => a.path.localeCompare(b.path)).map((file) => renderFile(file, files.indexOf(file)))}</>
+}
 
 function getIgnoreOptions(filePath: string): Array<{ label: string; value: string; desc: string }> {
   const options: Array<{ label: string; value: string; desc: string }> = []
@@ -68,13 +197,14 @@ function getIgnoreOptions(filePath: string): Array<{ label: string; value: strin
   return options
 }
 
-export const ActiveChanges: React.FC = () => {
+export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMode }) => {
   const { getActiveRepo, refreshRepo, identities } = useRepoStore()
   const { addToast } = useToaster()
   const activeRepo = getActiveRepo()
 
   const [selectedUnstaged, setSelectedUnstaged] = useState<Set<string>>(new Set())
   const [selectedStaged, setSelectedStaged] = useState<Set<string>>(new Set())
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set())
   const [lastUnstagedIndex, setLastUnstagedIndex] = useState<number | null>(null)
   const [lastStagedIndex, setLastStagedIndex] = useState<number | null>(null)
 
@@ -435,6 +565,29 @@ export const ActiveChanges: React.FC = () => {
     }
   }
 
+  const toggleFolder = (folderId: string) => {
+    setCollapsedFolders((previous) => {
+      const next = new Set(previous)
+      if (next.has(folderId)) next.delete(folderId)
+      else next.add(folderId)
+      return next
+    })
+  }
+
+  const toggleFolderSelection = (folderFiles: ChangeFile[], isStaged: boolean) => {
+    const paths = folderFiles.map((file) => file.path)
+    const setSelection = isStaged ? setSelectedStaged : setSelectedUnstaged
+    setSelection((previous) => {
+      const next = new Set(previous)
+      const isFullySelected = paths.every((path) => next.has(path))
+      paths.forEach((path) => {
+        if (isFullySelected) next.delete(path)
+        else next.add(path)
+      })
+      return next
+    })
+  }
+
   const getStatusClass = (status: string) => {
     if (status === '?') return 'status-q'
     return `status-${status.toLowerCase()}`
@@ -534,7 +687,15 @@ export const ActiveChanges: React.FC = () => {
                 No unstaged changes
               </div>
             ) : (
-              unstagedFiles.map((file, index) => {
+              <FileTree
+                files={unstagedFiles}
+                selectedPaths={selectedUnstaged}
+                treeMode={viewMode === 'tree'}
+                panel="unstaged"
+                collapsedFolders={collapsedFolders}
+                onToggleFolder={toggleFolder}
+                onToggleFolderSelection={(folderFiles) => toggleFolderSelection(folderFiles, false)}
+                renderFile={(file, index) => {
                 const statusChar = file.working_dir === ' ' && file.index === '?' ? '?' : file.working_dir
                 const isSelected = selectedUnstaged.has(file.path)
                 const isIgnoredTracked = ignoredTrackedSet.has(file.path)
@@ -691,7 +852,8 @@ export const ActiveChanges: React.FC = () => {
                     </button>
                   </div>
                 )
-              })
+                }}
+              />
             )}
           </div>
         </div>
@@ -751,7 +913,15 @@ export const ActiveChanges: React.FC = () => {
                 No staged changes
               </div>
             ) : (
-              stagedFiles.map((file, index) => {
+              <FileTree
+                files={stagedFiles}
+                selectedPaths={selectedStaged}
+                treeMode={viewMode === 'tree'}
+                panel="staged"
+                collapsedFolders={collapsedFolders}
+                onToggleFolder={toggleFolder}
+                onToggleFolderSelection={(folderFiles) => toggleFolderSelection(folderFiles, true)}
+                renderFile={(file, index) => {
                 const oldPath = getRenamedOldPath(file.path)
                 const isSelected = selectedStaged.has(file.path)
                 const isIgnoredTracked = ignoredTrackedSet.has(file.path)
@@ -866,7 +1036,8 @@ export const ActiveChanges: React.FC = () => {
                     </button>
                   </div>
                 )
-              })
+                }}
+              />
             )}
           </div>
         </div>

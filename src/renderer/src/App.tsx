@@ -139,6 +139,17 @@ function App() {
     return saved ? parseInt(saved, 10) : window.innerHeight / 2
   })
   const [isActiveChangesDragging, setIsActiveChangesDragging] = useState(false)
+  const [changesViewMode, setChangesViewMode] = useState<'list' | 'tree'>(() => {
+    return localStorage.getItem('changes-view-mode') === 'tree' ? 'tree' : 'list'
+  })
+
+  const toggleChangesViewMode = () => {
+    setChangesViewMode((previous) => {
+      const next = previous === 'list' ? 'tree' : 'list'
+      localStorage.setItem('changes-view-mode', next)
+      return next
+    })
+  }
 
   // Use a ref to access the active width inside listeners without re-binding them
   const sidebarWidthRef = useRef(sidebarWidth)
@@ -383,10 +394,15 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
         />
 
         <div className="main-content">
-          <Toolbar onMergeConflicts={handleMergeConflicts} onOpenConflictResolver={openConflictResolver} />
+          <Toolbar
+            onMergeConflicts={handleMergeConflicts}
+            onOpenConflictResolver={openConflictResolver}
+            changesViewMode={changesViewMode}
+            onToggleChangesViewMode={toggleChangesViewMode}
+          />
           {hasActiveChanges && (
             <>
-              <ActiveChanges />
+              <ActiveChanges viewMode={changesViewMode} />
               <div 
                 className={`active-changes-resizer ${isActiveChangesDragging ? 'is-dragging' : ''}`}
                 onPointerDown={startActiveChangesResize}
@@ -462,4 +478,3 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
 }
 
 export default App
-

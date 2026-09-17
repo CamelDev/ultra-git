@@ -159,6 +159,52 @@ test.describe('Active Changes Panel', () => {
     }
   })
 
+  test('should select, collapse, and stage every changed file in a folder', async () => {
+    const { app, page } = await launchElectronApp()
+
+    try {
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => ({ canceled: false, path: sandboxPath }))
+      }, sandbox.dir)
+      await addRepoViaUI(page)
+
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await tabs.last().click()
+      fs.mkdirSync(path.join(sandbox.dir, 'src', 'nested'), { recursive: true })
+      fs.writeFileSync(path.join(sandbox.dir, 'src', 'index.ts'), 'export {}\n')
+      fs.writeFileSync(path.join(sandbox.dir, 'src', 'nested', 'feature.ts'), 'export const feature = true\n')
+
+      await tabs.first().click()
+      await page.waitForTimeout(500)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      const panel = page.locator('[data-testid="active-changes-panel"]')
+      const unstagedColumn = panel.locator('.unstaged-column')
+      const sourceFolder = unstagedColumn.locator('[data-testid="folder-checkbox-unstaged-src"]')
+      await expect(sourceFolder).toHaveCount(0)
+      await page.locator('[data-testid="changes-view-toggle-btn"]').click()
+      await expect(sourceFolder).toBeVisible()
+      await sourceFolder.check()
+      await expect(panel.locator('[data-testid="batch-stage-btn"]')).toContainText('Stage (2)')
+
+      await panel.locator('[data-testid="folder-toggle-unstaged-src"]').click()
+      await expect(unstagedColumn.locator('.file-item')).toHaveCount(0)
+      await panel.locator('[data-testid="folder-toggle-unstaged-src"]').click()
+      await expect(unstagedColumn.locator('.file-item')).toHaveCount(2)
+
+      await panel.locator('[data-testid="batch-stage-btn"]').click()
+      await expect(panel.locator('.staged-column .file-item')).toHaveCount(2)
+    } finally {
+      await app.close()
+    }
+  })
+
   test('should show warning dialog and not commit if nothing is staged', async () => {
     const { app, page } = await launchElectronApp()
     page.on('console', msg => console.log('PAGE LOG:', msg.text()))
@@ -692,4 +738,3 @@ test.describe('Active Changes Panel', () => {
     }
   })
 })
-
