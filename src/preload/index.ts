@@ -74,6 +74,13 @@ const api = {
       ipcRenderer.invoke('git:getConflictFileDiff', repoPath, filePath),
     resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) =>
       ipcRenderer.invoke('git:resolveConflict', repoPath, filePath, resolvedContent),
+    conflictSnapshot: (repoPath: string) => ipcRenderer.invoke('conflict:snapshot', repoPath),
+    conflictDocument: (repoPath: string, filePath: string, generation: string) => ipcRenderer.invoke('conflict:document', repoPath, filePath, generation),
+    applyConflictResolution: (repoPath: string, filePath: string, selections: unknown[], generation: string) => ipcRenderer.invoke('conflict:apply', repoPath, filePath, selections, generation),
+    undoConflictResolution: (token: string) => ipcRenderer.invoke('conflict:undo', token),
+    continueConflictOperation: (repoPath: string) => ipcRenderer.invoke('conflict:continue', repoPath),
+    skipConflictOperation: (repoPath: string) => ipcRenderer.invoke('conflict:skip', repoPath),
+    abortConflictOperation: (repoPath: string) => ipcRenderer.invoke('conflict:abort', repoPath),
     getMergeStatus: (repoPath: string) => ipcRenderer.invoke('git:getMergeStatus', repoPath),
     getTags: (repoPath: string) => ipcRenderer.invoke('git:getTags', repoPath),
     getUnpushedTags: (repoPath: string) => ipcRenderer.invoke('git:getUnpushedTags', repoPath),

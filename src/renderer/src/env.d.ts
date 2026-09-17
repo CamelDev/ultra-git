@@ -109,6 +109,13 @@ declare global {
         getConflictedFiles: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ path: string; status: string }>; error?: string }>;
         getConflictFileDiff: (repoPath: string, filePath: string) => Promise<{ success: boolean; data?: { raw: string; hunks: Array<{ ours: string; base: string; theirs: string; startLine: number }> }; error?: string }>;
         resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) => Promise<{ success: boolean; error?: string }>;
+        conflictSnapshot: (repoPath: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
+        conflictDocument: (repoPath: string, filePath: string, generation: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
+        applyConflictResolution: (repoPath: string, filePath: string, selections: any[], generation: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
+        undoConflictResolution: (token: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
+        continueConflictOperation: (repoPath: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
+        skipConflictOperation: (repoPath: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
+        abortConflictOperation: (repoPath: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
         getMergeStatus: (repoPath: string) => Promise<{
           success: boolean;
           data?: {

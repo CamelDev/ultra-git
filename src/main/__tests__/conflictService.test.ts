@@ -5,6 +5,7 @@ import path from 'path';
 import { promisify } from 'util';
 import { execFile } from 'child_process';
 import { gitService } from '../git';
+import { conflictService } from '../conflictService';
 
 const exec = promisify(execFile);
 const repos = new Set<string>();
@@ -52,6 +53,19 @@ afterEach(() => {
 });
 
 describe('real Git conflict characterization', () => {
+  test('authoritative document resolves whole file and exposes generation-bound undo', async () => {
+    const dir = await repo();
+    await git(dir, ['checkout', '-b', 'incoming']); fs.writeFileSync(path.join(dir, 'conflict.txt'), 'incoming\n'); await commit(dir, 'incoming');
+    await git(dir, ['checkout', 'main']); fs.writeFileSync(path.join(dir, 'conflict.txt'), 'current\n'); await commit(dir, 'current'); await git(dir, ['merge', 'incoming'], true);
+    const before = await conflictService.getSnapshot(dir); const doc = await conflictService.getDocument(dir, 'conflict.txt', before.generation);
+    expect(doc.regions.length).toBeGreaterThan(0);
+    const applied = await conflictService.apply(dir, 'conflict.txt', doc.regions.map(region => ({ documentGeneration: before.generation, regionId: region.id, choice: 'current' as const })), before.generation);
+    expect((await conflictService.getSnapshot(dir)).conflicts).toHaveLength(0);
+    expect(fs.readFileSync(path.join(dir, 'conflict.txt'), 'utf8')).toBe('current\n');
+    await conflictService.undo(applied.token);
+    expect((await conflictService.getSnapshot(dir)).conflicts).toHaveLength(1);
+    expect(fs.readFileSync(path.join(dir, 'conflict.txt'), 'utf8')).toContain('<<<<<<<');
+  });
   test('merge records both-modified stages and merge metadata', async () => {
     const dir = await repo();
     await git(dir, ['checkout', '-b', 'incoming']);

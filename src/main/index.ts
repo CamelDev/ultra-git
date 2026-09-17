@@ -8,6 +8,7 @@ import icon from '../../resources/icon.png?asset'
 import iconWin from '../../resources/icon-win.png?asset'
 import { fixPath } from './env'
 import { gitService } from './git'
+import { conflictService, ConflictServiceError } from './conflictService'
 import { watchDirectory, stopWatching } from './watcher'
 import { registerUpdateHandlers, scheduleUpdateChecks } from './update'
 
@@ -734,6 +735,38 @@ app.whenReady().then(() => {
     } catch (error: any) {
       return { success: false, error: error.message }
     }
+  })
+
+  // Conflict operations use the authoritative stage-based service. Keep these
+  // channels separate from the legacy marker parser while the workbench rolls
+  // over to typed snapshots.
+  ipcMain.handle('conflict:snapshot', async (_, repoPath) => {
+    try { return { success: true, data: await conflictService.getSnapshot(repoPath) } }
+    catch (error: any) { return { success: false, code: error.code ?? 'PREFLIGHT_FAILED', error: error.message } }
+  })
+  ipcMain.handle('conflict:document', async (_, repoPath, filePath, generation) => {
+    try { return { success: true, data: await conflictService.getDocument(repoPath, filePath, generation) } }
+    catch (error: any) { return { success: false, code: error.code ?? 'PREFLIGHT_FAILED', error: error.message } }
+  })
+  ipcMain.handle('conflict:apply', async (_, repoPath, filePath, selections, generation) => {
+    try { return { success: true, data: await conflictService.apply(repoPath, filePath, selections, generation) } }
+    catch (error: any) { return { success: false, code: error.code ?? 'PREFLIGHT_FAILED', error: error.message } }
+  })
+  ipcMain.handle('conflict:undo', async (_, token) => {
+    try { return { success: true, data: await conflictService.undo(token) } }
+    catch (error: any) { return { success: false, code: error.code ?? 'UNDO_EXPIRED', error: error.message } }
+  })
+  ipcMain.handle('conflict:continue', async (_, repoPath) => {
+    try { return { success: true, data: await conflictService.continue(repoPath) } }
+    catch (error: any) { return { success: false, code: error.code ?? 'PREFLIGHT_FAILED', error: error.message } }
+  })
+  ipcMain.handle('conflict:skip', async (_, repoPath) => {
+    try { return { success: true, data: await conflictService.skip(repoPath) } }
+    catch (error: any) { return { success: false, code: error.code ?? 'PREFLIGHT_FAILED', error: error.message } }
+  })
+  ipcMain.handle('conflict:abort', async (_, repoPath) => {
+    try { return { success: true, data: await conflictService.abort(repoPath) } }
+    catch (error: any) { return { success: false, code: error.code ?? 'PREFLIGHT_FAILED', error: error.message } }
   })
 
   ipcMain.handle('git:getMergeStatus', async (_, repoPath) => {
