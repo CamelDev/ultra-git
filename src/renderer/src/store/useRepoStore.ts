@@ -120,6 +120,12 @@ interface RepoState {
   skipConflictOperation: (repoId: string) => Promise<ConflictSession | null>;
   abortConflictOperation: (repoId: string) => Promise<ConflictSession | null>;
   runConflictOperation: (repoId: string, operation: 'continue' | 'skip' | 'abort') => Promise<ConflictSession | null>;
+  loadConflictCandidates: (repoId: string, filePath?: string) => Promise<ConflictSession | null>;
+  previewConflictCandidate: (repoId: string, candidateId: string) => Promise<ConflictSession | null>;
+  acceptConflictCandidate: (repoId: string, candidateId: string) => void;
+  rejectConflictCandidate: (repoId: string, candidateId: string) => void;
+  setConflictCandidateReuse: (repoId: string, enabled: boolean) => Promise<ConflictSession | null>;
+  forgetConflictCandidate: (repoId: string, recordId?: string) => Promise<ConflictSession | null>;
 }
 
 const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '').replace(/^\/private\/var\//, '/var/');
@@ -241,6 +247,88 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   editConflictResult: (repoId, filePath, result) => {
     const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'edit-result', path: filePath, result });
     set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+  },
+
+  loadConflictCandidates: async (repoId, filePath) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    const session = get().getConflictSession(repoId);
+    const path = filePath || session.activePath;
+    if (!repo || !path || !session.generation) return session;
+    try {
+      const response = await window.api.git.getConflictCandidates(repo.path, path, session.generation);
+      if (!response.success) throw new Error(response.error || 'Unable to load resolution candidates');
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'candidates', path, candidates: response.data || [] });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    } catch (error: any) {
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'error', message: error?.message || 'Unable to load resolution candidates' });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    }
+  },
+
+  previewConflictCandidate: async (repoId, candidateId) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    const session = get().getConflictSession(repoId);
+    const path = session.activePath;
+    if (!repo || !path || !session.generation) return session;
+    try {
+      const response = await window.api.git.previewConflictCandidate(repo.path, path, session.generation, candidateId);
+      if (!response.success || !response.data) throw new Error(response.error || 'Unable to preview resolution candidate');
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'candidate-preview', path, candidateId });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    } catch (error: any) {
+      const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'error', message: error?.message || 'Unable to preview resolution candidate' });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    }
+  },
+
+  acceptConflictCandidate: (repoId, candidateId) => {
+    const session = get().getConflictSession(repoId);
+    if (!session.activePath) return;
+    const next = conflictSessionReducer(session, { type: 'candidate-accept', path: session.activePath, candidateId });
+    set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+  },
+
+  rejectConflictCandidate: (repoId, candidateId) => {
+    const session = get().getConflictSession(repoId);
+    if (!session.activePath) return;
+    const next = conflictSessionReducer(session, { type: 'candidate-reject', path: session.activePath, candidateId });
+    set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+  },
+
+  setConflictCandidateReuse: async (repoId, enabled) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    const session = get().getConflictSession(repoId);
+    if (!repo) return session;
+    try {
+      const response = await window.api.git.setConflictCandidateEnabled(repo.path, enabled);
+      if (!response.success) throw new Error(response.error || 'Unable to update candidate reuse setting');
+      const next = conflictSessionReducer(session, { type: 'candidate-settings', enabled });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    } catch (error: any) {
+      const next = conflictSessionReducer(session, { type: 'error', message: error?.message || 'Unable to update candidate reuse setting' });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    }
+  },
+
+  forgetConflictCandidate: async (repoId, recordId) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    const session = get().getConflictSession(repoId);
+    if (!repo) return session;
+    try {
+      const response = await window.api.git.forgetConflictCandidateRecords(repo.path, recordId);
+      if (!response.success) throw new Error(response.error || 'Unable to forget resolution record');
+      return get().loadConflictCandidates(repoId);
+    } catch (error: any) {
+      const next = conflictSessionReducer(session, { type: 'error', message: error?.message || 'Unable to forget resolution record' });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    }
   },
 
   applyConflictResolution: async (repoId, filePath) => {

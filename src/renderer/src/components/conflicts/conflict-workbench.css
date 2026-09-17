@@ -32,5 +32,19 @@
 .conflict-pane.result .conflict-pane-title { color:#34d399; }
 .conflict-choices { display:flex; gap:6px; flex-wrap:wrap; padding:8px 12px; border-top:1px solid var(--border); }
 .conflict-summary { padding:8px 12px; border-top:1px solid var(--border); color:var(--text-secondary); font-size:12px; }
+.conflict-candidate-panel { padding:10px 12px; border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--accent) 5%, transparent); max-height:35vh; overflow:auto; }
+.conflict-candidate-header { display:flex; gap:16px; align-items:flex-start; justify-content:space-between; }
+.conflict-candidate-header h3 { margin:0; font-size:13px; }
+.conflict-candidate-header p, .conflict-candidate-muted { margin:4px 0 0; color:var(--text-secondary); font-size:11px; }
+.conflict-candidate-header label { display:flex; gap:6px; align-items:center; color:var(--text-secondary); font-size:11px; white-space:nowrap; }
+.conflict-candidate-list { display:grid; gap:8px; margin-top:10px; }
+.conflict-candidate-card { padding:9px; border:1px solid var(--border); border-radius:6px; background:var(--bg-secondary); }
+.conflict-candidate-card p { margin:4px 0; font-size:12px; }
+.conflict-candidate-card small { display:block; color:var(--text-secondary); font-size:11px; }
+.conflict-candidate-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.conflict-candidate-actions .conflict-workbench-btn { padding:4px 8px; font-size:11px; }
+.conflict-candidate-preview { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:8px; }
+.conflict-candidate-preview pre { max-height:140px; overflow:auto; margin:4px 0 0; padding:7px; border:1px solid var(--border); background:var(--bg-primary); white-space:pre-wrap; overflow-wrap:anywhere; font:11px/1.4 var(--font-mono,monospace); }
+.conflict-candidate-card [role=status] { color:#34d399; font-size:11px; }
 @media (max-width: 900px) { .conflict-workbench-body { grid-template-columns:190px minmax(0,1fr); } .conflict-panes { grid-template-columns:repeat(2,minmax(0,1fr)); overflow:auto; } .conflict-pane { min-height:220px; } }
 @media (max-width: 620px) { .conflict-workbench-body { display:flex; flex-direction:column; } .conflict-file-list { max-height:180px; border-right:0; border-bottom:1px solid var(--border); } .conflict-operation-actions { margin-left:0; width:100%; } .conflict-panes { display:flex; flex-direction:column; } .conflict-pane { min-height:160px; } }

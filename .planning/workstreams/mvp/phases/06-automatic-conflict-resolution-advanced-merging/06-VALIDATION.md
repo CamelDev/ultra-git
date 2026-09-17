@@ -57,8 +57,8 @@ created: 2026-09-17
 | 06-08-02 | 08 | 7 | CONFLICT-02 | transaction rollback | Partial UI batches, stale reload, Undo/Redo, and expiry are Git-verified | E2E + integration | `bunx playwright test e2e/partial-staging.spec.ts && bun test src/main/__tests__/git.partialPatch.test.ts` | ❌ create | ⬜ pending |
 | 06-09-01 | 09 | 8 | CONFLICT-03 | unsafe heuristic | Required deterministic candidates pass positive/negative byte-safety cases | unit/integration | `bun test src/main/__tests__/conflictCandidates.test.ts` | ❌ create | ⬜ pending |
 | 06-09-02 | 09 | 8 | CONFLICT-03 | record tampering | Local records and preview/reject/restart leave Git unchanged | integration + build | `bun test src/main/__tests__/conflictCandidates.test.ts src/main/__tests__/conflictService.test.ts && bun run build` | ❌ extend | ⬜ pending |
-| 06-10-01 | 10 | 9 | CONFLICT-03 | silent automation | Preview/accept/reject/forget UI never mutates before Apply | E2E + unit | `bunx playwright test e2e/conflict-resolution-reuse.spec.ts && bun test src/main/__tests__/conflictCandidates.test.ts src/renderer/src/store/__tests__/conflictSession.test.ts` | ❌ create | ⬜ pending |
-| 06-10-02 | 10 | 9 | CONFLICT-01,02,03 | phase gate | Full suite/build and documentation evidence are complete | full | `bun test src && bun run test:e2e && bun run build` | ✅ commands | ⬜ pending |
+| 06-10-01 | 10 | 9 | CONFLICT-03 | silent automation | Preview/accept/reject/forget UI never mutates before Apply | E2E + unit | `bunx playwright test e2e/conflict-resolution-reuse.spec.ts && bun test src/main/__tests__/conflictCandidates.test.ts src/renderer/src/store/__tests__/conflictSession.test.ts` | ✅ created | ✅ green (2 Playwright, 10 focused Bun) |
+| 06-10-02 | 10 | 9 | CONFLICT-01,02,03 | phase gate | Full suite/build and documentation evidence are complete | full | `bun test src && bun run test:e2e && bun run build` | ✅ commands | ⚠️ blocked: 6 pre-existing git.untrack failures (`simpleGit` mock contamination); build and focused gates green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

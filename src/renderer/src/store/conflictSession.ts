@@ -1,4 +1,4 @@
-import type { ConflictDocument, ConflictRegion, OperationActionResult, OperationSnapshot, RegionChoice } from '../../../shared/conflicts'
+import type { ConflictCandidate, ConflictDocument, ConflictRegion, OperationActionResult, OperationSnapshot, RegionChoice } from '../../../shared/conflicts'
 
 export type FileChoice = 'unresolved' | 'current' | 'incoming' | 'manual'
 
@@ -8,6 +8,9 @@ export interface ConflictDraft {
   dirty: boolean
   fileChoice: FileChoice
   updatedAt: number
+  candidates: ConflictCandidate[]
+  previewedCandidateId: string | null
+  acceptedCandidateId: string | null
 }
 
 export interface ConflictSession {
@@ -21,6 +24,7 @@ export interface ConflictSession {
   externalChange: boolean
   pending: string | null
   error: string | null
+  candidateReuseEnabled: boolean
 }
 
 export type ConflictSessionAction =
@@ -36,10 +40,15 @@ export type ConflictSessionAction =
   | { type: 'action-result'; result: OperationActionResult }
   | { type: 'undo-expired' }
   | { type: 'error'; message: string }
+  | { type: 'candidates'; path: string; candidates: ConflictCandidate[] }
+  | { type: 'candidate-preview'; path: string; candidateId: string }
+  | { type: 'candidate-accept'; path: string; candidateId: string }
+  | { type: 'candidate-reject'; path: string; candidateId: string }
+  | { type: 'candidate-settings'; enabled: boolean }
 
 export const createConflictSession = (repoId: string): ConflictSession => ({
   repoId, snapshot: null, generation: null, activePath: null, activeRegionId: null,
-  drafts: {}, undo: null, externalChange: false, pending: null, error: null
+  drafts: {}, undo: null, externalChange: false, pending: null, error: null, candidateReuseEnabled: false
 })
 
 const compose = (doc: ConflictDocument, choices: Record<string, { choice: RegionChoice; selected?: string }>) => {
@@ -73,6 +82,7 @@ const draftFor = (document: ConflictDocument): ConflictDraft => ({
   dirty: false,
   fileChoice: document.isBinary || document.regions.length === 0 ? 'unresolved' : 'unresolved',
   updatedAt: Date.now()
+  , candidates: [], previewedCandidateId: null, acceptedCandidateId: null
 })
 
 const sameGeneration = (state: ConflictSession, generation: string) => state.generation === generation
@@ -104,6 +114,27 @@ export function conflictSessionReducer(state: ConflictSession, action: ConflictS
       const draft = state.drafts[action.path]; if (!draft) return state
       return { ...state, drafts: { ...state.drafts, [action.path]: { ...draft, result: action.result, dirty: true, fileChoice: 'manual', updatedAt: Date.now() } } }
     }
+    case 'candidates': {
+      const draft = state.drafts[action.path]; if (!draft) return state
+      return { ...state, drafts: { ...state.drafts, [action.path]: { ...draft, candidates: action.candidates, previewedCandidateId: null, acceptedCandidateId: null } } }
+    }
+    case 'candidate-preview': {
+      const draft = state.drafts[action.path]; if (!draft || !draft.candidates.some(candidate => candidate.id === action.candidateId)) return state
+      return { ...state, drafts: { ...state.drafts, [action.path]: { ...draft, previewedCandidateId: action.candidateId } } }
+    }
+    case 'candidate-accept': {
+      const draft = state.drafts[action.path]; const candidate = draft?.candidates.find(item => item.id === action.candidateId)
+      if (!draft || !candidate || draft.previewedCandidateId !== action.candidateId) return state
+      const regions = draft.document.regions.map(region => candidate.affectedRegionIds.includes(region.id) ? { ...region, choice: 'manual' as RegionChoice, selected: candidate.proposedBytes } : region)
+      const document = { ...draft.document, regions }
+      const result = regions.every(region => region.choice !== 'unresolved') ? compose(document, Object.fromEntries(regions.map(region => [region.id, { choice: region.choice, selected: region.selected }]))) : draft.result
+      return { ...state, drafts: { ...state.drafts, [action.path]: { ...draft, document, result, dirty: true, acceptedCandidateId: action.candidateId, updatedAt: Date.now() } } }
+    }
+    case 'candidate-reject': {
+      const draft = state.drafts[action.path]; if (!draft) return state
+      return { ...state, drafts: { ...state.drafts, [action.path]: { ...draft, candidates: draft.candidates.filter(candidate => candidate.id !== action.candidateId), previewedCandidateId: null, acceptedCandidateId: draft.acceptedCandidateId === action.candidateId ? null : draft.acceptedCandidateId } } }
+    }
+    case 'candidate-settings': return { ...state, candidateReuseEnabled: action.enabled }
     case 'choose-file': {
       const draft = state.drafts[action.path]; if (!draft) return state
       return { ...state, drafts: { ...state.drafts, [action.path]: { ...draft, fileChoice: action.choice, dirty: true, updatedAt: Date.now() } } }

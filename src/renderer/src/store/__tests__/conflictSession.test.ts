@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { deriveConflictRegions } from '../../../../main/conflictRegions'
 import { conflictSelectors, conflictSessionReducer, createConflictSession } from '../conflictSession'
-import type { ConflictDocument, OperationSnapshot } from '../../../../shared/conflicts'
+import type { ConflictCandidate, ConflictDocument, OperationSnapshot } from '../../../../shared/conflicts'
 
 const snapshot = (generation: string, phase: OperationSnapshot['phase'] = 'conflicted'): OperationSnapshot => ({
   repoId: '/repo', generation, kind: 'rebase', phase,
@@ -71,5 +71,19 @@ describe('conflictSessionReducer', () => {
     expect(state.undo).toBeNull()
     state = conflictSessionReducer(state, { type: 'action-result', result: { snapshot: snapshot('g2', 'ready-to-continue') } })
     expect(conflictSelectors.canContinue(state)).toBe(true)
+  })
+
+  it('requires preview before accepting a candidate and only edits Result', () => {
+    let state = loaded()
+    const region = document().regions[0]
+    const candidate: ConflictCandidate = { id: 'candidate-1', ruleId: 'one-side-equals-base', rationale: 'safe', safety: 'exact', generation: 'g1', path: 'file.txt', affectedRegionIds: [region.id], stageIdentities: {}, proposedBytes: 'candidate text', proposedHash: 'hash', beforePreview: region.base, afterPreview: 'candidate text' }
+    state = conflictSessionReducer(state, { type: 'candidates', path: 'file.txt', candidates: [candidate] })
+    state = conflictSessionReducer(state, { type: 'candidate-accept', path: 'file.txt', candidateId: candidate.id })
+    expect(state.drafts['file.txt'].acceptedCandidateId).toBeNull()
+    state = conflictSessionReducer(state, { type: 'candidate-preview', path: 'file.txt', candidateId: candidate.id })
+    state = conflictSessionReducer(state, { type: 'candidate-accept', path: 'file.txt', candidateId: candidate.id })
+    expect(state.drafts['file.txt'].acceptedCandidateId).toBe(candidate.id)
+    expect(state.drafts['file.txt'].dirty).toBe(true)
+    expect(state.undo).toBeNull()
   })
 })
