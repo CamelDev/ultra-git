@@ -59,6 +59,28 @@ export interface ConflictDocument {
   hasFinalNewline: boolean
 }
 
+/** A deterministic, preview-only resolution proposal. */
+export interface ConflictCandidate {
+  id: string
+  ruleId: 'one-side-equals-base' | 'identical-normalized-result' | 'whitespace-only' | 'confirmed-record'
+  rationale: string
+  safety: string
+  generation: string
+  path: string
+  affectedRegionIds: string[]
+  stageIdentities: { base?: string; current?: string; incoming?: string }
+  proposedBytes: string
+  proposedHash: string
+  beforePreview: string
+  afterPreview: string
+  recordId?: string
+  provenanceRules?: ConflictCandidate['ruleId'][]
+}
+
+export interface ConflictCandidateSettings {
+  enabled: boolean
+}
+
 export interface ConflictFileSummary { path: string; status: string; conflictType?: ConflictType }
 
 export interface OperationSnapshot {

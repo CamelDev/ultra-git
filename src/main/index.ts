@@ -757,6 +757,34 @@ app.whenReady().then(() => {
     try { return { success: true, data: await conflictService.undo(token) } }
     catch (error: any) { return { success: false, code: error.code ?? 'UNDO_EXPIRED', error: error.message } }
   })
+  ipcMain.handle('conflict:candidate-settings', async (_, repoPath) => {
+    try { return { success: true, data: await conflictService.candidates.getSettings(repoPath) } }
+    catch (error: any) { return { success: false, error: error.message } }
+  })
+  ipcMain.handle('conflict:candidate-settings-set', async (_, repoPath, enabled) => {
+    try { return { success: true, data: await conflictService.candidates.setEnabled(repoPath, enabled === true) } }
+    catch (error: any) { return { success: false, error: error.message } }
+  })
+  ipcMain.handle('conflict:candidate-records', async (_, repoPath) => {
+    try { return { success: true, data: await conflictService.candidates.listRecords(repoPath) } }
+    catch (error: any) { return { success: false, error: error.message } }
+  })
+  ipcMain.handle('conflict:candidates', async (_, repoPath, filePath, generation) => {
+    try { const document = await conflictService.getDocument(repoPath, filePath, generation); return { success: true, data: await conflictService.candidates.generate(repoPath, document) } }
+    catch (error: any) { return { success: false, code: error.code ?? 'PREFLIGHT_FAILED', error: error.message } }
+  })
+  ipcMain.handle('conflict:candidate-preview', async (_, repoPath, filePath, generation, candidateId) => {
+    try { const document = await conflictService.getDocument(repoPath, filePath, generation); return { success: true, data: await conflictService.candidates.preview(repoPath, document, candidateId) } }
+    catch (error: any) { return { success: false, code: error.code ?? 'STALE_DIFF', error: error.message } }
+  })
+  ipcMain.handle('conflict:candidate-record', async (_, repoPath, filePath, generation, regionId, proposedBytes) => {
+    try { const document = await conflictService.getDocument(repoPath, filePath, generation); return { success: true, data: await conflictService.candidates.recordConfirmed(repoPath, document, regionId, proposedBytes) } }
+    catch (error: any) { return { success: false, code: error.code ?? 'PREFLIGHT_FAILED', error: error.message } }
+  })
+  ipcMain.handle('conflict:candidate-forget', async (_, repoPath, id) => {
+    try { return { success: true, data: await conflictService.candidates.forget(repoPath, id) } }
+    catch (error: any) { return { success: false, error: error.message } }
+  })
 
   // Ordinary diffs use opaque, generation-bound selections. Conflict paths are
   // deliberately rejected by PartialPatchService and must use conflict:*.

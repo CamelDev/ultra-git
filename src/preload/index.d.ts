@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { ConflictDocument, OperationActionResult, OperationSnapshot, ResolutionSelection } from '../shared/conflicts'
+import type { ConflictCandidate, ConflictCandidateSettings, ConflictDocument, OperationActionResult, OperationSnapshot, ResolutionSelection } from '../shared/conflicts'
 
 // Types for IPC responses
 export type IpcResponse<T = any> = {
@@ -66,6 +66,13 @@ declare global {
         continueConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;
         skipConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;
         abortConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;
+        getConflictCandidateSettings: (repoPath: string) => Promise<IpcResponse<ConflictCandidateSettings>>;
+        setConflictCandidateEnabled: (repoPath: string, enabled: boolean) => Promise<IpcResponse<ConflictCandidateSettings>>;
+        getConflictCandidateRecords: (repoPath: string) => Promise<IpcResponse<any[]>>;
+        getConflictCandidates: (repoPath: string, filePath: string, generation: string) => Promise<IpcResponse<ConflictCandidate[]>>;
+        previewConflictCandidate: (repoPath: string, filePath: string, generation: string, candidateId: string) => Promise<IpcResponse<ConflictCandidate>>;
+        recordConflictCandidate: (repoPath: string, filePath: string, generation: string, regionId: string, proposedBytes: string) => Promise<IpcResponse<any>>;
+        forgetConflictCandidateRecords: (repoPath: string, id?: string) => Promise<IpcResponse<any[]>>;
         getPartialDiff: (repoPath: string, filePath: string, target: 'stage' | 'unstage' | 'discard' | 'staged-discard') => Promise<IpcResponse<import('../shared/conflicts').PartialDiff>>;
         applyPartialPatchTransaction: (repoPath: string, target: 'stage' | 'unstage' | 'discard' | 'staged-discard', selections: Array<import('../shared/conflicts').PartialSelection>, generation: string) => Promise<IpcResponse<import('../shared/conflicts').PartialTransactionResult>>;
         undoPartialTransaction: (transactionId: string) => Promise<IpcResponse<import('../shared/conflicts').PartialTransactionResult>>;

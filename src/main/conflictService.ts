@@ -7,6 +7,7 @@ import { promisify } from 'util'
 import { gitService } from './git'
 import { composeConflictResult, deriveConflictRegions, validateRegionSelection } from './conflictRegions'
 import type { BlobView, ConflictDocument, ConflictErrorCode, ConflictRegion, ConflictType, OperationActionResult, OperationSnapshot, ResolutionSelection } from '../shared/conflicts'
+import { conflictCandidateService } from './conflictCandidates'
 
 const exec = promisify(execFile)
 const MAX_BYTES = 8 * 1024 * 1024
@@ -80,6 +81,7 @@ export const conflictService = {
   continue: async (repo: string) => mutate(repo, async () => { const s = await snapshot(repo); if (s.phase === 'conflicted') throw new ConflictServiceError('PREFLIGHT_FAILED', 'Resolve all conflicts before continuing'); await run(repo, ['-c', 'core.editor=true', s.kind === 'rebase' ? 'rebase' : s.kind === 'cherry-pick' ? 'cherry-pick' : 'merge', s.kind === 'rebase' ? '--continue' : '--continue']); return snapshot(repo) }),
   skip: async (repo: string) => mutate(repo, async () => { const s = await snapshot(repo); if (s.kind !== 'rebase') throw new ConflictServiceError('PREFLIGHT_FAILED', 'Skip is only available during rebase'); await run(repo, ['rebase', '--skip']); return snapshot(repo) }),
   abort: async (repo: string) => mutate(repo, async () => { const s = await snapshot(repo); const command = s.kind === 'rebase' ? ['rebase', '--abort'] : s.kind === 'cherry-pick' ? ['cherry-pick', '--abort'] : ['merge', '--abort']; await run(repo, command); return snapshot(repo) })
+  , candidates: conflictCandidateService
 }
 async function restore(repo: string, file: string, dir: string) { const full = safePath(repo, file); const meta = JSON.parse(fs.readFileSync(path.join(dir, 'metadata.json'), 'utf8')); if (meta.existed) fs.copyFileSync(path.join(dir, 'worktree'), full); else if (fs.existsSync(full)) fs.rmSync(full); await run(repo, ['update-index', '--force-remove', '--', file]).catch(() => {}); if (meta.stages.length) { const info = meta.stages.map((x: Stage) => `${x.mode} ${x.oid} ${x.stage}\t${file}\n`).join(''); await runIndexInfo(repo, info) } }
 
