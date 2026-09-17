@@ -341,7 +341,10 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
               <ChevronRight size={14} style={{ marginRight: '6px', flexShrink: 0 }} />
             )}
             <Folder size={14} style={{ marginRight: '8px', color: 'var(--accent-light)', flexShrink: 0 }} />
-            <span style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span
+              title={node.fullName}
+              style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
               {node.name}
             </span>
           </div>
@@ -396,6 +399,7 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
         <div style={{ width: '20px', flexShrink: 0 }} />
         <GitBranch className="sidebar-item-icon" size={14} style={{ flexShrink: 0, marginRight: '8px' }} />
         <span
+          title={name}
           style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px' }}
           data-tooltip={isCurrentActive ? "Active branch (cannot delete)" : isWT ? "Checked out in another worktree (cannot delete)" : undefined}
         >
@@ -415,7 +419,7 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
       <div
         className="app-dialog-content"
         style={{
-          maxWidth: "480px",
+          maxWidth: "720px",
           width: "95%",
           height: "540px",
           display: "flex",
@@ -548,7 +552,7 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
               <span>Failed to delete some branches:</span>
             </div>
             <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
-              {errors.map((err, idx) => <li key={idx}>{err}</li>)}
+              {errors.map((err, idx) => <li key={idx} style={{ wordBreak: "break-word" }}>{err}</li>)}
             </ul>
           </div>
         )}
@@ -561,7 +565,8 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
             borderTop: "1px solid var(--border)",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between"
+            justifyContent: "space-between",
+            gap: "12px"
           }}
         >
           {/* Force delete option checkbox */}
@@ -573,7 +578,9 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
               fontSize: "12px",
               color: "var(--text-secondary)",
               cursor: "pointer",
-              userSelect: "none"
+              userSelect: "none",
+              whiteSpace: "nowrap",
+              flexShrink: 0
             }}
             data-testid="force-delete-label"
           >
@@ -593,7 +600,7 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
           </label>
 
           {/* Action buttons */}
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
             <button
               className="btn-secondary"
               onClick={onClose}
