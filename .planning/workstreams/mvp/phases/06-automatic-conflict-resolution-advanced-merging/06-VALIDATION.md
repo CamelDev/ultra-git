@@ -38,13 +38,27 @@ created: 2026-09-17
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 06-01-01 | 01 | 0 | CONFLICT-01 | — | Test mocks do not leak across suites | unit/integration | `bun test src` | ✅ existing suites; repair required | ⬜ pending |
-| 06-01-02 | 01 | 0 | CONFLICT-01 | — | Sequential rebase stops remain observable | integration + E2E | `bun test src/main/__tests__/conflictService.test.ts && bunx playwright test e2e/rebase-conflict-resolver.spec.ts` | ❌ Wave 0 | ⬜ pending |
-| 06-02-01 | 02 | 1 | CONFLICT-01 | IPC/path | Repository, path, generation, and payload are validated | integration | `bun test src/main/__tests__/conflictService.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 06-02-02 | 02 | 1 | CONFLICT-02 | stale state | Conflict stages and structural types are Git-derived | integration | `bun test src/main/__tests__/conflictService.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 06-03-01 | 03 | 2 | CONFLICT-02 | stale patch | Partial actions preflight and apply atomically | integration + E2E | `bun test src/main/__tests__/git.partialPatch.test.ts && bunx playwright test e2e/partial-staging.spec.ts` | ❌ Wave 0 | ⬜ pending |
-| 06-04-01 | 04 | 3 | CONFLICT-02 | — | No conflict is preselected; drafts survive navigation by generation | reducer + E2E | `bun test src/renderer/src/store/__tests__/conflictSession.test.ts && bunx playwright test e2e/conflict-resolver.spec.ts e2e/rebase-conflict-resolver.spec.ts` | ❌ reducer/rebase specs | ⬜ pending |
-| 06-05-01 | 05 | 4 | CONFLICT-03 | unsafe automation | Candidates are preview-only and never silently staged | integration + E2E | `bun test src/main/__tests__/conflictResolutionReuse.test.ts && bunx playwright test e2e/conflict-resolution-reuse.spec.ts` | ❌ Wave 4 | ⬜ pending |
+| 06-01-01 | 01 | 0 | CONFLICT-01 | test isolation | Rebase mocks cannot contaminate real Git suites | unit/integration | `bun test src/main/__tests__/git.rebase-status.test.ts src/main/__tests__/git.patch.test.ts` | ✅ files; repair required | ⬜ pending |
+| 06-01-02 | 01 | 0 | CONFLICT-01,02 | fixture safety | Real repositories characterize operations and conflict classes | integration | `bun test src/main/__tests__/conflictService.test.ts` | ❌ create | ⬜ pending |
+| 06-01-03 | 01 | 0 | CONFLICT-01 | repeated stops | Two-stop rebase fixture is deterministic | E2E | `bunx playwright test e2e/rebase-conflict-resolver.spec.ts --grep "first stop|fixture"` | ❌ create | ⬜ pending |
+| 06-02-01 | 02 | 1 | CONFLICT-02 | stale identity | Shared generation/OID/region/EOL/undo contracts compile | build | `bun run build` | ❌ create | ⬜ pending |
+| 06-02-02 | 02 | 1 | CONFLICT-02 | region tampering | Git-derived regions compose deterministically and non-mutatingly | unit/integration | `bun test src/main/__tests__/conflictRegions.test.ts` | ❌ create | ⬜ pending |
+| 06-03-01 | 03 | 2 | CONFLICT-01,02 | path/stale/rollback | Operations, resolution, rollback, postconditions, and undo are Git-derived | integration | `bun test src/main/__tests__/conflictService.test.ts src/main/__tests__/conflictRegions.test.ts` | ❌ create/extend | ⬜ pending |
+| 06-03-02 | 03 | 2 | CONFLICT-01,02 | IPC privilege | Sender/repository/path/payload/undo handles are guarded | integration + build | `bun test src/main/__tests__/conflictService.test.ts && bun run build` | ❌ extend | ⬜ pending |
+| 06-04-01 | 04 | 3 | CONFLICT-02 | stale drafts | Explicit reducer choices, external changes, and undo expiry are deterministic | unit | `bun test src/renderer/src/store/__tests__/conflictSession.test.ts` | ❌ create | ⬜ pending |
+| 06-04-02 | 04 | 3 | CONFLICT-01,02 | controller authority | One controller consumes returned snapshots across generations | unit + build | `bun test src/renderer/src/store/__tests__/conflictSession.test.ts && bun run build` | ❌ extend | ⬜ pending |
+| 06-05-01 | 05 | 4 | CONFLICT-02 | accessible shell | Responsive semantic workbench shell compiles | build | `bun run build` | ❌ create | ⬜ pending |
+| 06-05-02 | 05 | 4 | CONFLICT-02 | explicit choice | Sources/Result/structural choices preserve unresolved gating | unit + build | `bun run build && bun test src/renderer/src/store/__tests__/conflictSession.test.ts` | ❌ create | ⬜ pending |
+| 06-06-01 | 06 | 5 | CONFLICT-01,02 | bypass prevention | All entry points use centralized controller | build | `bun run build` | ✅ modify | ⬜ pending |
+| 06-06-02 | 06 | 5 | CONFLICT-01,02 | Git postconditions | Real merge/cherry-pick/two-stop rebase/accessibility/undo flows pass | E2E | `bunx playwright test e2e/conflict-resolver.spec.ts e2e/rebase-conflict-resolver.spec.ts` | ✅ extend/create | ⬜ pending |
+| 06-07-01 | 07 | 6 | CONFLICT-02 | stale/atomic/undo | Exact partial batches and Undo/Redo preserve before/after state | integration | `bun test src/main/__tests__/git.partialPatch.test.ts src/main/__tests__/git.patch.test.ts` | ❌ create | ⬜ pending |
+| 06-07-02 | 07 | 6 | CONFLICT-02 | IPC privilege | Canonical selection and Undo/Redo APIs reject forged/stale handles | integration + build | `bun test src/main/__tests__/git.partialPatch.test.ts && bun run build` | ❌ extend | ⬜ pending |
+| 06-08-01 | 08 | 7 | CONFLICT-02 | renderer authority | DiffModal submits one typed batch and exposes bounded Undo/Redo | unit + build | `bun run build && bun test src/renderer/src/store/__tests__/useUndoStore.test.ts` | ✅ extend | ⬜ pending |
+| 06-08-02 | 08 | 7 | CONFLICT-02 | transaction rollback | Partial UI batches, stale reload, Undo/Redo, and expiry are Git-verified | E2E + integration | `bunx playwright test e2e/partial-staging.spec.ts && bun test src/main/__tests__/git.partialPatch.test.ts` | ❌ create | ⬜ pending |
+| 06-09-01 | 09 | 8 | CONFLICT-03 | unsafe heuristic | Required deterministic candidates pass positive/negative byte-safety cases | unit/integration | `bun test src/main/__tests__/conflictCandidates.test.ts` | ❌ create | ⬜ pending |
+| 06-09-02 | 09 | 8 | CONFLICT-03 | record tampering | Local records and preview/reject/restart leave Git unchanged | integration + build | `bun test src/main/__tests__/conflictCandidates.test.ts src/main/__tests__/conflictService.test.ts && bun run build` | ❌ extend | ⬜ pending |
+| 06-10-01 | 10 | 9 | CONFLICT-03 | silent automation | Preview/accept/reject/forget UI never mutates before Apply | E2E + unit | `bunx playwright test e2e/conflict-resolution-reuse.spec.ts && bun test src/main/__tests__/conflictCandidates.test.ts src/renderer/src/store/__tests__/conflictSession.test.ts` | ❌ create | ⬜ pending |
+| 06-10-02 | 10 | 9 | CONFLICT-01,02,03 | phase gate | Full suite/build and documentation evidence are complete | full | `bun test src && bun run test:e2e && bun run build` | ✅ commands | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -53,10 +67,7 @@ created: 2026-09-17
 ## Wave 0 Requirements
 
 - [ ] `src/main/__tests__/conflictService.test.ts` — stage parsing and operation transition matrix.
-- [ ] `src/main/__tests__/git.partialPatch.test.ts` — atomic multi-hunk and stale patch behavior.
-- [ ] `src/renderer/src/store/__tests__/conflictSession.test.ts` — explicit unresolved reducer and generation changes.
 - [ ] `e2e/rebase-conflict-resolver.spec.ts` — at least two commits that stop consecutively.
-- [ ] `e2e/partial-staging.spec.ts` — file/hunk/line selection and failed-preflight rollback.
 - [ ] Isolate `git.rebase-status.test.ts` mocks so the combined `bun test src` invocation does not contaminate `git.patch.test.ts`.
 
 ---

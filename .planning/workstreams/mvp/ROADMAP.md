@@ -77,8 +77,20 @@ Plans:
 **Requirements**: [CONFLICT-01, CONFLICT-02, CONFLICT-03]
 **Success Criteria**:
   1. Conflict state triggers 3-way split diff UI
-  2. "Auto-Resolve" heuristics successfully auto-merges trivial formatting/non-overlapping conflicts
-**Plans**: TBD
+  2. Deterministic resolution heuristics and prior confirmed resolutions are offered as preview-only candidates; no candidate mutates or stages until explicit acceptance and Apply & Stage
+**Plans**: 10 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Isolate tests and characterize real operation/conflict behavior
+- [ ] 06-02-PLAN.md — Define shared contracts and stable Git-derived conflict regions
+- [ ] 06-03-PLAN.md — Implement guarded authoritative operations and resolution undo
+- [ ] 06-04-PLAN.md — Build the repository-scoped conflict session/controller
+- [ ] 06-05-PLAN.md — Implement the responsive accessible conflict workbench
+- [ ] 06-06-PLAN.md — Integrate operation entry points and prove real conflict workflows
+- [ ] 06-07-PLAN.md — Build atomic ordinary partial transactions with Undo/Redo
+- [ ] 06-08-PLAN.md — Migrate DiffModal to canonical stable selections
+- [ ] 06-09-PLAN.md — Generate non-mutating deterministic and recorded candidates
+- [ ] 06-10-PLAN.md — Deliver candidate UI, full validation, and walkthrough
 
 ### Phase 7: Polish, Aesthetics & Performance
 **Goal**: Enhance dark mode styles with smooth micro-animations, optimize for huge repositories, and enable shortcuts.
@@ -98,5 +110,5 @@ Plans:
 | 3. Sidebar & Actions | v1.0 | 0/2 | Not started | - |
 | 4. Commit Graph | v1.0 | 0/0 | Not started | - |
 | 5. File Changes & Tree | v1.0 | 0/0 | Not started | - |
-| 6. Conflict Resolution | v1.0 | 0/0 | Not started | - |
+| 6. Conflict Resolution | v1.0 | 0/10 | Not started | - |
 | 7. Polish & Aesthetics | v1.0 | 0/0 | Not started | - |

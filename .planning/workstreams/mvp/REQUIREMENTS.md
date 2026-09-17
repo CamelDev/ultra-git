@@ -43,7 +43,7 @@ Requirements for initial release, mapping to roadmap phases.
 
 - [ ] **CONFLICT-01**: Implement manual Merge, Rebase, and Cherry-pick operations
 - [ ] **CONFLICT-02**: Interactive conflict resolution UI with a visual 3-way split diff view
-- [ ] **CONFLICT-03**: Intelligent auto-resolve heuristical algorithm for merge conflicts
+- [ ] **CONFLICT-03**: Generate deterministic and previously confirmed resolution candidates for merge conflicts, with mandatory preview and explicit acceptance; candidates never silently mutate or stage
 
 ### Phase 7: Polish, Aesthetics & Performance
 
