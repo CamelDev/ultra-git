@@ -12,11 +12,12 @@ const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$
 interface ToolbarProps {
   onMergeConflicts?: (conflictedFiles: Array<{ path: string; status: string }>, isRebase: boolean, isCherryPick?: boolean) => void
   onOpenConflictResolver?: () => void
+  onConflictOperation?: (operation: 'continue' | 'skip' | 'abort') => Promise<void>
   changesViewMode: 'list' | 'tree'
   onToggleChangesViewMode: () => void
 }
 
-const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResolver, changesViewMode, onToggleChangesViewMode }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResolver, onConflictOperation, changesViewMode, onToggleChangesViewMode }) => {
   const { getActiveRepo, refreshRepo, identities, setRepoCommitMessage } = useRepoStore()
   const {
     restoredCommitMessage,
@@ -146,6 +147,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResol
 
   const handleContinueRebase = async () => {
     if (!activeRepo) return
+    if (onConflictOperation) { await onConflictOperation('continue'); return }
     try {
       const res = await window.api.git.continueRebase(activeRepo.path)
       if (res.success) {
@@ -165,6 +167,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResol
 
   const handleSkipRebase = async () => {
     if (!activeRepo) return
+    if (onConflictOperation) { await onConflictOperation('skip'); return }
     try {
       const res = await window.api.git.skipRebase(activeRepo.path)
       if (res.success) {
@@ -184,6 +187,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResol
 
   const handleAbortRebase = async () => {
     if (!activeRepo) return
+    if (onConflictOperation) { await onConflictOperation('abort'); return }
     try {
       const res = await window.api.git.abortRebase(activeRepo.path)
       if (res.success) {

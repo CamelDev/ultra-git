@@ -13,7 +13,7 @@ export const ConflictFileList: React.FC<Props> = ({ files, activePath, drafts, o
     <h3>Files ({files.length})</h3>
     {groups.map(([label, entries]) => entries.length ? <section className="conflict-file-group" key={label} aria-labelledby={`conflict-group-${label}`}>
       <div className="conflict-file-group-title" id={`conflict-group-${label}`}>{label} ({entries.length})</div>
-      {entries.map(file => { const draft = drafts[file.path]; const unresolved = !draft || draft.document.isBinary ? draft?.fileChoice === 'unresolved' : draft.document.regions.some(r => r.choice === 'unresolved'); return <button className="conflict-file-row" key={file.path} type="button" role="option" aria-selected={activePath === file.path} title={file.path} onClick={() => onSelect(file.path)}>
+      {entries.map(file => { const draft = drafts[file.path]; const unresolved = !draft || draft.document.isBinary ? draft?.fileChoice === 'unresolved' : draft.document.regions.some(r => r.choice === 'unresolved'); return <button className="conflict-file-row" key={file.path} type="button" role="option" aria-selected={activePath === file.path} title={file.path} data-testid={`conflict-file-${file.path}`} onClick={() => onSelect(file.path)}>
         <span aria-hidden="true">{unresolved ? '○' : '✓'}</span><span className="path">{file.path}</span><span className="status">{file.status}</span>
       </button> })}
     </section> : null)}

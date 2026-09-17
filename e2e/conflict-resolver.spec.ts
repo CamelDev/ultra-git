@@ -98,7 +98,7 @@ test.describe('Interactive Conflict Resolver', () => {
       await expect(resolver).toBeVisible();
 
       console.log('[Test 1] Dismissing (minimizing) Conflict Resolver...');
-      const dismissBtn = page.locator('[data-testid="dismiss-conflict-resolver-btn"]');
+      const dismissBtn = page.getByRole('button', { name: 'Minimize conflict workbench' });
       await expect(dismissBtn).toBeVisible();
       await dismissBtn.click();
       await expect(resolver).toBeHidden();
@@ -117,29 +117,29 @@ test.describe('Interactive Conflict Resolver', () => {
       await expect(fileItem).toContainText('conflict.txt');
 
       console.log('[Test 1] Verifying accept buttons...');
-      const acceptOurs = page.locator('[data-testid="accept-ours-btn"]');
-      const acceptTheirs = page.locator('[data-testid="accept-theirs-btn"]');
-      const acceptBoth = page.locator('[data-testid="accept-both-btn"]');
+      const acceptOurs = page.locator('[data-testid="conflict-current"]');
+      const acceptTheirs = page.locator('[data-testid="conflict-incoming"]');
+      const acceptBoth = page.locator('[data-testid="conflict-both-current-first"]');
       await expect(acceptOurs).toBeVisible();
       await expect(acceptTheirs).toBeVisible();
       await expect(acceptBoth).toBeVisible();
 
       console.log('[Test 1] Testing Theirs resolution...');
       await acceptTheirs.click();
-      const resultPane = page.locator('[data-testid="conflict-result-preview"]');
-      await expect(resultPane).toContainText('Branch A modification');
+      const resultPane = page.locator('[data-testid="conflict-result-editor"]');
+      await expect(resultPane).toHaveValue(/Branch A modification/);
 
       console.log('[Test 1] Testing Both resolution...');
       await acceptBoth.click();
-      await expect(resultPane).toContainText('Branch B modification');
-      await expect(resultPane).toContainText('Branch A modification');
+      await expect(resultPane).toHaveValue(/Branch B modification/);
+      await expect(resultPane).toHaveValue(/Branch A modification/);
 
       console.log('[Test 1] Testing Ours resolution...');
       await acceptOurs.click();
-      await expect(resultPane).toContainText('Branch B modification');
+      await expect(resultPane).toHaveValue(/Branch B modification/);
 
       console.log('[Test 1] Clicking Apply & Stage...');
-      const applyBtn = page.locator('[data-testid="mark-resolved-btn"]');
+      const applyBtn = page.locator('[data-testid="conflict-apply-stage"]');
       await expect(applyBtn).toBeEnabled();
       await applyBtn.click();
       await page.waitForTimeout(800);
@@ -149,7 +149,7 @@ test.describe('Interactive Conflict Resolver', () => {
       await expect(fileItemIcon).toBeVisible();
 
       console.log('[Test 1] Clicking Commit Merge...');
-      const completeBtn = page.locator('[data-testid="complete-merge-btn"]');
+      const completeBtn = page.getByRole('button', { name: 'Continue' });
       await expect(completeBtn).toBeEnabled();
       await completeBtn.click();
 
@@ -223,7 +223,7 @@ test.describe('Interactive Conflict Resolver', () => {
       await expect(resolver).toBeVisible();
 
       // Click Abort Merge
-      const abortBtn = page.locator('[data-testid="abort-merge-btn"]');
+      const abortBtn = page.locator('[data-testid="conflict-resolver"]').getByRole('button', { name: 'Abort', exact: true });
       await expect(abortBtn).toBeVisible();
       await abortBtn.click();
 

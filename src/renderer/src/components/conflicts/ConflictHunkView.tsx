@@ -9,9 +9,9 @@ export const ConflictHunkView: React.FC<Props> = ({ document, region, onChoice }
   return <>
     <div className="conflict-region-bar" aria-label="Conflict region choices">
       <span className="region-label">Region {region.baseRange.start + 1}–{region.baseRange.end}</span>
-      <button className="conflict-workbench-btn" type="button" data-testid="conflict-current" onClick={() => onChoice('current')}>Use Current</button>
-      <button className="conflict-workbench-btn" type="button" data-testid="conflict-incoming" onClick={() => onChoice('incoming')}>Use Incoming</button>
-      <button className="conflict-workbench-btn" type="button" data-testid="conflict-both-current-first" onClick={() => onChoice('both-current-first')}>Both (Current first)</button>
+      <button className="conflict-workbench-btn" type="button" data-testid="conflict-current" data-legacy-testid="accept-ours-btn" onClick={() => onChoice('current')}>Use Current</button>
+      <button className="conflict-workbench-btn" type="button" data-testid="conflict-incoming" data-legacy-testid="accept-theirs-btn" onClick={() => onChoice('incoming')}>Use Incoming</button>
+      <button className="conflict-workbench-btn" type="button" data-testid="conflict-both-current-first" data-legacy-testid="accept-both-btn" onClick={() => onChoice('both-current-first')}>Both (Current first)</button>
       <button className="conflict-workbench-btn" type="button" data-testid="conflict-both-incoming-first" onClick={() => onChoice('both-incoming-first')}>Both (Incoming first)</button>
       <button className="conflict-workbench-btn" type="button" onClick={() => onChoice('selected-range', region.current)}>Current range</button>
       <button className="conflict-workbench-btn" type="button" onClick={() => onChoice('selected-range', region.incoming)}>Incoming range</button>

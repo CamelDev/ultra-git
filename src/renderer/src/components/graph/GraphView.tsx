@@ -9,6 +9,7 @@ import { useToaster } from '../toaster/ToasterContext'
 
 interface GraphViewProps {
   onOpenConflictResolver?: () => void
+  onConflictOperation?: (operation: 'continue' | 'skip' | 'abort') => Promise<void>
 }
 
 const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
@@ -32,7 +33,7 @@ interface SmartPullChoice {
   commitMessage?: string
 }
 
-const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
+const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflictOperation }) => {
   const { 
     getActiveRepo, 
     selectedCommitHash, 
@@ -660,6 +661,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 ]
               )
               if (action === 'commit') {
+                if (onConflictOperation) { await onConflictOperation('continue'); return }
                 const res = await window.api.git.commit(targetRepo.path, 'Merge commit')
                 if (res.success) {
                   addToast({ variant: 'success', title: 'Merge Committed', message: 'Merge commit completed.' })
@@ -708,6 +710,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 ]
               )
               if (action === 'continue') {
+                if (onConflictOperation) { await onConflictOperation('continue'); return }
                 const res = await window.api.git.continueRebase(targetRepo.path)
                 if (res.success) {
                   addToast({
@@ -720,6 +723,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   addToast({ variant: 'error', title: 'Continue Failed', message: res.error || 'Failed to continue rebase.' })
                 }
               } else if (action === 'skip') {
+                if (onConflictOperation) { await onConflictOperation('skip'); return }
                 const res = await window.api.git.skipRebase(targetRepo.path)
                 if (res.success) {
                   addToast({
@@ -732,6 +736,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   addToast({ variant: 'error', title: 'Skip Failed', message: res.error || 'Failed to skip commit.' })
                 }
               } else if (action === 'abort') {
+                if (onConflictOperation) { await onConflictOperation('abort'); return }
                 await handlePullAbort('rebase')
               }
             }
@@ -754,6 +759,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               if (action === 'resolve') {
                 if (onOpenConflictResolver) onOpenConflictResolver()
               } else if (action === 'abort') {
+                if (onConflictOperation) { await onConflictOperation('abort'); return }
                 await window.api.git.abortCherryPick(targetRepo.path)
                 await refreshRepo(targetRepo.id)
               }
@@ -769,6 +775,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                 ]
               )
               if (action === 'continue') {
+                if (onConflictOperation) { await onConflictOperation('continue'); return }
                 const res = await window.api.git.continueCherryPick(targetRepo.path)
                 if (res.success) {
                   addToast({ variant: 'success', title: 'Cherry-pick Continued', message: 'Cherry-pick completed.' })
@@ -777,6 +784,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
                   addToast({ variant: 'error', title: 'Continue Failed', message: res.error || 'Failed to continue cherry-pick.' })
                 }
               } else if (action === 'abort') {
+                if (onConflictOperation) { await onConflictOperation('abort'); return }
                 await window.api.git.abortCherryPick(targetRepo.path)
                 await refreshRepo(targetRepo.id)
               }
@@ -1888,6 +1896,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
 
         const handleBannerContinue = async () => {
           if (!activeRepo) return
+          if (onConflictOperation) { await onConflictOperation('continue'); return }
           if (isRebase) {
             const res = await window.api.git.continueRebase(activeRepo.path)
             if (res.success) {
@@ -1921,6 +1930,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
 
         const handleBannerSkip = async () => {
           if (!activeRepo) return
+          if (onConflictOperation) { await onConflictOperation('skip'); return }
           const res = await window.api.git.skipRebase(activeRepo.path)
           if (res.success) {
             addToast({
@@ -1936,6 +1946,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
 
         const handleBannerAbort = async () => {
           if (!activeRepo) return
+          if (onConflictOperation) { await onConflictOperation('abort'); return }
           if (isRebase) {
             await handlePullAbort('rebase')
           } else if (isCherryPick) {
@@ -3641,4 +3652,3 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
 }
 
 export default GraphView
-

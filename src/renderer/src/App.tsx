@@ -6,7 +6,7 @@ import GraphView from "./components/graph/GraphView"
 import DetailsPanel from "./components/details/DetailsPanel"
 import { useRepoStore } from "./store/useRepoStore"
 import { ActiveChanges } from "./components/active-changes/ActiveChanges"
-import { ConflictResolver } from "./components/sidebar/ConflictResolver"
+import { ConflictWorkbench } from "./components/conflicts/ConflictWorkbench"
 import LandingPage from "./components/layout/LandingPage"
 import { useTooltip } from "./hooks/useTooltip"
 import { useTheme } from "./hooks/useTheme"
@@ -23,15 +23,8 @@ const UndoShortcutsListener: React.FC = () => {
   return null
 }
 
-interface ConflictState {
-  active: boolean
-  isRebase: boolean
-  isCherryPick?: boolean
-  conflictedFiles: Array<{ path: string; status: string }>
-}
-
 function App() {
-  const { addRepo, repositories, activeId, refreshRepo, initializeRepos } = useRepoStore()
+  const { addRepo, repositories, activeId, refreshRepo, initializeRepos, loadConflictSnapshot, runConflictOperation } = useRepoStore()
   const activeRepo = repositories.find(r => r.id === activeId)
   const [isInitialized, setIsInitialized] = useState(false)
   useTooltip()
@@ -46,80 +39,51 @@ function App() {
   }
   const hasActiveChanges = !!(activeRepo?.status?.files && activeRepo.status.files.length > 0)
 
-  const [conflictState, setConflictState] = useState<ConflictState>({
-    active: false,
-    isRebase: false,
-    isCherryPick: false,
-    conflictedFiles: []
-  })
+  const [conflictOpen, setConflictOpen] = useState(false)
+  const [conflictDismissed, setConflictDismissed] = useState(false)
+  const dismissedConflictRepo = useRef<string | null>(null)
 
-  const handleMergeConflicts = (conflictedFiles: Array<{ path: string; status: string }>, isRebase: boolean, isCherryPick?: boolean) => {
-    setConflictState({ active: true, isRebase, isCherryPick, conflictedFiles })
+  const handleMergeConflicts = () => {
+    if (!activeRepo) return
+    dismissedConflictRepo.current = null
+    setConflictDismissed(false)
+    setConflictOpen(true)
+    void loadConflictSnapshot(activeRepo.id)
   }
 
-  const handleAbortMerge = async () => {
+  const handleConflictOperation = async (operation: 'continue' | 'skip' | 'abort') => {
     if (!activeRepo) return
-    if (conflictState.isCherryPick) {
-      await window.api.git.abortCherryPick(activeRepo.path)
-    } else if (conflictState.isRebase) {
-      await window.api.git.abortRebase(activeRepo.path)
-    } else {
-      await window.api.git.abortMerge(activeRepo.path)
+    await runConflictOperation(activeRepo.id, operation)
+    await refreshRepo(activeRepo.id)
+    if (operation === 'abort' || operation === 'continue') {
+      dismissedConflictRepo.current = activeRepo.id
+      setConflictDismissed(true)
+      setConflictOpen(false)
     }
-    setConflictState({ active: false, isRebase: false, isCherryPick: false, conflictedFiles: [] })
-    await refreshRepo(activeRepo.id)
-  }
-
-  const handleCompleteMerge = async () => {
-    if (!activeRepo) return
-    if (conflictState.isCherryPick) {
-      await window.api.git.continueCherryPick(activeRepo.path)
-    } else if (conflictState.isRebase) {
-      await window.api.git.continueRebase(activeRepo.path)
-    } else {
-      await window.api.git.commit(activeRepo.path, "Merge commit")
-    }
-    setConflictState({ active: false, isRebase: false, isCherryPick: false, conflictedFiles: [] })
-    await refreshRepo(activeRepo.id)
-  }
-
-  const handleSkipRebase = async () => {
-    if (!activeRepo) return
-    await window.api.git.skipRebase(activeRepo.path)
-    setConflictState({ active: false, isRebase: false, isCherryPick: false, conflictedFiles: [] })
-    await refreshRepo(activeRepo.id)
   }
 
   // Auto-detect existing conflicts (e.g. from external merge or on app start)
   const conflictedPaths = activeRepo?.status?.conflicted
   useEffect(() => {
-    if (!activeRepo || conflictState.active) return
+    if (!activeRepo || conflictOpen || conflictDismissed || dismissedConflictRepo.current === activeRepo.id) return
     if (!conflictedPaths || conflictedPaths.length === 0) return
 
     // Conflicts detected — figure out if merge or rebase is in progress
-    window.api.git.getMergeStatus(activeRepo.path).then(msRes => {
-      const isRebase = msRes.success && !!msRes.data?.isRebase
-      const isCherryPick = msRes.success && !!msRes.data?.isCherryPick
-      window.api.git.getConflictedFiles(activeRepo.path).then(cfRes => {
-        if (cfRes.success && cfRes.data && cfRes.data.length > 0) {
-          setConflictState({ active: true, isRebase, isCherryPick, conflictedFiles: cfRes.data })
-        }
-      })
+    window.api.git.getConflictedFiles(activeRepo.path).then(cfRes => {
+      if (cfRes.success && cfRes.data && cfRes.data.length > 0) {
+        setConflictOpen(true)
+        void loadConflictSnapshot(activeRepo.id)
+      }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conflictedPaths?.length, activeRepo?.id])
+  }, [conflictedPaths?.length, activeRepo?.id, conflictOpen, conflictDismissed, loadConflictSnapshot])
 
   const openConflictResolver = () => {
-    if (!activeRepo || conflictState.active) return
-    window.api.git.getMergeStatus(activeRepo.path).then(msRes => {
-      const isRebase = msRes.success && !!msRes.data?.isRebase
-      const isCherryPick = msRes.success && !!msRes.data?.isCherryPick
-      window.api.git.getConflictedFiles(activeRepo.path).then(cfRes => {
-        if (cfRes.success && cfRes.data) {
-          setConflictState({ active: true, isRebase, isCherryPick, conflictedFiles: cfRes.data })
-        }
-      })
-    })
+    if (!activeRepo) return
+    dismissedConflictRepo.current = null
+    setConflictDismissed(false)
+    setConflictOpen(true)
+    void loadConflictSnapshot(activeRepo.id)
   }
   
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -397,6 +361,7 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
           <Toolbar
             onMergeConflicts={handleMergeConflicts}
             onOpenConflictResolver={openConflictResolver}
+            onConflictOperation={handleConflictOperation}
             changesViewMode={changesViewMode}
             onToggleChangesViewMode={toggleChangesViewMode}
           />
@@ -411,7 +376,7 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
             </>
           )}
           <div className="git-log-and-details">
-            <GraphView onOpenConflictResolver={openConflictResolver} />
+            <GraphView onOpenConflictResolver={openConflictResolver} onConflictOperation={handleConflictOperation} />
             <div
               className={`details-resizer ${isDetailsDragging ? "is-dragging" : ""}`}
               onPointerDown={startDetailsResize}
@@ -421,7 +386,7 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
           </div>
 
           {/* Conflict Resolver Modal Overlay */}
-          {conflictState.active && (
+          {conflictOpen && activeRepo && (
             <div
               style={{
                 position: 'fixed',
@@ -450,15 +415,7 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
                   animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
                 }}
               >
-                <ConflictResolver
-                  isRebase={conflictState.isRebase}
-                  isCherryPick={conflictState.isCherryPick}
-                  conflictedFiles={conflictState.conflictedFiles}
-                  onAbort={handleAbortMerge}
-                  onComplete={handleCompleteMerge}
-                  onSkip={handleSkipRebase}
-                  onDismiss={() => setConflictState(s => ({ ...s, active: false }))}
-                />
+                <ConflictWorkbench repoId={activeRepo.id} onDismiss={() => { dismissedConflictRepo.current = activeRepo.id; setConflictOpen(false); setConflictDismissed(true) }} />
               </div>
             </div>
           )}
