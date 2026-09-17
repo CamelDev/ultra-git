@@ -27,6 +27,7 @@ import {
   DiffItem
 } from '../../utils/patchBuilder'
 import { useRepoStore } from '../../store/useRepoStore'
+import { getFullFilePath } from '../../utils/pathUtils'
 import { useToaster } from '../toaster/ToasterContext'
 import { MarkdownDiffView } from './MarkdownDiffView'
 import { ImageDiffView } from './ImageDiffView'
@@ -444,6 +445,11 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const currentStatus = isStash ? selectedStashFile?.status : activeFile?.status ?? status
   const currentIsStaged = activeFile?.isStaged ?? isStaged
   const currentIsUntracked = activeFile?.isUntracked ?? false
+
+  const effectiveRepoPath = repoPath || getActiveRepo()?.path || ''
+  const fullDiskPath = useMemo(() => {
+    return getFullFilePath(effectiveRepoPath, currentFilePath)
+  }, [effectiveRepoPath, currentFilePath])
 
   const totalFiles = isStash ? stashFiles.length : files && files.length > 0 ? files.length : 1
   const fileIndex = isStash
@@ -1152,16 +1158,28 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     setCopiedFilePath(false)
   }, [currentFilePath, isOpen])
 
-  const handleCopyFilePath = (e?: React.MouseEvent) => {
+  const handleCopyFilePath = async (e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation()
     }
     if (!currentFilePath || currentFilePath === 'No file selected') return
 
+    let pathToCopy = fullDiskPath
+    if (window.api?.app?.resolvePath && effectiveRepoPath) {
+      try {
+        const res = await window.api.app.resolvePath(effectiveRepoPath, currentFilePath)
+        if (res?.success && res.path) {
+          pathToCopy = res.path
+        }
+      } catch {
+        // Fallback to fullDiskPath
+      }
+    }
+
     if (window.api?.app?.copyToClipboard) {
-      window.api.app.copyToClipboard(currentFilePath)
+      await window.api.app.copyToClipboard(pathToCopy)
     } else if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(currentFilePath)
+      await navigator.clipboard.writeText(pathToCopy)
     }
     setCopiedFilePath(true)
     setTimeout(() => setCopiedFilePath(false), 2000)
@@ -1469,6 +1487,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                 <div
                   className="diff-file-path"
                   data-testid="diff-file-path"
+                  title={fullDiskPath}
                   style={{
                     fontWeight: 600,
                     fontSize: '14px',
@@ -1485,9 +1504,9 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                   <button
                     className="diff-copy-file-path-btn"
                     onClick={handleCopyFilePath}
-                    data-tooltip={copiedFilePath ? 'Copied file path!' : 'Copy file path'}
+                    data-tooltip={copiedFilePath ? 'Copied full path!' : 'Copy full path'}
                     data-testid="copy-file-path-btn"
-                    aria-label="Copy file path"
+                    aria-label="Copy full path"
                   >
                     {copiedFilePath ? (
                       <Check size={14} style={{ color: '#34d399' }} />

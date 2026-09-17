@@ -137,8 +137,19 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       await expect(copyLeftBtn).toContainText('Copied Old!')
 
       // Click Copy New button and verify button status feedback
-      await copyRightBtn.click()
       await expect(copyRightBtn).toContainText('Copied New!')
+
+      // Verify copy full file path button copies full path on disk
+      const copyFilePathBtn = page.locator('[data-testid="copy-file-path-btn"]')
+      await expect(copyFilePathBtn).toBeVisible()
+      await copyFilePathBtn.click()
+      await page.waitForTimeout(200)
+
+      const copiedFilePath = await app.evaluate(async ({ clipboard }) => {
+        return clipboard.readText()
+      })
+      expect(copiedFilePath.endsWith('sample.txt')).toBe(true)
+      expect(copiedFilePath).toContain(path.basename(sandbox.dir))
 
       // Verify user-select: text CSS property on diff line content
       const lineContentStyle = await changeRow.locator('.diff-col.left .diff-line-content').evaluate(el => window.getComputedStyle(el).userSelect)

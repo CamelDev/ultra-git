@@ -597,15 +597,22 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('app:resolvePath', async (_, repoPath) => {
+  ipcMain.handle('app:resolvePath', async (_, ...paths: string[]) => {
     try {
-      return { success: true, path: realpathSync(repoPath) }
-    } catch (error: any) {
-      try {
-        return { success: true, path: resolve(repoPath) }
-      } catch (err: any) {
-        return { success: false, error: error.message }
+      const validPaths = paths.filter((p) => typeof p === 'string' && p.trim().length > 0)
+      if (validPaths.length === 0) {
+        return { success: false, error: 'No path provided' }
       }
+      const base = validPaths[0]
+      const rest = validPaths.slice(1).map((p) => p.replace(/^[/\\]+/, ''))
+      const combined = resolve(base, ...rest)
+      try {
+        return { success: true, path: realpathSync(combined) }
+      } catch {
+        return { success: true, path: combined }
+      }
+    } catch (error: any) {
+      return { success: false, error: error.message }
     }
   })
 
