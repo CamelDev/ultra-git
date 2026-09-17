@@ -7,6 +7,10 @@ import { execSync } from 'child_process';
  * or custom locations.
  */
 export function fixPath(): void {
+  // Ensure Git never attempts to launch an interactive editor in headless child processes
+  process.env.GIT_EDITOR = 'true';
+  process.env.GIT_MERGE_AUTOEDIT = 'no';
+
   if (process.platform === 'win32') return;
 
   const shell = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash');

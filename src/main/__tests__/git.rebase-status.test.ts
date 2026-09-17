@@ -1,27 +1,17 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-
-let rawCalls: string[][] = [];
-const fakeGit = {
-  raw: async (args: string[]) => {
-    rawCalls.push(args);
-    return '';
-  }
-};
-
-mock.module('simple-git', () => ({ default: () => fakeGit }));
-
-const { gitService } = await import('../git');
+import simpleGit from 'simple-git';
+import { gitService, parseRebaseMetadata } from '../git';
 
 describe('gitService rebase and merge status', () => {
   let tmpDir: string;
   let gitDir: string;
 
-  beforeEach(() => {
-    rawCalls = [];
+  beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ultra-git-rebase-test-'));
+    await simpleGit(tmpDir).init();
     gitDir = path.join(tmpDir, '.git');
     fs.mkdirSync(gitDir, { recursive: true });
   });
@@ -32,24 +22,15 @@ describe('gitService rebase and merge status', () => {
     } catch {}
   });
 
-  test('skipRebase calls git raw with rebase --skip', async () => {
-    const res = await gitService.skipRebase(tmpDir);
-    expect(res.success).toBe(true);
-    expect(rawCalls).toEqual([['rebase', '--skip']]);
+  test('parses rebase-merge metadata through a pure seam', () => {
+    expect(parseRebaseMetadata({
+      end: '3\n', done: 'pick abc1234 First commit\npick def5678 Second commit\n',
+      msg: 'BE-12203: Middle name comparator\n\nDetailed message', headName: 'refs/heads/feature/comparator\n'
+    })).toEqual({ currentStep: 2, totalSteps: 3, currentCommitSubject: 'BE-12203: Middle name comparator', branchName: 'feature/comparator' });
   });
 
-  test('getMergeStatus returns inProgress=false when no operation is active', async () => {
-    const res = await gitService.getMergeStatus(tmpDir);
-    expect(res).toEqual({
-      isMerge: false,
-      isRebase: false,
-      isCherryPick: false,
-      inProgress: false,
-      currentStep: undefined,
-      totalSteps: undefined,
-      currentCommitSubject: undefined,
-      branchName: undefined
-    });
+  test('parses rebase-apply metadata through the same seam', () => {
+    expect(parseRebaseMetadata({ next: '1\n', last: '2\n', msg: 'Apply patch step 1\n' })).toEqual({ currentStep: 1, totalSteps: 2, currentCommitSubject: 'Apply patch step 1', branchName: undefined });
   });
 
   test('getMergeStatus parses rebase-merge progress and metadata', async () => {

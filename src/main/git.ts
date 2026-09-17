@@ -39,6 +39,36 @@ export interface MergeStatus {
   branchName?: string;
 }
 
+export interface RebaseMetadataFiles {
+  end?: string | null;
+  done?: string | null;
+  next?: string | null;
+  last?: string | null;
+  msg?: string | null;
+  headName?: string | null;
+}
+
+/** Parse Git's rebase sentinel files without coupling tests to simple-git. */
+export function parseRebaseMetadata(files: RebaseMetadataFiles): Pick<MergeStatus, 'currentStep' | 'totalSteps' | 'currentCommitSubject' | 'branchName'> {
+  const firstLine = (value: string | null | undefined) => value?.split('\n')[0].trim() || undefined;
+  const branch = files.headName?.trim().replace(/^refs\/heads\//, '') || undefined;
+  if (files.end !== undefined && files.end !== null) {
+    const doneLines = (files.done ?? '').split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
+    return {
+      totalSteps: parseInt(files.end.trim(), 10) || undefined,
+      currentStep: doneLines.length || 1,
+      currentCommitSubject: firstLine(files.msg),
+      branchName: branch
+    };
+  }
+  return {
+    currentStep: files.next ? parseInt(files.next.trim(), 10) || undefined : undefined,
+    totalSteps: files.last ? parseInt(files.last.trim(), 10) || undefined : undefined,
+    currentCommitSubject: firstLine(files.msg),
+    branchName: branch
+  };
+}
+
 /** Result of the read-only pre-pull analysis. */
 export interface PullPlan {
   ok: boolean;
@@ -113,8 +143,10 @@ function getGitInstance(repoPath: string): SimpleGit {
       binary: 'git',
       maxConcurrentProcesses: 6,
       trimmed: false,
+      config: ['core.editor=true'],
       unsafe: {
-        allowUnsafeCredentialHelper: true
+        allowUnsafeCredentialHelper: true,
+        allowUnsafeEditor: true
       }
     };
     gitInstances.set(repoPath, simpleGit(options));
@@ -1627,7 +1659,7 @@ export const gitService = {
   rebase: async (repoPath: string, ontoBranch: string) => {
     const git = getGitInstance(repoPath);
     try {
-      await git.rebase([ontoBranch]);
+      await git.raw(['-c', 'core.editor=true', 'rebase', ontoBranch]);
       return { hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
     } catch (err: any) {
       const msg: string = err.message || '';
@@ -1653,14 +1685,58 @@ export const gitService = {
 
   continueRebase: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
-    await git.raw(['rebase', '--continue']);
-    return { success: true };
+    let output = '';
+    let rawError: any = null;
+    try {
+      output = await git.raw(['-c', 'core.editor=true', 'rebase', '--continue']);
+    } catch (err: any) {
+      rawError = err;
+    }
+    const msg: string = [rawError?.message, output].filter(Boolean).join('\n');
+
+    if (
+      msg.includes('is now empty') ||
+      msg.includes('No changes - did you forget') ||
+      msg.includes('patch is empty')
+    ) {
+      throw new Error("The current commit is empty. Click 'Skip Commit' to continue the rebase.");
+    }
+
+    const mergeStatus = await gitService.getMergeStatus(repoPath);
+    if (mergeStatus.inProgress && mergeStatus.isRebase) {
+      const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+      if (conflictedFiles.length > 0) {
+        return { success: true, hadConflicts: true, conflictedFiles };
+      }
+    }
+
+    if (rawError) {
+      throw rawError;
+    }
+
+    return { success: true, hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
   },
 
   skipRebase: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
-    await git.raw(['rebase', '--skip']);
-    return { success: true };
+    let output = '';
+    let rawError: any = null;
+    try {
+      output = await git.raw(['-c', 'core.editor=true', 'rebase', '--skip']);
+    } catch (err: any) {
+      rawError = err;
+    }
+    const mergeStatus = await gitService.getMergeStatus(repoPath);
+    if (mergeStatus.inProgress && mergeStatus.isRebase) {
+      const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+      if (conflictedFiles.length > 0) {
+        return { success: true, hadConflicts: true, conflictedFiles };
+      }
+    }
+    if (rawError && !mergeStatus.inProgress) {
+      throw rawError;
+    }
+    return { success: true, hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
   },
 
   getConflictedFiles: async (repoPath: string): Promise<ConflictedFile[]> => {
@@ -1786,35 +1862,24 @@ export const gitService = {
       // Check rebase-merge
       const endRaw = await readFileSafe(join(rebaseMergePath, 'end'));
       if (endRaw) {
-        totalSteps = parseInt(endRaw.trim(), 10) || undefined;
-        const doneRaw = await readFileSafe(join(rebaseMergePath, 'done'));
-        if (doneRaw !== null) {
-          const doneLines = doneRaw.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
-          currentStep = doneLines.length;
-          if (currentStep === 0) currentStep = 1;
-        }
-        const msgRaw = await readFileSafe(join(rebaseMergePath, 'msg'));
-        if (msgRaw) {
-          currentCommitSubject = msgRaw.split('\n')[0].trim();
-        }
-        const headNameRaw = await readFileSafe(join(rebaseMergePath, 'head-name'));
-        if (headNameRaw) {
-          branchName = headNameRaw.trim().replace(/^refs\/heads\//, '');
-        }
+        const metadata = parseRebaseMetadata({
+          end: endRaw,
+          done: await readFileSafe(join(rebaseMergePath, 'done')),
+          msg: await readFileSafe(join(rebaseMergePath, 'msg')),
+          headName: await readFileSafe(join(rebaseMergePath, 'head-name'))
+        });
+        ({ currentStep, totalSteps, currentCommitSubject, branchName } = metadata);
       } else {
         // Check rebase-apply
         const nextRaw = await readFileSafe(join(rebaseApplyPath, 'next'));
         const lastRaw = await readFileSafe(join(rebaseApplyPath, 'last'));
-        if (nextRaw) currentStep = parseInt(nextRaw.trim(), 10) || undefined;
-        if (lastRaw) totalSteps = parseInt(lastRaw.trim(), 10) || undefined;
-        const msgRaw = await readFileSafe(join(rebaseApplyPath, 'msg'));
-        if (msgRaw) {
-          currentCommitSubject = msgRaw.split('\n')[0].trim();
-        }
-        const headNameRaw = await readFileSafe(join(rebaseApplyPath, 'head-name'));
-        if (headNameRaw) {
-          branchName = headNameRaw.trim().replace(/^refs\/heads\//, '');
-        }
+        const metadata = parseRebaseMetadata({
+          next: nextRaw,
+          last: lastRaw,
+          msg: await readFileSafe(join(rebaseApplyPath, 'msg')),
+          headName: await readFileSafe(join(rebaseApplyPath, 'head-name'))
+        });
+        ({ currentStep, totalSteps, currentCommitSubject, branchName } = metadata);
       }
     } else if (isMerge || isCherryPick) {
       const mergeMsgRaw = await readFileSafe(join(gitResolvedPath, 'MERGE_MSG'));

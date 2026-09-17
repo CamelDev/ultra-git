@@ -104,8 +104,8 @@ declare global {
         rebase: (repoPath: string, ontoBranch: string) => Promise<{ success: boolean; data?: { hadConflicts: boolean; conflictedFiles: Array<{ path: string; status: string }> }; error?: string }>;
         abortMerge: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         abortRebase: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
-        continueRebase: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
-        skipRebase: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
+        continueRebase: (repoPath: string) => Promise<{ success: boolean; data?: { success: boolean; hadConflicts?: boolean; conflictedFiles?: Array<{ path: string; status: string }> }; error?: string }>;
+        skipRebase: (repoPath: string) => Promise<{ success: boolean; data?: { success: boolean; hadConflicts?: boolean; conflictedFiles?: Array<{ path: string; status: string }> }; error?: string }>;
         getConflictedFiles: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ path: string; status: string }>; error?: string }>;
         getConflictFileDiff: (repoPath: string, filePath: string) => Promise<{ success: boolean; data?: { raw: string; hunks: Array<{ ours: string; base: string; theirs: string; startLine: number }> }; error?: string }>;
         resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) => Promise<{ success: boolean; error?: string }>;

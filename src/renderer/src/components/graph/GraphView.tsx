@@ -710,7 +710,11 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               if (action === 'continue') {
                 const res = await window.api.git.continueRebase(targetRepo.path)
                 if (res.success) {
-                  addToast({ variant: 'success', title: 'Rebase Advanced', message: 'Rebase continued successfully.' })
+                  addToast({
+                    variant: res.data?.hadConflicts ? 'info' : 'success',
+                    title: res.data?.hadConflicts ? 'Conflicts Encountered' : 'Rebase Advanced',
+                    message: res.data?.hadConflicts ? 'Next commit has conflicts to resolve.' : 'Rebase continued successfully.'
+                  })
                   await refreshRepo(targetRepo.id)
                 } else {
                   addToast({ variant: 'error', title: 'Continue Failed', message: res.error || 'Failed to continue rebase.' })
@@ -718,7 +722,11 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
               } else if (action === 'skip') {
                 const res = await window.api.git.skipRebase(targetRepo.path)
                 if (res.success) {
-                  addToast({ variant: 'info', title: 'Commit Skipped', message: 'Skipped commit and advanced rebase.' })
+                  addToast({
+                    variant: 'info',
+                    title: res.data?.hadConflicts ? 'Conflicts Encountered' : 'Commit Skipped',
+                    message: res.data?.hadConflicts ? 'Next commit has conflicts to resolve.' : 'Skipped commit and advanced rebase.'
+                  })
                   await refreshRepo(targetRepo.id)
                 } else {
                   addToast({ variant: 'error', title: 'Skip Failed', message: res.error || 'Failed to skip commit.' })
@@ -1883,7 +1891,11 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
           if (isRebase) {
             const res = await window.api.git.continueRebase(activeRepo.path)
             if (res.success) {
-              addToast({ variant: 'success', title: 'Rebase Advanced', message: 'Rebase continued successfully.' })
+              addToast({
+                variant: res.data?.hadConflicts ? 'info' : 'success',
+                title: res.data?.hadConflicts ? 'Conflicts Encountered' : 'Rebase Advanced',
+                message: res.data?.hadConflicts ? 'Next commit has conflicts to resolve.' : 'Rebase continued successfully.'
+              })
               await refreshRepo(activeRepo.id)
             } else {
               addToast({ variant: 'error', title: 'Continue Failed', message: res.error || 'Failed to continue rebase.' })
@@ -1911,7 +1923,11 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver }) => {
           if (!activeRepo) return
           const res = await window.api.git.skipRebase(activeRepo.path)
           if (res.success) {
-            addToast({ variant: 'info', title: 'Commit Skipped', message: 'Skipped current commit.' })
+            addToast({
+              variant: 'info',
+              title: res.data?.hadConflicts ? 'Conflicts Encountered' : 'Commit Skipped',
+              message: res.data?.hadConflicts ? 'Next commit has conflicts to resolve.' : 'Skipped commit and advanced rebase.'
+            })
             await refreshRepo(activeRepo.id)
           } else {
             addToast({ variant: 'error', title: 'Skip Failed', message: res.error || 'Failed to skip commit.' })
