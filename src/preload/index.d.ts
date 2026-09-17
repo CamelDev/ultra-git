@@ -66,6 +66,10 @@ declare global {
         continueConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;
         skipConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;
         abortConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;
+        getPartialDiff: (repoPath: string, filePath: string, target: 'stage' | 'unstage' | 'discard' | 'staged-discard') => Promise<IpcResponse<import('../shared/conflicts').PartialDiff>>;
+        applyPartialPatchTransaction: (repoPath: string, target: 'stage' | 'unstage' | 'discard' | 'staged-discard', selections: Array<import('../shared/conflicts').PartialSelection>, generation: string) => Promise<IpcResponse<import('../shared/conflicts').PartialTransactionResult>>;
+        undoPartialTransaction: (transactionId: string) => Promise<IpcResponse<import('../shared/conflicts').PartialTransactionResult>>;
+        redoPartialTransaction: (transactionId: string) => Promise<IpcResponse<import('../shared/conflicts').PartialTransactionResult>>;
       },
       app: {
         openDirectory: () => Promise<{ canceled: boolean, path?: string }>;

@@ -9,6 +9,7 @@ import iconWin from '../../resources/icon-win.png?asset'
 import { fixPath } from './env'
 import { gitService } from './git'
 import { conflictService, ConflictServiceError } from './conflictService'
+import { partialPatchService, PartialPatchError } from './partialPatchService'
 import { watchDirectory, stopWatching } from './watcher'
 import { registerUpdateHandlers, scheduleUpdateChecks } from './update'
 
@@ -755,6 +756,25 @@ app.whenReady().then(() => {
   ipcMain.handle('conflict:undo', async (_, token) => {
     try { return { success: true, data: await conflictService.undo(token) } }
     catch (error: any) { return { success: false, code: error.code ?? 'UNDO_EXPIRED', error: error.message } }
+  })
+
+  // Ordinary diffs use opaque, generation-bound selections. Conflict paths are
+  // deliberately rejected by PartialPatchService and must use conflict:*.
+  ipcMain.handle('partial:getDiff', async (_, repoPath, filePath, target) => {
+    try { return { success: true, data: await partialPatchService.getPartialDiff(repoPath, filePath, target) } }
+    catch (error: any) { return { success: false, code: error instanceof PartialPatchError ? error.code : 'PREFLIGHT_FAILED', error: error.message } }
+  })
+  ipcMain.handle('partial:apply', async (_, repoPath, target, selections, generation) => {
+    try { return { success: true, data: await partialPatchService.apply(repoPath, target, selections, generation) } }
+    catch (error: any) { return { success: false, code: error instanceof PartialPatchError ? error.code : 'PREFLIGHT_FAILED', error: error.message } }
+  })
+  ipcMain.handle('partial:undo', async (_, transactionId) => {
+    try { return { success: true, data: await partialPatchService.undo(transactionId) } }
+    catch (error: any) { return { success: false, code: error instanceof PartialPatchError ? error.code : 'UNDO_EXPIRED', error: error.message } }
+  })
+  ipcMain.handle('partial:redo', async (_, transactionId) => {
+    try { return { success: true, data: await partialPatchService.redo(transactionId) } }
+    catch (error: any) { return { success: false, code: error instanceof PartialPatchError ? error.code : 'UNDO_EXPIRED', error: error.message } }
   })
   ipcMain.handle('conflict:continue', async (_, repoPath) => {
     try { return { success: true, data: await conflictService.continue(repoPath) } }

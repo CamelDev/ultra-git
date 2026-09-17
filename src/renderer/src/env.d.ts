@@ -116,6 +116,10 @@ declare global {
         continueConflictOperation: (repoPath: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
         skipConflictOperation: (repoPath: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
         abortConflictOperation: (repoPath: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
+        getPartialDiff: (repoPath: string, filePath: string, target: 'stage' | 'unstage' | 'discard' | 'staged-discard') => Promise<{ success: boolean; data?: import('../../shared/conflicts').PartialDiff; code?: string; error?: string }>;
+        applyPartialPatchTransaction: (repoPath: string, target: 'stage' | 'unstage' | 'discard' | 'staged-discard', selections: Array<import('../../shared/conflicts').PartialSelection>, generation: string) => Promise<{ success: boolean; data?: import('../../shared/conflicts').PartialTransactionResult; code?: string; error?: string }>;
+        undoPartialTransaction: (transactionId: string) => Promise<{ success: boolean; data?: import('../../shared/conflicts').PartialTransactionResult; code?: string; error?: string }>;
+        redoPartialTransaction: (transactionId: string) => Promise<{ success: boolean; data?: import('../../shared/conflicts').PartialTransactionResult; code?: string; error?: string }>;
         getMergeStatus: (repoPath: string) => Promise<{
           success: boolean;
           data?: {

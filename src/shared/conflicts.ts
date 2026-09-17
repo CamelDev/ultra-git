@@ -98,3 +98,32 @@ export interface OperationActionResult {
   document?: ConflictDocument
   error?: ConflictError
 }
+
+/** Renderer-safe, identity-bound ordinary (non-conflict) diff contracts. */
+export type PartialPatchTarget = 'stage' | 'unstage' | 'discard' | 'staged-discard'
+export interface PartialHunk {
+  id: string
+  path: string
+  header: string
+  lines: string[]
+  oldStart: number
+  oldCount: number
+  newStart: number
+  newCount: number
+}
+export interface PartialDiff {
+  repository: string
+  path: string
+  target: PartialPatchTarget
+  generation: string
+  hunks: PartialHunk[]
+  binary: boolean
+}
+export interface PartialSelection { path: string; hunkId: string; generation: string }
+export interface PartialTransactionResult {
+  transactionId: string
+  generation: string
+  undoAvailable: boolean
+  redoAvailable: boolean
+  diff?: PartialDiff
+}
