@@ -33,9 +33,10 @@ declare global {
   }
 
   interface PullResult {
-    status: 'up-to-date' | 'success' | 'merge-conflicts' | 'stash-pop-conflicts' | 'failed'
+    status: 'up-to-date' | 'success' | 'merge-conflicts' | 'operation-in-progress' | 'stash-pop-conflicts' | 'failed'
     errorCode?: 'NO_UPSTREAM' | 'UNRELATED_HISTORIES' | 'FF_ONLY_DIVERGED' | 'DIRTY_OVERLAP' | 'AUTH' | 'NETWORK' | 'STASH_FAILED' | 'UNKNOWN'
     conflictedFiles?: Array<{ path: string; status: string }>
+    operation?: 'merge' | 'rebase' | 'cherry-pick'
     stashedChanges: boolean
     stashRef?: string
     strategy?: PullStrategy

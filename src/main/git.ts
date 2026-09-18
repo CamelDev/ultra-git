@@ -105,8 +105,11 @@ export type PullResultStatus =
   | 'up-to-date'
   | 'success'
   | 'merge-conflicts'
+  | 'operation-in-progress'
   | 'stash-pop-conflicts'
   | 'failed';
+
+export type PullOperation = 'merge' | 'rebase' | 'cherry-pick';
 
 export type PullErrorCode =
   | 'NO_UPSTREAM'
@@ -122,6 +125,8 @@ export interface PullResult {
   status: PullResultStatus;
   errorCode?: PullErrorCode;
   conflictedFiles?: ConflictedFile[];
+  /** Operation that needs user action when status is operation-in-progress. */
+  operation?: PullOperation;
   /** A pre-pull stash exists that was NOT cleanly re-applied. */
   stashedChanges: boolean;
   stashRef?: string;
@@ -596,23 +601,19 @@ export const gitService = {
       return { status: 'failed', errorCode: 'DIRTY_OVERLAP', stashedChanges: stillStashed, stashRef: stillStashed ? 'stash@{0}' : undefined, strategy: opts.strategy, detail: msg };
     }
 
-    // Merge/rebase conflicts: repo is left in MERGING/REBASING state.
-    // The pre-pull stash is intentionally NOT popped onto a conflicted tree.
-    let conflicted = /CONFLICT|Merge conflict|Automatic merge failed|could not apply|Resolve all conflicts/i.test(msg);
-    if (!conflicted) {
+    // An operation being in progress is not itself a conflict. Only unmerged
+    // paths may open the conflict resolver; an operation with zero such paths
+    // must instead be routed to its continue/skip/abort controls.
+    const pullReportedConflict = /CONFLICT|Merge conflict|Automatic merge failed|could not apply|Resolve all conflicts/i.test(msg);
+    let conflictedFiles: ConflictedFile[] = [];
+    const readConflictedFiles = async () => {
+      if (conflictedFiles.length > 0) return conflictedFiles;
       try {
-        const mergeStatus = await gitService.getMergeStatus(repoPath);
-        conflicted = mergeStatus.inProgress;
-      } catch (e) { /* ignore */ }
-    }
-    if (!conflicted) {
-      try {
-        const statusAfter = await git.status();
-        conflicted = statusAfter.conflicted.length > 0;
-      } catch (e) { /* ignore */ }
-    }
-    if (conflicted) {
-      const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+        conflictedFiles = await gitService.getConflictedFiles(repoPath);
+      } catch (e) { /* preserve the original pull error classification below */ }
+      return conflictedFiles;
+    };
+    if (pullReportedConflict && (await readConflictedFiles()).length > 0) {
       return {
         status: 'merge-conflicts',
         conflictedFiles,
@@ -622,6 +623,37 @@ export const gitService = {
         detail: msg
       };
     }
+
+    try {
+      const mergeStatus = await gitService.getMergeStatus(repoPath);
+      const operation: PullOperation | undefined = mergeStatus.isRebase
+        ? 'rebase'
+        : mergeStatus.isMerge
+          ? 'merge'
+          : mergeStatus.isCherryPick
+            ? 'cherry-pick'
+            : undefined;
+      if (operation) {
+        if ((await readConflictedFiles()).length > 0) {
+          return {
+            status: 'merge-conflicts',
+            conflictedFiles,
+            stashedChanges: stashed,
+            stashRef: stashed ? 'stash@{0}' : undefined,
+            strategy: opts.strategy,
+            detail: msg
+          };
+        }
+        return {
+          status: 'operation-in-progress',
+          operation,
+          stashedChanges: stashed,
+          stashRef: stashed ? 'stash@{0}' : undefined,
+          strategy: opts.strategy,
+          detail: msg
+        };
+      }
+    } catch (e) { /* preserve the original pull error classification below */ }
 
     if (pullError) {
       if (/Authentication failed|Permission denied|could not read (Username|Password)|Repository not found/i.test(msg)) {

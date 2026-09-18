@@ -279,6 +279,26 @@ describe('smartPull', () => {
     expect(callsMatching(['stash', 'pop']).length).toBe(0);
   });
 
+  test('reports a conflict-free rebase as an operation in progress', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ultragit-smart-pull-rebase-'));
+    try {
+      fs.mkdirSync(path.join(tmp, '.git', 'rebase-merge'), { recursive: true });
+      rawHandler = (args) => {
+        const cmd = args.join(' ');
+        if (cmd.startsWith('pull')) return 'error: could not apply 1234567 Commit awaiting continuation';
+        return defaultRaw(args);
+      };
+
+      const result = await gitService.smartPull(tmp, { strategy: 'rebase' });
+
+      expect(result.status).toBe('operation-in-progress');
+      expect(result.operation).toBe('rebase');
+      expect(result.conflictedFiles).toBeUndefined();
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   // simple-git's raw() RESOLVES with output when git exits with code 1 —
   // merge conflicts must be detected from the output text / repo state,
   // not only from thrown errors. This mirrors the real runtime behavior.

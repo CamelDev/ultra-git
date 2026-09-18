@@ -536,6 +536,13 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
         else if (action === 'abort') await handlePullAbort(result.strategy)
         break
       }
+      case 'operation-in-progress':
+        // The pull left Git in an operation state without any unmerged paths.
+        // Re-run preflight to present the existing operation-specific controls
+        // (continue/skip/abort) instead of opening an empty conflict resolver.
+        await refreshRepo(activeRepo.id)
+        await handlePull()
+        break
       case 'stash-pop-conflicts': {
         const conflictCount = result.conflictedFiles?.length ?? 0
         const what = conflictCount > 0
