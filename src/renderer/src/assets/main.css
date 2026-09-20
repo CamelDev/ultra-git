@@ -36,6 +36,19 @@
   --diff-add-bg-subtle: rgba(16, 185, 129, 0.08);
   --diff-add-inline-bg: rgba(16, 185, 129, 0.45);
   --diff-add-inline-text: #6ee7b7;
+  --code-view-bg: #171a24;
+  --code-view-empty-bg: #141720;
+  --code-view-frame: rgba(148, 163, 184, 0.3);
+  --code-border-add: #10b981;
+  --code-border-delete: #ef4444;
+  --code-border-mixed: #f59e0b;
+  --code-gutter-add: #34d399;
+  --code-gutter-delete: #f87171;
+  --code-token-comment: #7f8ea3;
+  --code-token-string: #d6b777;
+  --code-token-keyword: #c792ea;
+  --code-token-number: #f78c6c;
+  --code-token-property: #82aaff;
   --scrollbar-thumb: rgba(255, 255, 255, 0.45);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.7);
   --scrollbar-track: rgba(255, 255, 255, 0.06);
@@ -76,6 +89,19 @@
   --diff-add-bg-subtle: rgba(16, 185, 129, 0.04);
   --diff-add-inline-bg: rgba(16, 185, 129, 0.25);
   --diff-add-inline-text: #14532d; /* Deep Green 900 */
+  --code-view-bg: #ffffff;
+  --code-view-empty-bg: #f8fafc;
+  --code-view-frame: rgba(71, 85, 105, 0.3);
+  --code-border-add: #16a34a;
+  --code-border-delete: #dc2626;
+  --code-border-mixed: #d97706;
+  --code-gutter-add: #15803d;
+  --code-gutter-delete: #b91c1c;
+  --code-token-comment: #64748b;
+  --code-token-string: #a16207;
+  --code-token-keyword: #7c3aed;
+  --code-token-number: #c2410c;
+  --code-token-property: #1d4ed8;
   --scrollbar-thumb: rgba(15, 23, 42, 0.45);
   --scrollbar-thumb-hover: rgba(15, 23, 42, 0.7);
   --scrollbar-track: rgba(15, 23, 42, 0.06);
@@ -1262,6 +1288,44 @@ mark.diff-search-highlight.active {
   white-space: nowrap;
 }
 
+/* Diff Transaction Undo / Redo Actions */
+.diff-transaction-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.diff-transaction-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.diff-transaction-btn:hover:not(:disabled) {
+  background-color: var(--hover);
+  color: var(--text-primary);
+}
+
+.diff-transaction-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 /* File Stage / Unstage Action Buttons in Diff Modal */
 .diff-file-action-btn {
   display: flex;
@@ -1600,6 +1664,140 @@ mark.diff-search-highlight.active {
   background-color: var(--diff-add-inline-bg);
   color: var(--diff-add-inline-text);
 }
+
+/* Code view keeps the split diff geometry unchanged. Git status is carried by gutters and a
+ * 1px inset marker while syntax tokens keep their own foreground colors. */
+.diff-code-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.diff-code-view-btn.active {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.diff-table.code-view .diff-row,
+.diff-table.code-view .diff-row.type-add,
+.diff-table.code-view .diff-row.type-delete {
+  background-color: var(--code-view-bg);
+}
+
+.diff-table.code-view .diff-col,
+.diff-table.code-view .diff-row.type-delete .diff-col.left,
+.diff-table.code-view .diff-row.type-add .diff-col.right,
+.diff-table.code-view .diff-row.type-change .diff-col.left,
+.diff-table.code-view .diff-row.type-change .diff-col.right {
+  background-color: var(--code-view-bg);
+}
+
+.diff-table.code-view .diff-col.empty-side,
+.diff-table.code-view .diff-row.type-delete .diff-col.right.empty-side,
+.diff-table.code-view .diff-row.type-add .diff-col.left.empty-side {
+  background-color: var(--code-view-empty-bg);
+}
+
+.diff-table.code-view .diff-row.line-selected .diff-col {
+  background-color: rgba(59, 130, 246, 0.16) !important;
+}
+
+.diff-table.code-view .diff-hunk-block {
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 6px 8px;
+  position: relative;
+  background-color: var(--code-view-bg);
+}
+
+.diff-table.code-view .diff-hunk-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--code-view-frame);
+  border-radius: inherit;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.diff-table.code-view .diff-hunk-block.hunk-type-add::after {
+  border-color: var(--code-border-add);
+}
+
+.diff-table.code-view .diff-hunk-block.hunk-type-delete::after {
+  border-color: var(--code-border-delete);
+}
+
+.diff-table.code-view .diff-hunk-block.hunk-type-mixed::after {
+  border-color: var(--code-border-mixed);
+}
+
+.diff-table.code-view .diff-hunk-block .diff-hunk-header {
+  border-top: none;
+}
+
+/* Full File optimization: skip off-screen rows rendering using native content-visibility */
+.diff-table.extent-full .diff-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 24px;
+}
+
+.diff-table.code-view .diff-row.type-delete .diff-col.left .diff-line-content,
+.diff-table.code-view .diff-row.type-add .diff-col.right .diff-line-content,
+.diff-table.code-view .diff-row.type-change .diff-col .diff-line-content {
+  color: var(--text-primary);
+}
+
+.diff-table.code-view .diff-row.type-delete .diff-col.left .diff-line-number,
+.diff-table.code-view .diff-row.type-change .diff-col.left .diff-line-number,
+.diff-table.code-view .diff-row.type-add .diff-col.right .diff-line-number,
+.diff-table.code-view .diff-row.type-change .diff-col.right .diff-line-number {
+  opacity: 1;
+  color: var(--text-secondary);
+}
+
+.diff-table.code-view .diff-row.type-delete .diff-col.left .diff-line-number::before,
+.diff-table.code-view .diff-row.type-change .diff-col.left .diff-line-number::before {
+  content: '-';
+  color: var(--code-gutter-delete);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.diff-table.code-view .diff-row.type-add .diff-col.right .diff-line-number::before,
+.diff-table.code-view .diff-row.type-change .diff-col.right .diff-line-number::before {
+  content: '+';
+  color: var(--code-gutter-add);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.diff-table.code-view .diff-inline-highlight.type-delete,
+.diff-table.code-view .diff-inline-highlight.type-add {
+  color: inherit;
+  background: transparent;
+  text-decoration: none;
+}
+.diff-token.token-comment { color: var(--code-token-comment); }
+.diff-token.token-string { color: var(--code-token-string); }
+.diff-token.token-keyword { color: var(--code-token-keyword); font-weight: 600; }
+.diff-token.token-number { color: var(--code-token-number); }
+.diff-token.token-property { color: var(--code-token-property); }
 
 /* Animations */
 @keyframes fadeIn {

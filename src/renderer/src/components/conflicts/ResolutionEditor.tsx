@@ -1,4 +1,5 @@
 import React from 'react'
+import { Check } from 'lucide-react'
 import type { ConflictDocument, ConflictRegion, RegionChoice } from '../../../../shared/conflicts'
 import { ConflictHunkView } from './ConflictHunkView'
 
@@ -8,4 +9,4 @@ export const ResolutionEditor: React.FC<Props> = ({ document, result, activeRegi
   const region = document.regions.find(r => r.id === activeRegionId) || document.regions[0]
   return <div className="conflict-workbench-content"><div className="conflict-region-bar" role="tablist" aria-label="Conflict regions">{document.regions.map((r, i) => <button key={r.id} type="button" role="tab" aria-selected={r.id === region.id} className="conflict-workbench-btn" onClick={() => onRegion(r.id)}>Region {i + 1}: {r.choice === 'unresolved' ? 'unresolved' : r.choice}</button>)}</div><ConflictHunkView document={document} region={region} onChoice={(choice, selected) => onChoice(region.id, choice, selected)} /><label className="conflict-pane result" style={{ minHeight: 180 }}><div className="conflict-pane-title">Editable Result <span aria-live="polite">{document.eol !== 'none' ? `· ${document.eol.toUpperCase()}${document.hasFinalNewline ? ' · final newline' : ''}` : ''}</span></div><textarea data-testid="conflict-result-editor" value={result} onChange={e => onEdit(e.target.value)} aria-label="Editable whole-file result" /></label><Footer canApply={canApply} onApply={onApply} /></div>
 }
-const Footer: React.FC<{ canApply: boolean; onApply: () => void }> = ({ canApply, onApply }) => <div className="conflict-summary"><button type="button" className="conflict-workbench-btn primary" disabled={!canApply} onClick={onApply} data-testid="conflict-apply-stage" data-legacy-testid="mark-resolved-btn">Apply &amp; Stage</button>{!canApply && <span> Resolve every region explicitly before staging.</span>}</div>
+const Footer: React.FC<{ canApply: boolean; onApply: () => void }> = ({ canApply, onApply }) => <div className="conflict-summary"><button type="button" className="conflict-workbench-btn primary" disabled={!canApply} onClick={onApply} data-testid="conflict-apply-stage" data-legacy-testid="mark-resolved-btn"><Check size={13} /> Apply &amp; Stage</button>{!canApply && <span> Resolve every region explicitly before staging.</span>}</div>

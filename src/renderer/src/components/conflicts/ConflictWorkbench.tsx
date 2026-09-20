@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { ArrowRight, Minus, RotateCcw, SkipForward, XCircle } from 'lucide-react'
 import { createConflictSession, conflictSelectors } from '../../store/conflictSession'
 import { useRepoStore } from '../../store/useRepoStore'
 import { ConflictFileList } from './ConflictFileList'
@@ -61,7 +62,80 @@ export const ConflictWorkbench: React.FC<Props> = ({ repoId, onDismiss }) => {
   if (closing) return null
 
   return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-labelledby="conflict-title" aria-describedby="conflict-description" data-testid="conflict-resolver" data-workbench-testid="conflict-workbench">
-    <header className="conflict-operation-strip"><div><h2 id="conflict-title">{operationName} conflict workbench</h2><div className="conflict-operation-meta" id="conflict-description"><span className="conflict-operation-status">{operationName} in progress</span><span>{sourceLabel}: {session.snapshot.roles.current}</span><span>{incomingLabel}: {session.snapshot.roles.incoming}</span>{session.snapshot.currentStep && <span>Step {session.snapshot.currentStep}{session.snapshot.totalSteps ? ` of ${session.snapshot.totalSteps}` : ''}</span>}<span>{session.snapshot.subject || 'Resolve changes explicitly'}</span><span data-testid="conflict-unresolved-count">{statusText}</span></div></div><div className="conflict-operation-actions"><button ref={firstFocus} type="button" className="conflict-workbench-btn danger" data-testid="abort-merge-btn" aria-label="Abort" disabled={!!session.pending} onClick={() => void runAndClose('abort')}>Abort {operationName}</button>{kind === 'rebase' && <button type="button" className="conflict-workbench-btn" disabled={!!session.pending} onClick={() => void runAndClose('skip')}>Skip commit</button>}{conflictSelectors.canUndoResolution(session) && <button type="button" className="conflict-workbench-btn" data-testid="conflict-undo-resolution" onClick={() => void undo(repoId)}>Undo Resolution</button>}<button type="button" className="conflict-workbench-btn primary" disabled={!conflictSelectors.canContinue(session)} onClick={() => void runAndClose('continue')}>Continue</button>{onDismiss && <button type="button" className="conflict-workbench-btn" onClick={onDismiss} aria-label="Minimize conflict workbench">Minimize</button>}</div></header>
+    <header className="conflict-operation-strip">
+      <div>
+        <h2 id="conflict-title">{operationName} conflict workbench</h2>
+        <div className="conflict-operation-meta" id="conflict-description">
+          <span className="conflict-operation-status">{operationName} in progress</span>
+          <span>{sourceLabel}: {session.snapshot.roles.current}</span>
+          <span>{incomingLabel}: {session.snapshot.roles.incoming}</span>
+          {session.snapshot.currentStep && <span>Step {session.snapshot.currentStep}{session.snapshot.totalSteps ? ` of ${session.snapshot.totalSteps}` : ''}</span>}
+          <span>{session.snapshot.subject || 'Resolve changes explicitly'}</span>
+          <span data-testid="conflict-unresolved-count">{statusText}</span>
+        </div>
+      </div>
+      <div className="conflict-operation-actions">
+        <button
+          ref={firstFocus}
+          type="button"
+          className="conflict-workbench-btn danger"
+          data-testid="abort-merge-btn"
+          aria-label="Abort"
+          data-tooltip={`Abort ${operationName} and restore previous state`}
+          disabled={!!session.pending}
+          onClick={() => void runAndClose('abort')}
+        >
+          <XCircle size={13} />
+          Abort {operationName}
+        </button>
+        {kind === 'rebase' && (
+          <button
+            type="button"
+            className="conflict-workbench-btn warning"
+            disabled={!!session.pending}
+            data-tooltip="Skip this commit in rebase"
+            onClick={() => void runAndClose('skip')}
+          >
+            <SkipForward size={13} />
+            Skip commit
+          </button>
+        )}
+        {conflictSelectors.canUndoResolution(session) && (
+          <button
+            type="button"
+            className="conflict-workbench-btn purple"
+            data-testid="conflict-undo-resolution"
+            data-tooltip="Undo previous conflict resolution"
+            onClick={() => void undo(repoId)}
+          >
+            <RotateCcw size={13} />
+            Undo Resolution
+          </button>
+        )}
+        <button
+          type="button"
+          className="conflict-workbench-btn primary"
+          disabled={!conflictSelectors.canContinue(session)}
+          data-tooltip={!conflictSelectors.canContinue(session) ? "Resolve all conflicts before continuing" : `Continue ${operationName}`}
+          onClick={() => void runAndClose('continue')}
+        >
+          Continue
+          <ArrowRight size={13} />
+        </button>
+        {onDismiss && (
+          <button
+            type="button"
+            className="conflict-workbench-btn"
+            onClick={onDismiss}
+            aria-label="Minimize conflict workbench"
+            data-tooltip="Minimize — conflicts remain active"
+          >
+            <Minus size={13} />
+            Minimize
+          </button>
+        )}
+      </div>
+    </header>
     {session.externalChange && <div className="conflict-error" role="alert">Files changed outside UltraGIT. Reload the operation before applying any resolution.</div>}
     {session.error && <div className="conflict-error" role="alert">{session.error}</div>}
     <div className="conflict-workbench-body"><ConflictFileList files={files} activePath={session.activePath} drafts={session.drafts} onSelect={path => void loadDocument(repoId, path)} /><section className="conflict-workbench-content" aria-label="Conflict editor">{!active ? <div className="conflict-empty">Select a file to inspect its Base, {sourceLabel}, {incomingLabel}, and Result.</div> : <><CandidatePanel enabled={session.candidateReuseEnabled} candidates={active.candidates} previewedId={active.previewedCandidateId} acceptedId={active.acceptedCandidateId} onToggle={enabled => void setCandidateReuse(repoId, enabled)} onPreview={id => void previewCandidate(repoId, id)} onAccept={id => acceptCandidate(repoId, id)} onReject={id => rejectCandidate(repoId, id)} onForget={id => void forgetCandidate(repoId, id)} /><ResolutionEditor document={active.document} result={active.result} activeRegionId={session.activeRegionId} canApply={conflictSelectors.canApplyFile(session)} fileChoice={active.fileChoice} onEdit={value => session.activePath && editResult(repoId, session.activePath, value)} onChoice={chooseRegion} onRegion={id => { const store = useRepoStore.getState(); const current = store.getConflictSession(repoId); useRepoStore.setState({ conflictSessions: { ...store.conflictSessions, [repoId]: { ...current, activeRegionId: id } } }) }} onApply={() => void apply(repoId, session.activePath || undefined)} onFileChoice={choice => { const store = useRepoStore.getState(); const current = store.getConflictSession(repoId); const draft = session.activePath ? current.drafts[session.activePath] : undefined; if (draft && session.activePath) useRepoStore.setState({ conflictSessions: { ...store.conflictSessions, [repoId]: { ...current, drafts: { ...current.drafts, [session.activePath]: { ...draft, fileChoice: choice, dirty: true } } } } }) }} /></>}</section></div>

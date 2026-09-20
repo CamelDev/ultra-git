@@ -11,12 +11,15 @@ import {
   Plus,
   Minus,
   RotateCcw,
+  Undo2,
+  Redo2,
   Trash2,
   Layers,
   AlertTriangle,
   Loader2,
   Search,
-  Eye
+  Eye,
+  Code2
 } from 'lucide-react'
 import {
   buildHunksFromDiffItems,
@@ -31,6 +34,18 @@ import { MarkdownDiffView } from './MarkdownDiffView'
 import { ImageDiffView } from './ImageDiffView'
 import { useUndoStore } from '../../store/useUndoStore'
 import type { PartialDiff, PartialPatchTarget, PartialSelection } from '../../../../shared/conflicts'
+import {
+  CodeToken,
+  HunkChangeType,
+  isRasterImage,
+  isSvg,
+  readCodeViewPreference,
+  resolveCodeLanguage,
+  resolveHunkChangeType,
+  resolveRenameLanguages,
+  tokenizeCode,
+  writeCodeViewPreference
+} from './codeView'
 
 export interface DiffFileItem {
   path: string
@@ -152,31 +167,6 @@ function computeInlineDiff(
   }
 }
 
-/**
- * Render a line content with inline char highlights.
- */
-function InlineContent({
-  spans,
-  type
-}: {
-  spans: CharSpan[]
-  type: 'add' | 'delete'
-}): React.ReactElement {
-  return (
-    <pre className="diff-line-content">
-      {spans.map((span, i) =>
-        span.highlight ? (
-          <mark key={i} className={`diff-inline-highlight type-${type}`}>
-            {span.text}
-          </mark>
-        ) : (
-          <span key={i}>{span.text}</span>
-        )
-      )}
-    </pre>
-  )
-}
-
 interface RenderRow {
   rowIdx?: number
   rowType: 'normal' | 'change' | 'delete' | 'add'
@@ -197,66 +187,89 @@ interface SearchMatch {
   length: number
 }
 
-function SearchHighlightContent({
+const EMPTY_MATCHES: SearchMatch[] = []
+
+const SearchHighlightContent = React.memo(function SearchHighlightContent({
   text,
   side,
   spans,
+  tokens,
+  codeView,
   type,
-  searchQuery,
+  searchQuery: _searchQuery,
   rowMatches,
   activeMatchIndex
 }: {
   text: string
   side: 'left' | 'right'
   spans?: CharSpan[]
+  tokens?: CodeToken[]
+  codeView: boolean
   type?: 'add' | 'delete'
   searchQuery: string
   rowMatches: SearchMatch[]
   activeMatchIndex: number
 }) {
-  if (!searchQuery) {
-    if (spans && type) {
-      return <InlineContent spans={spans} type={type} />
+  const sideMatches = rowMatches.length > 0 ? rowMatches.filter((m) => m.side === side) : EMPTY_MATCHES
+  const hasSideMatches = sideMatches.length > 0
+  const hasInlineSpans = Boolean(spans && type && spans.some((s) => s.highlight))
+
+  // Fast path for common lines without search matches or inline diff highlights
+  if (!hasSideMatches && !hasInlineSpans) {
+    if (codeView && tokens && tokens.length > 0) {
+      const elements = tokens.map((token, index) => {
+        const value = text.slice(token.start, token.end)
+        if (token.type !== 'plain') {
+          return (
+            <span key={index} className={`diff-token token-${token.type}`}>
+              {value}
+            </span>
+          )
+        }
+        return value
+      })
+      return <pre className="diff-line-content code-view-content">{elements}</pre>
     }
-    return <pre className="diff-line-content">{text}</pre>
+    return <pre className={`diff-line-content${codeView ? ' code-view-content' : ''}`}>{text}</pre>
   }
 
-  const sideMatches = rowMatches.filter((m) => m.side === side)
-  if (sideMatches.length === 0) {
-    if (spans && type) {
-      return <InlineContent spans={spans} type={type} />
-    }
-    return <pre className="diff-line-content">{text}</pre>
+  // Multi-layer overlap resolution path for lines with search matches or inline diffs
+  const inlineRanges: Array<{ start: number; end: number }> = []
+  if (spans && type) {
+    let offset = 0
+    spans.forEach((span) => {
+      if (span.highlight) inlineRanges.push({ start: offset, end: offset + span.text.length })
+      offset += span.text.length
+    })
   }
-
-  const elements: React.ReactNode[] = []
-  let lastIndex = 0
-
-  sideMatches.forEach((m) => {
-    if (m.startIdx > lastIndex) {
-      elements.push(
-        <span key={`text-${lastIndex}`}>{text.substring(lastIndex, m.startIdx)}</span>
+  const boundaries = new Set<number>([0, text.length])
+  if (codeView) tokens?.forEach((token) => { boundaries.add(token.start); boundaries.add(token.end) })
+  inlineRanges.forEach((range) => { boundaries.add(range.start); boundaries.add(range.end) })
+  sideMatches.forEach((match) => { boundaries.add(match.startIdx); boundaries.add(match.startIdx + match.length) })
+  const points = [...boundaries].filter((point) => point >= 0 && point <= text.length).sort((a, b) => a - b)
+  const elements = points.slice(0, -1).map((start, index) => {
+    const end = points[index + 1]
+    const value = text.slice(start, end)
+    const inline = inlineRanges.some((range) => range.start <= start && range.end >= end)
+    const match = sideMatches.find((candidate) => candidate.startIdx <= start && candidate.startIdx + candidate.length >= end)
+    const token = codeView ? tokens?.find((candidate) => candidate.start <= start && candidate.end >= end) : undefined
+    let node: React.ReactNode = value
+    if (token && token.type !== 'plain') node = <span className={`diff-token token-${token.type}`}>{node}</span>
+    if (inline && type) node = <mark className={`diff-inline-highlight type-${type}`}>{node}</mark>
+    if (match) {
+      node = (
+        <mark
+          id={start === match.startIdx ? `search-match-${match.matchIndex}` : undefined}
+          className={`diff-search-highlight${match.matchIndex === activeMatchIndex ? ' active' : ''}`}
+        >
+          {node}
+        </mark>
       )
     }
-    const isActive = m.matchIndex === activeMatchIndex
-    elements.push(
-      <mark
-        id={`search-match-${m.matchIndex}`}
-        key={`match-${m.matchIndex}`}
-        className={`diff-search-highlight${isActive ? ' active' : ''}`}
-      >
-        {text.substring(m.startIdx, m.startIdx + m.length)}
-      </mark>
-    )
-    lastIndex = m.startIdx + m.length
+    return <React.Fragment key={`${start}-${end}`}>{node}</React.Fragment>
   })
-
-  if (lastIndex < text.length) {
-    elements.push(<span key={`text-${lastIndex}`}>{text.substring(lastIndex)}</span>)
-  }
-
-  return <pre className="diff-line-content">{elements}</pre>
-}
+  return <pre className={`diff-line-content${codeView ? ' code-view-content' : ''}`}>{elements}</pre>
+})
 
 function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
   const rows: RenderRow[] = []
@@ -381,15 +394,16 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   // File navigation state
   const [currentFileIndex, setCurrentFileIndex] = useState<number>(initialFileIndex || 0)
 
-  // Chunk navigation, view mode, and line selection state
-  const [viewMode, setViewMode] = useState<'chunks' | 'full' | 'preview'>(() => {
-    if (initialViewMode) return initialViewMode
+  // Diff extent, rendered preview, and syntax preference are deliberately independent.
+  // Preview must never overwrite either the saved preference or the remembered extent.
+  const [diffExtent, setDiffExtent] = useState<'chunks' | 'full'>(() => initialViewMode === 'full' ? 'full' : 'chunks')
+  const [isPreviewActive, setPreviewActive] = useState(() => {
+    if (initialViewMode) return initialViewMode === 'preview'
     const p = (files && files.length > 0 && initialFileIndex !== undefined && files[initialFileIndex]?.path) || filePath
-    if (p && /\.(png|jpg|jpeg|bmp|svg|gif|webp|ico|avif)$/i.test(p)) {
-      return 'preview'
-    }
-    return 'chunks'
+    return !!p && (isRasterImage(p) || isSvg(p))
   })
+  const [codeViewEnabled, setCodeViewEnabled] = useState(() => readCodeViewPreference(typeof window === 'undefined' ? undefined : window.localStorage))
+  const viewMode: 'chunks' | 'full' | 'preview' = isPreviewActive ? 'preview' : diffExtent
   const [activeChunkIndex, setActiveChunkIndex] = useState(0)
   const [selectedLineIndices, setSelectedLineIndices] = useState<Set<number>>(new Set())
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
@@ -464,6 +478,14 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   }, [isOpen, isActiveChange, isStash, currentFilePath, currentIsStaged, repoPath])
 
   const effectiveRepoPath = repoPath || getActiveRepo()?.path || ''
+  const isMac = typeof window !== 'undefined' && Boolean(window.api?.isMac)
+  const undoShortcut = isMac ? 'Cmd+Z' : 'Ctrl+Z'
+  const redoShortcut = isMac ? 'Cmd+Shift+Z' : 'Ctrl+Y'
+  const undoDesc = getUndoDescription(effectiveRepoPath)
+  const undoTooltip = undoDesc ? `Undo: ${undoDesc} (${undoShortcut})` : `Undo (${undoShortcut})`
+  const redoDesc = getRedoDescription(effectiveRepoPath)
+  const redoTooltip = redoDesc ? `Redo: ${redoDesc} (${redoShortcut})` : `Redo (${redoShortcut})`
+
   const undoPartial = async () => {
     const res = await undo(effectiveRepoPath, async () => { const active = getActiveRepo(); if (active) await refreshRepo(active.id); loadDiffContent() })
     if (!res.success) addToast({ variant: 'error', title: 'Undo unavailable', message: res.error || 'The transaction expired' })
@@ -491,19 +513,54 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
   const isImage = useMemo(() => {
     if (!currentFilePath || currentFilePath === 'No file selected') return false
-    return /\.(png|jpg|jpeg|bmp|svg|gif|webp|ico|avif)$/i.test(currentFilePath)
+    return isRasterImage(currentFilePath) || isSvg(currentFilePath)
   }, [currentFilePath])
+  const isRaster = useMemo(() => isRasterImage(currentFilePath), [currentFilePath])
+  const isSvgSource = useMemo(() => isSvg(currentFilePath), [currentFilePath])
+  const supportsCodeView =
+    !isRaster &&
+    !isBinary &&
+    !!currentFilePath &&
+    currentFilePath !== 'No file selected' &&
+    resolveCodeLanguage(currentFilePath) !== 'text'
 
   const isPreviewable = isMarkdown || isImage
 
-  // Automatically switch to 'preview' for known images, or reset from preview if active file is not previewable
+  const previousFilePathRef = useRef<string | undefined>(undefined)
+  // Raster images and SVG keep their existing initial image-preview entry behavior. This only
+  // runs after navigation, so selecting Code view for an SVG is not immediately undone.
   useEffect(() => {
-    if (isImage) {
-      setViewMode('preview')
-    } else if (viewMode === 'preview' && !isMarkdown) {
-      setViewMode('chunks')
+    if (previousFilePathRef.current === currentFilePath) return
+    const isInitialFile = previousFilePathRef.current === undefined
+    previousFilePathRef.current = currentFilePath
+    if (isRaster || isSvgSource) {
+      setPreviewActive(true)
+    } else if (!isMarkdown && !(isInitialFile && initialViewMode === 'preview')) {
+      setPreviewActive(false)
     }
-  }, [currentFilePath, isImage, isMarkdown])
+  }, [currentFilePath, isRaster, isSvgSource, isMarkdown, initialViewMode])
+
+  useEffect(() => {
+    if (isOpen && initialViewMode === 'preview') setPreviewActive(true)
+  }, [isOpen, initialViewMode])
+
+  const setCodeView = useCallback((enabled: boolean) => {
+    setCodeViewEnabled(enabled)
+    writeCodeViewPreference(enabled, typeof window === 'undefined' ? undefined : window.localStorage)
+  }, [])
+
+  const handleCodeViewToggle = useCallback(() => {
+    if (isPreviewActive) {
+      setPreviewActive(false)
+      setCodeView(true)
+      return
+    }
+    setCodeView(!codeViewEnabled)
+  }, [codeViewEnabled, isPreviewActive, setCodeView])
+
+  const handlePreviewToggle = useCallback(() => {
+    setPreviewActive((active) => !active)
+  }, [])
 
   // File navigation handlers
   const handlePrevFile = useCallback(() => {
@@ -564,10 +621,19 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
   // Build visual rows and calculate selected row count
   const renderRows = useMemo(() => buildRenderRows(diffItems), [diffItems])
+  const codeLanguages = useMemo(
+    () => resolveRenameLanguages(currentOldPath || currentFilePath, currentFilePath),
+    [currentOldPath, currentFilePath]
+  )
+  const beforeCodeLines = useMemo(() => tokenizeCode(rawBefore, codeLanguages.before), [rawBefore, codeLanguages.before])
+  const afterCodeLines = useMemo(() => tokenizeCode(rawAfter, codeLanguages.after), [rawAfter, codeLanguages.after])
   const selectedRowCount = useMemo(
     () => renderRows.filter((row) => row.diffIndices.some((idx) => selectedLineIndices.has(idx))).length,
     [renderRows, selectedLineIndices]
   )
+  const overallChangeType = useMemo<HunkChangeType>(() => {
+    return resolveHunkChangeType(diffItems)
+  }, [diffItems])
 
   // Search matches calculation
   const matches = useMemo<SearchMatch[]>(() => {
@@ -1311,7 +1377,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                 <div className="diff-view-toggle" data-testid="view-mode-toggle">
                   <button
                     className={`diff-view-toggle-btn ${viewMode === 'chunks' ? 'active' : ''}`}
-                    onClick={() => setViewMode('chunks')}
+                    onClick={() => { setDiffExtent('chunks'); setPreviewActive(false) }}
                     data-tooltip="Show only changed chunks with context"
                     data-testid="toggle-chunks-btn"
                   >
@@ -1320,7 +1386,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                   </button>
                   <button
                     className={`diff-view-toggle-btn ${viewMode === 'full' ? 'active' : ''}`}
-                    onClick={() => setViewMode('full')}
+                    onClick={() => { setDiffExtent('full'); setPreviewActive(false) }}
                     data-tooltip="Show entire file content with diff highlights"
                     data-testid="toggle-full-btn"
                   >
@@ -1421,7 +1487,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               {(isMarkdown || isImage) && (
                 <button
                   className={`diff-dedicated-preview-btn ${viewMode === 'preview' ? 'active' : ''}`}
-                  onClick={() => setViewMode((prev) => (prev === 'preview' ? 'chunks' : 'preview'))}
+                  onClick={handlePreviewToggle}
                   data-tooltip={
                     viewMode === 'preview'
                       ? 'Return to code / raw diff'
@@ -1433,6 +1499,18 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                 >
                   <Eye size={13} />
                   <span>Preview</span>
+                </button>
+              )}
+              {supportsCodeView && (
+                <button
+                  className={`diff-code-view-btn ${codeViewEnabled && viewMode !== 'preview' ? 'active' : ''}`}
+                  onClick={handleCodeViewToggle}
+                  aria-pressed={codeViewEnabled && viewMode !== 'preview'}
+                  data-tooltip={viewMode === 'preview' ? 'Show syntax-highlighted source diff' : codeViewEnabled ? 'Disable Code view' : 'Enable Code view'}
+                  data-testid="toggle-code-view-btn"
+                >
+                  <Code2 size={13} />
+                  <span>Code view</span>
                 </button>
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
@@ -1529,11 +1607,25 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
               {isActiveChange && !isStash && (canUndo(effectiveRepoPath) || canRedo(effectiveRepoPath)) && (
                 <div className="diff-transaction-actions" aria-label="Partial transaction history">
-                  <button className="diff-file-action-btn" onClick={() => void undoPartial()} disabled={!canUndo(effectiveRepoPath) || actionLoading} title={getUndoDescription(effectiveRepoPath) || 'Undo transaction'} data-testid="partial-undo-btn">
-                    <RotateCcw size={13} /><span>Undo</span>
+                  <button
+                    className="diff-transaction-btn"
+                    onClick={() => void undoPartial()}
+                    disabled={!canUndo(effectiveRepoPath) || actionLoading}
+                    data-tooltip={undoTooltip}
+                    data-testid="partial-undo-btn"
+                  >
+                    <Undo2 size={13} />
+                    <span>Undo</span>
                   </button>
-                  <button className="diff-file-action-btn" onClick={() => void redoPartial()} disabled={!canRedo(effectiveRepoPath) || actionLoading} title={getRedoDescription(effectiveRepoPath) || 'Redo transaction'} data-testid="partial-redo-btn">
-                    <RotateCcw size={13} /><span>Redo</span>
+                  <button
+                    className="diff-transaction-btn"
+                    onClick={() => void redoPartial()}
+                    disabled={!canRedo(effectiveRepoPath) || actionLoading}
+                    data-tooltip={redoTooltip}
+                    data-testid="partial-redo-btn"
+                  >
+                    <Redo2 size={13} />
+                    <span>Redo</span>
                   </button>
                 </div>
               )}
@@ -1714,7 +1806,9 @@ export const DiffModal: React.FC<DiffModalProps> = ({
             )}
 
             {!loading && !error && !isBinary && viewMode !== 'preview' && (
-              <div className="diff-table">
+              <div
+                className={`diff-table extent-${viewMode}${codeViewEnabled ? ' code-view' : ''}`}
+              >
                 {renderRows.length === 0 ? (
                   <div
                     data-testid="no-changes-placeholder"
@@ -1733,9 +1827,14 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                       row.diffIndices.some((idx) => hunkIndices.has(idx))
                     )
                     const rowsToRender = hunkRows.length > 0 ? hunkRows : renderRows
+                    const hunkChangeType = resolveHunkChangeType(hunk.lines, rowsToRender)
 
                     return (
-                      <div key={`hunk-block-${hunkIdx}`}>
+                      <div
+                        key={`hunk-block-${hunkIdx}`}
+                        className={`diff-hunk-block hunk-type-${hunkChangeType}`}
+                        data-hunk-change-type={hunkChangeType}
+                      >
                         {/* Hunk Header Bar */}
                         <div
                           id={`diff-hunk-${hunkIdx}`}
@@ -1819,9 +1918,11 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                                   text={row.beforeLine ?? ''}
                                   side="left"
                                   spans={row.oldSpans}
+                                  tokens={row.beforeNum ? beforeCodeLines[row.beforeNum - 1]?.tokens : undefined}
+                                  codeView={codeViewEnabled}
                                   type="delete"
                                   searchQuery={searchQuery}
-                                  rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) || []}
+                                  rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) ?? EMPTY_MATCHES}
                                   activeMatchIndex={activeMatchIndex}
                                 />
                               </div>
@@ -1831,9 +1932,11 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                                   text={row.afterLine ?? ''}
                                   side="right"
                                   spans={row.newSpans}
+                                  tokens={row.afterNum ? afterCodeLines[row.afterNum - 1]?.tokens : undefined}
+                                  codeView={codeViewEnabled}
                                   type="add"
                                   searchQuery={searchQuery}
-                                  rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) || []}
+                                  rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) ?? EMPTY_MATCHES}
                                   activeMatchIndex={activeMatchIndex}
                                 />
                               </div>
@@ -1845,9 +1948,14 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                   })
                 ) : (
                   renderRows.map((row, rowIdx) => {
-                    const matchingHunk = row.diffIndices
-                      .map((idx) => hunkByStartDiffIdx.get(idx))
-                      .find((item) => item !== undefined)
+                    let matchingHunk: { hunk: DiffHunk; hunkIdx: number } | undefined
+                    for (let d = 0; d < row.diffIndices.length; d++) {
+                      const found = hunkByStartDiffIdx.get(row.diffIndices[d])
+                      if (found) {
+                        matchingHunk = found
+                        break
+                      }
+                    }
                     const isRowSelected = row.diffIndices.some((idx) => selectedLineIndices.has(idx))
 
                     return (
@@ -1930,9 +2038,11 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                               text={row.beforeLine ?? ''}
                               side="left"
                               spans={row.oldSpans}
+                              tokens={row.beforeNum ? beforeCodeLines[row.beforeNum - 1]?.tokens : undefined}
+                              codeView={codeViewEnabled}
                               type="delete"
                               searchQuery={searchQuery}
-                              rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) || []}
+                              rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) ?? EMPTY_MATCHES}
                               activeMatchIndex={activeMatchIndex}
                             />
                           </div>
@@ -1942,9 +2052,11 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                               text={row.afterLine ?? ''}
                               side="right"
                               spans={row.newSpans}
+                              tokens={row.afterNum ? afterCodeLines[row.afterNum - 1]?.tokens : undefined}
+                              codeView={codeViewEnabled}
                               type="add"
                               searchQuery={searchQuery}
-                              rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) || []}
+                              rowMatches={matchesByRowIdx.get(row.rowIdx ?? 0) ?? EMPTY_MATCHES}
                               activeMatchIndex={activeMatchIndex}
                             />
                           </div>
