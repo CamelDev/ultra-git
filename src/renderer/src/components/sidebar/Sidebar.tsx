@@ -530,10 +530,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     return { success: true }
   }
 
+  const isGitLockErrorMsg = (errorMsg: string) =>
+    errorMsg.includes("index.lock': File exists") ||
+    (errorMsg.includes('Unable to create') && errorMsg.includes('index.lock')) ||
+    errorMsg.includes('Another git process seems to be running') ||
+    (errorMsg.includes('Unable to create') && errorMsg.includes('.lock'));
+
   const handleGitCheckoutError = async (repoPath: string, errorMsg: string, retryAction: () => Promise<void>) => {
-    const isLockError =
-      errorMsg.includes("index.lock': File exists") ||
-      (errorMsg.includes('Unable to create') && errorMsg.includes('index.lock'));
+    const isLockError = isGitLockErrorMsg(errorMsg);
 
     if (isLockError) {
       const dialogRes = await window.api.app.showMessageBox({
@@ -650,22 +654,46 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
 
   const handleMergeConfirm = async (strategy: MergeStrategy) => {
     if (!activeRepo) return
-    if (mergeOperation === "merge") {
-      const res = await window.api.git.merge(activeRepo.path, mergeTargetBranch, strategy)
-      if (!res.success) throw new Error(res.error || "Merge failed")
-      if (res.data?.hadConflicts) {
-        setMergeModalOpen(false)
-        onMergeConflicts?.(res.data.conflictedFiles, false)
+    const isRebase = mergeOperation !== "merge"
+    const executeOp = async () => {
+      return isRebase
+        ? await window.api.git.rebase(activeRepo.path, mergeTargetBranch)
+        : await window.api.git.merge(activeRepo.path, mergeTargetBranch, strategy)
+    }
+
+    let res = await executeOp()
+    if (!res.success && isGitLockErrorMsg(res.error || '')) {
+      const opName = isRebase ? 'rebase' : 'merge'
+      const dialogRes = await window.api.app.showMessageBox({
+        type: 'warning',
+        title: 'Git Lock File Detected',
+        message:
+          `Unable to ${opName} because a Git lock file ('.git/index.lock') exists.\n\n` +
+          `Another Git command may be running, or a previous command crashed. Would you like to force remove the lock file and retry?`,
+        buttons: ['Cancel', 'Retry', 'Force Remove Lock & Retry'],
+        defaultId: 2,
+        cancelId: 0
+      })
+
+      if (dialogRes.success && dialogRes.response === 1) {
+        res = await executeOp()
+      } else if (dialogRes.success && dialogRes.response === 2) {
+        const removeRes = await window.api.git.removeIndexLock(activeRepo.path)
+        if (removeRes.success) {
+          res = await executeOp()
+        } else {
+          throw new Error(`Could not delete '.git/index.lock': ${removeRes.error || 'Unknown error'}`)
+        }
+      } else {
         return
       }
-    } else {
-      const res = await window.api.git.rebase(activeRepo.path, mergeTargetBranch)
-      if (!res.success) throw new Error(res.error || "Rebase failed")
-      if (res.data?.hadConflicts) {
-        setMergeModalOpen(false)
-        onMergeConflicts?.(res.data.conflictedFiles, true)
-        return
-      }
+    }
+
+    if (!res.success) throw new Error(res.error || (isRebase ? "Rebase failed" : "Merge failed"))
+    if (res.data?.hadConflicts) {
+      setMergeModalOpen(false)
+      onMergeConflicts?.(res.data.conflictedFiles, isRebase)
+      return
     }
     setMergeModalOpen(false)
     await refreshRepo(activeRepo.id)

@@ -149,6 +149,12 @@ function getGitInstance(repoPath: string): SimpleGit {
       maxConcurrentProcesses: 6,
       trimmed: false,
       config: ['core.editor=true'],
+      spawnOptions: {
+        env: {
+          ...process.env,
+          GIT_OPTIONAL_LOCKS: '0'
+        }
+      },
       unsafe: {
         allowUnsafeCredentialHelper: true,
         allowUnsafeEditor: true
@@ -160,19 +166,22 @@ function getGitInstance(repoPath: string): SimpleGit {
 }
 
 /**
- * Helper to check if an error is an index.lock collision from Git.
+ * Helper to check if an error is a Git lock contention error (index.lock, refs, HEAD, etc.).
  */
 export function isIndexLockError(err: any): boolean {
   if (!err) return false;
   const message = typeof err === 'string' ? err : (err.message || String(err));
   return (
     message.includes("index.lock': File exists") ||
-    (message.includes('Unable to create') && message.includes('index.lock'))
+    (message.includes('Unable to create') && message.includes('index.lock')) ||
+    message.includes('Another git process seems to be running') ||
+    (message.includes('Unable to create') && message.includes('.lock')) ||
+    (message.includes('cannot lock ref') && message.includes('File exists'))
   );
 }
 
 /**
- * Retries a Git operation if it fails due to an index.lock contention error.
+ * Retries a Git operation if it fails due to an index.lock or Git lock contention error.
  */
 export async function withGitLockRetry<T>(
   fn: () => Promise<T>,
@@ -187,11 +196,39 @@ export async function withGitLockRetry<T>(
       attempt++;
       if (attempt <= maxRetries && isIndexLockError(err)) {
         const delay = initialDelayMs * Math.pow(2, attempt - 1);
-        console.warn(`[gitService] index.lock collision encountered. Retrying attempt ${attempt}/${maxRetries} after ${delay}ms...`);
+        console.warn(`[gitService] Git lock collision encountered. Retrying attempt ${attempt}/${maxRetries} after ${delay}ms...`);
         await new Promise((res) => setTimeout(res, delay));
       } else {
         throw err;
       }
+    }
+  }
+}
+
+const repoOperationQueues = new Map<string, Promise<unknown>>();
+
+/**
+ * Ensures sequential execution of mutating Git operations for a specific repository path.
+ */
+export async function withRepoLock<T>(repoPath: string, action: () => Promise<T>): Promise<T> {
+  const currentQueue = repoOperationQueues.get(repoPath) || Promise.resolve();
+  let release: () => void;
+  const nextLock = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  repoOperationQueues.set(
+    repoPath,
+    currentQueue.catch(() => {}).then(() => nextLock)
+  );
+
+  await currentQueue.catch(() => {});
+  try {
+    return await action();
+  } finally {
+    release!();
+    if (repoOperationQueues.get(repoPath) === nextLock) {
+      repoOperationQueues.delete(repoPath);
     }
   }
 }
@@ -497,94 +534,95 @@ export const gitService = {
    * step-attributed results. Never throws for expected git outcomes.
    */
   smartPull: async (repoPath: string, options?: SmartPullOptions): Promise<PullResult> => {
-    const git = getGitInstance(repoPath);
-    const opts: Required<SmartPullOptions> = {
-      strategy: options?.strategy ?? 'merge',
-      stash: options?.stash ?? false,
-      stashIncludeUntracked: options?.stashIncludeUntracked ?? true,
-      prune: options?.prune ?? true
-    };
+    return await withRepoLock(repoPath, async () => {
+      const git = getGitInstance(repoPath);
+      const opts: Required<SmartPullOptions> = {
+        strategy: options?.strategy ?? 'merge',
+        stash: options?.stash ?? false,
+        stashIncludeUntracked: options?.stashIncludeUntracked ?? true,
+        prune: options?.prune ?? true
+      };
 
-    // Upstream must exist.
-    let upstream = '';
-    try {
-      upstream = (await git.raw(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])).trim();
-    } catch (e) {
-      return { status: 'failed', errorCode: 'NO_UPSTREAM', stashedChanges: false, strategy: opts.strategy };
-    }
-
-    // Refresh remote-tracking refs, then check whether there is anything to do.
-    try {
-      await git.fetch(opts.prune ? { '--prune': null } : {});
-    } catch (e) {
-      // Non-fatal: the pull itself will surface a proper typed error below.
-      console.warn('smartPull: fetch before pull failed (continuing)', e);
-    }
-    let behind = 0;
-    try {
-      const countsRaw = await git.raw(['rev-list', '--left-right', '--count', `HEAD...${upstream}`]);
-      behind = parseInt(countsRaw.trim().split(/\s+/)[1] || '0', 10) || 0;
-    } catch (e) {
-      console.warn('smartPull: failed to compute behind count', e);
-    }
-    if (behind === 0) {
-      return { status: 'up-to-date', stashedChanges: false, strategy: opts.strategy };
-    }
-
-    // Step 1: stash local changes (app-managed autostash).
-    let stashed = false;
-    if (opts.stash) {
+      // Upstream must exist.
+      let upstream = '';
       try {
-        const args = ['stash', 'push'];
-        if (opts.stashIncludeUntracked) args.push('--include-untracked');
-        args.push('-m', SMART_PULL_STASH_MESSAGE);
-        const out = await git.raw(args);
-        // git prints "No local changes to save" and creates nothing in that case.
-        stashed = !out.includes('No local changes to save');
-      } catch (err: any) {
-        return {
-          status: 'failed',
-          errorCode: 'STASH_FAILED',
-          stashedChanges: false,
-          strategy: opts.strategy,
-          detail: err?.message || String(err)
-        };
-      }
-    }
-
-    // Restores the pre-pull stash after a failed pull step (best effort).
-    // Returns true when the stash could NOT be cleanly restored and still exists.
-    const restoreStash = async (): Promise<boolean> => {
-      if (!stashed) return false;
-      try {
-        const popRes = await gitService.stashPop(repoPath, 0);
-        if (popRes.hadConflicts) return true;
-        stashed = false;
+        upstream = (await git.raw(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])).trim();
       } catch (e) {
-        console.warn('smartPull: failed to restore pre-pull stash after error', e);
-        return true; // stash still exists
+        return { status: 'failed', errorCode: 'NO_UPSTREAM', stashedChanges: false, strategy: opts.strategy };
       }
-      return false;
-    };
 
-    // Step 2: pull with the chosen integration strategy.
-    const pullArgs = ['pull', '--no-edit'];
-    if (opts.strategy === 'rebase') pullArgs.push('--rebase');
-    else if (opts.strategy === 'ff-only') pullArgs.push('--ff-only');
-    else pullArgs.push('--no-rebase');
-    if (opts.prune) pullArgs.push('--prune');
+      // Refresh remote-tracking refs, then check whether there is anything to do.
+      try {
+        await git.fetch(opts.prune ? { '--prune': null } : {});
+      } catch (e) {
+        // Non-fatal: the pull itself will surface a proper typed error below.
+        console.warn('smartPull: fetch before pull failed (continuing)', e);
+      }
+      let behind = 0;
+      try {
+        const countsRaw = await git.raw(['rev-list', '--left-right', '--count', `HEAD...${upstream}`]);
+        behind = parseInt(countsRaw.trim().split(/\s+/)[1] || '0', 10) || 0;
+      } catch (e) {
+        console.warn('smartPull: failed to compute behind count', e);
+      }
+      if (behind === 0) {
+        return { status: 'up-to-date', stashedChanges: false, strategy: opts.strategy };
+      }
 
-    // IMPORTANT: simple-git's raw() RESOLVES (does not throw) when git exits
-    // with code 1 — which is exactly how merge/rebase conflicts and dirty-tree
-    // refusals report themselves. Classify from BOTH the output text and the
-    // repository state, not only from thrown errors.
-    let pullOutput = '';
-    let pullError: any = null;
-    try {
-      pullOutput = await git.raw(pullArgs);
-    } catch (err: any) {
-      pullError = err;
-    }
+      // Step 1: stash local changes (app-managed autostash).
+      let stashed = false;
+      if (opts.stash) {
+        try {
+          const args = ['stash', 'push'];
+          if (opts.stashIncludeUntracked) args.push('--include-untracked');
+          args.push('-m', SMART_PULL_STASH_MESSAGE);
+          const out = await withGitLockRetry(() => git.raw(args));
+          // git prints "No local changes to save" and creates nothing in that case.
+          stashed = !out.includes('No local changes to save');
+        } catch (err: any) {
+          return {
+            status: 'failed',
+            errorCode: 'STASH_FAILED',
+            stashedChanges: false,
+            strategy: opts.strategy,
+            detail: err?.message || String(err)
+          };
+        }
+      }
+
+      // Restores the pre-pull stash after a failed pull step (best effort).
+      // Returns true when the stash could NOT be cleanly restored and still exists.
+      const restoreStash = async (): Promise<boolean> => {
+        if (!stashed) return false;
+        try {
+          const popRes = await gitService.stashPop(repoPath, 0);
+          if (popRes.hadConflicts) return true;
+          stashed = false;
+        } catch (e) {
+          console.warn('smartPull: failed to restore pre-pull stash after error', e);
+          return true; // stash still exists
+        }
+        return false;
+      };
+
+      // Step 2: pull with the chosen integration strategy.
+      const pullArgs = ['pull', '--no-edit'];
+      if (opts.strategy === 'rebase') pullArgs.push('--rebase');
+      else if (opts.strategy === 'ff-only') pullArgs.push('--ff-only');
+      else pullArgs.push('--no-rebase');
+      if (opts.prune) pullArgs.push('--prune');
+
+      // IMPORTANT: simple-git's raw() RESOLVES (does not throw) when git exits
+      // with code 1 — which is exactly how merge/rebase conflicts and dirty-tree
+      // refusals report themselves. Classify from BOTH the output text and the
+      // repository state, not only from thrown errors.
+      let pullOutput = '';
+      let pullError: any = null;
+      try {
+        pullOutput = await withGitLockRetry(() => git.raw(pullArgs));
+      } catch (err: any) {
+        pullError = err;
+      }
     const msg: string = [pullError?.message, pullOutput].filter(Boolean).join('\n');
 
     if (msg.includes('Not possible to fast-forward') || msg.includes('non-fast-forward') || msg.includes('divergent branches')) {
@@ -702,6 +740,7 @@ export const gitService = {
     }
 
     return { status: 'success', stashedChanges: false, strategy: opts.strategy };
+    });
   },
 
   push: async (repoPath: string, force?: boolean, remote?: string, branch?: string, setUpstream?: boolean) => {
@@ -768,27 +807,29 @@ export const gitService = {
 
   checkout: async (repoPath: string, branchName: string) => {
     const git = getGitInstance(repoPath);
-    return await withGitLockRetry(() => git.checkout(branchName));
+    return await withRepoLock(repoPath, () => withGitLockRetry(() => git.checkout(branchName)));
   },
 
   createBranch: async (repoPath: string, branchName: string, startPoint?: string) => {
     console.log('[gitService.createBranch] called with:', { repoPath, branchName, startPoint });
     const git = getGitInstance(repoPath);
-    return await withGitLockRetry(() => {
+    return await withRepoLock(repoPath, () => withGitLockRetry(() => {
       if (startPoint) {
         console.log(`[gitService.createBranch] Creating branch ${branchName} from startPoint: ${startPoint}`);
         return git.checkoutBranch(branchName, startPoint);
       }
       console.log(`[gitService.createBranch] Creating branch ${branchName} from HEAD`);
       return git.checkoutLocalBranch(branchName);
-    });
+    }));
   },
 
   deleteBranch: async (repoPath: string, branchName: string, force?: boolean) => {
     const git = getGitInstance(repoPath);
     const args = ['branch', force ? '-D' : '-d', branchName];
-    await git.raw(args);
-    return { success: true };
+    return await withRepoLock(repoPath, () => withGitLockRetry(async () => {
+      await git.raw(args);
+      return { success: true };
+    }));
   },
 
   renameBranch: async (repoPath: string, oldName: string, newName: string) => {
@@ -1675,100 +1716,124 @@ export const gitService = {
       args.push('--squash');
     }
     args.push('--no-edit', sourceBranch);
-    try {
-      await git.raw(args);
-      return { hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
-    } catch (err: any) {
-      const msg: string = err.message || '';
-      if (msg.includes('CONFLICT') || msg.includes('Automatic merge failed')) {
-        const conflictedFiles = await gitService.getConflictedFiles(repoPath);
-        return { hadConflicts: true, conflictedFiles };
-      }
-      throw err;
-    }
+    return await withRepoLock(repoPath, () =>
+      withGitLockRetry(async () => {
+        try {
+          await git.raw(args);
+          return { hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
+        } catch (err: any) {
+          const msg: string = err.message || '';
+          if (msg.includes('CONFLICT') || msg.includes('Automatic merge failed')) {
+            const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+            return { hadConflicts: true, conflictedFiles };
+          }
+          throw err;
+        }
+      })
+    );
   },
 
   rebase: async (repoPath: string, ontoBranch: string) => {
     const git = getGitInstance(repoPath);
-    try {
-      await git.raw(['-c', 'core.editor=true', 'rebase', ontoBranch]);
-      return { hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
-    } catch (err: any) {
-      const msg: string = err.message || '';
-      if (msg.includes('CONFLICT') || msg.includes('conflict')) {
-        const conflictedFiles = await gitService.getConflictedFiles(repoPath);
-        return { hadConflicts: true, conflictedFiles };
-      }
-      throw err;
-    }
+    return await withRepoLock(repoPath, () =>
+      withGitLockRetry(async () => {
+        try {
+          await git.raw(['-c', 'core.editor=true', 'rebase', ontoBranch]);
+          return { hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
+        } catch (err: any) {
+          const msg: string = err.message || '';
+          if (msg.includes('CONFLICT') || msg.includes('conflict')) {
+            const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+            return { hadConflicts: true, conflictedFiles };
+          }
+          throw err;
+        }
+      })
+    );
   },
 
   abortMerge: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
-    await git.raw(['merge', '--abort']);
-    return { success: true };
+    return await withRepoLock(repoPath, () =>
+      withGitLockRetry(async () => {
+        await git.raw(['merge', '--abort']);
+        return { success: true };
+      })
+    );
   },
 
   abortRebase: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
-    await git.raw(['rebase', '--abort']);
-    return { success: true };
+    return await withRepoLock(repoPath, () =>
+      withGitLockRetry(async () => {
+        await git.raw(['rebase', '--abort']);
+        return { success: true };
+      })
+    );
   },
 
   continueRebase: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
-    let output = '';
-    let rawError: any = null;
-    try {
-      output = await git.raw(['-c', 'core.editor=true', 'rebase', '--continue']);
-    } catch (err: any) {
-      rawError = err;
-    }
-    const msg: string = [rawError?.message, output].filter(Boolean).join('\n');
+    return await withRepoLock(repoPath, () =>
+      withGitLockRetry(async () => {
+        let output = '';
+        let rawError: any = null;
+        try {
+          output = await git.raw(['-c', 'core.editor=true', 'rebase', '--continue']);
+        } catch (err: any) {
+          rawError = err;
+        }
+        const msg: string = [rawError?.message, output].filter(Boolean).join('\n');
 
-    if (
-      msg.includes('is now empty') ||
-      msg.includes('No changes - did you forget') ||
-      msg.includes('patch is empty')
-    ) {
-      throw new Error("The current commit is empty. Click 'Skip Commit' to continue the rebase.");
-    }
+        if (
+          msg.includes('is now empty') ||
+          msg.includes('No changes - did you forget') ||
+          msg.includes('patch is empty')
+        ) {
+          throw new Error("The current commit is empty. Click 'Skip Commit' to continue the rebase.");
+        }
 
-    const mergeStatus = await gitService.getMergeStatus(repoPath);
-    if (mergeStatus.inProgress && mergeStatus.isRebase) {
-      const conflictedFiles = await gitService.getConflictedFiles(repoPath);
-      if (conflictedFiles.length > 0) {
-        return { success: true, hadConflicts: true, conflictedFiles };
-      }
-    }
+        const mergeStatus = await gitService.getMergeStatus(repoPath);
+        if (mergeStatus.inProgress && mergeStatus.isRebase) {
+          const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+          if (conflictedFiles.length > 0) {
+            return { success: true, hadConflicts: true, conflictedFiles };
+          }
+        }
 
-    if (rawError) {
-      throw rawError;
-    }
+        if (rawError) {
+          throw rawError;
+        }
 
-    return { success: true, hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
+        return { success: true, hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
+      })
+    );
   },
 
   skipRebase: async (repoPath: string) => {
     const git = getGitInstance(repoPath);
-    let output = '';
-    let rawError: any = null;
-    try {
-      output = await git.raw(['-c', 'core.editor=true', 'rebase', '--skip']);
-    } catch (err: any) {
-      rawError = err;
-    }
-    const mergeStatus = await gitService.getMergeStatus(repoPath);
-    if (mergeStatus.inProgress && mergeStatus.isRebase) {
-      const conflictedFiles = await gitService.getConflictedFiles(repoPath);
-      if (conflictedFiles.length > 0) {
-        return { success: true, hadConflicts: true, conflictedFiles };
-      }
-    }
-    if (rawError && !mergeStatus.inProgress) {
-      throw rawError;
-    }
-    return { success: true, hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
+    return await withRepoLock(repoPath, () =>
+      withGitLockRetry(async () => {
+        let output = '';
+        let rawError: any = null;
+        try {
+          output = await git.raw(['-c', 'core.editor=true', 'rebase', '--skip']);
+        } catch (err: any) {
+          rawError = err;
+        }
+        const mergeStatus = await gitService.getMergeStatus(repoPath);
+        if (mergeStatus.inProgress && mergeStatus.isRebase) {
+          const conflictedFiles = await gitService.getConflictedFiles(repoPath);
+          if (conflictedFiles.length > 0) {
+            return { success: true, hadConflicts: true, conflictedFiles };
+          }
+        }
+        if (rawError && !mergeStatus.inProgress) {
+          throw rawError;
+        }
+        return { success: true, hadConflicts: false, conflictedFiles: [] as ConflictedFile[] };
+      })
+    );
   },
 
   getConflictedFiles: async (repoPath: string): Promise<ConflictedFile[]> => {

@@ -10,7 +10,7 @@ import { fixPath } from './env'
 import { gitService } from './git'
 import { conflictService, ConflictServiceError } from './conflictService'
 import { partialPatchService, PartialPatchError } from './partialPatchService'
-import { watchDirectory, stopWatching } from './watcher'
+import { watchDirectory, stopWatching, pauseWatching, resumeWatching } from './watcher'
 import { registerUpdateHandlers, scheduleUpdateChecks } from './update'
 
 // Fix the PATH on macOS and Linux before spawning child processes
@@ -163,11 +163,14 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('git:smartPull', async (_, repoPath, options) => {
+    pauseWatching()
     try {
       const data = await gitService.smartPull(repoPath, options)
       return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
+    } finally {
+      resumeWatching(true)
     }
   })
 
@@ -658,56 +661,74 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('git:merge', async (_, repoPath, sourceBranch, strategy) => {
+    pauseWatching()
     try {
       const data = await gitService.merge(repoPath, sourceBranch, strategy)
       return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
+    } finally {
+      resumeWatching(true)
     }
   })
 
   ipcMain.handle('git:rebase', async (_, repoPath, ontoBranch) => {
+    pauseWatching()
     try {
       const data = await gitService.rebase(repoPath, ontoBranch)
       return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
+    } finally {
+      resumeWatching(true)
     }
   })
 
   ipcMain.handle('git:abortMerge', async (_, repoPath) => {
+    pauseWatching()
     try {
       const data = await gitService.abortMerge(repoPath)
       return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
+    } finally {
+      resumeWatching(true)
     }
   })
 
   ipcMain.handle('git:abortRebase', async (_, repoPath) => {
+    pauseWatching()
     try {
       const data = await gitService.abortRebase(repoPath)
       return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
+    } finally {
+      resumeWatching(true)
     }
   })
 
   ipcMain.handle('git:continueRebase', async (_, repoPath) => {
+    pauseWatching()
     try {
       const data = await gitService.continueRebase(repoPath)
       return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
+    } finally {
+      resumeWatching(true)
     }
   })
 
   ipcMain.handle('git:skipRebase', async (_, repoPath) => {
+    pauseWatching()
     try {
       const data = await gitService.skipRebase(repoPath)
       return { success: true, data }
     } catch (error: any) {
       return { success: false, error: error.message }
+    } finally {
+      resumeWatching(true)
     }
   })
 
