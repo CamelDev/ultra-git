@@ -4,6 +4,7 @@ import {
   resolveCodeLanguage,
   resolveHunkChangeType,
   resolveRenameLanguages,
+  SUPPORTED_LANGUAGES,
   tokenizeCode
 } from '../codeView'
 
@@ -53,6 +54,56 @@ describe('complete-source tokenization', () => {
     const elapsed = performance.now() - start
     expect(lines.length).toBe(3000)
     expect(elapsed).toBeLessThan(250) // Should easily run in ~20-50ms
+  })
+
+  test('tokenizes CSS accurately with unified hex colors, properties, and selectors', () => {
+    const cssSource = [
+      '--code-view-empty-bg: #141720;',
+      '--code-border-add: #10b981;',
+      '.diff-transaction-btn:hover:not(:disabled) {',
+      '  background-color: var(--hover);',
+      '  opacity: 0.35;',
+      '}'
+    ].join('\n')
+
+    const lines = tokenizeCode(cssSource, 'css')
+
+    // Line 0: --code-view-empty-bg is property, #141720 is single number/color token
+    const line0Prop = lines[0].tokens.find((t) => lines[0].text.slice(t.start, t.end) === '--code-view-empty-bg')
+    expect(line0Prop?.type).toBe('property')
+    const line0Hex = lines[0].tokens.find((t) => lines[0].text.slice(t.start, t.end) === '#141720')
+    expect(line0Hex).toBeDefined()
+    expect(line0Hex?.type).toBe('number')
+
+    // Line 1: #10b981 is single token (not split into 10 and b981)
+    const line1Hex = lines[1].tokens.find((t) => lines[1].text.slice(t.start, t.end) === '#10b981')
+    expect(line1Hex).toBeDefined()
+    expect(line1Hex?.type).toBe('number')
+    expect(lines[1].tokens.some((t) => lines[1].text.slice(t.start, t.end) === '10')).toBe(false)
+    expect(lines[1].tokens.some((t) => lines[1].text.slice(t.start, t.end) === 'b981')).toBe(false)
+
+    // Line 2: selector
+    const line2Sel = lines[2].tokens.find((t) => t.type === 'selector')
+    expect(line2Sel).toBeDefined()
+
+    // Line 3: background-color property, var function, --hover variable
+    const line3Prop = lines[3].tokens.find((t) => lines[3].text.slice(t.start, t.end) === 'background-color')
+    expect(line3Prop?.type).toBe('property')
+    const line3Var = lines[3].tokens.find((t) => lines[3].text.slice(t.start, t.end) === 'var')
+    expect(line3Var?.type).toBe('function')
+
+    // Line 4: opacity property, 0.35 number
+    const line4Prop = lines[4].tokens.find((t) => lines[4].text.slice(t.start, t.end) === 'opacity')
+    expect(line4Prop?.type).toBe('property')
+    const line4Num = lines[4].tokens.find((t) => lines[4].text.slice(t.start, t.end) === '0.35')
+    expect(line4Num?.type).toBe('number')
+  })
+
+  test('exposes all supported languages for the dropdown selector', () => {
+    expect(SUPPORTED_LANGUAGES.some((l) => l.id === 'css' && l.label === 'CSS')).toBe(true)
+    expect(SUPPORTED_LANGUAGES.some((l) => l.id === 'typescript' && l.label === 'TypeScript')).toBe(true)
+    expect(SUPPORTED_LANGUAGES.some((l) => l.id === 'python' && l.label === 'Python')).toBe(true)
+    expect(SUPPORTED_LANGUAGES.some((l) => l.id === 'text' && l.label === 'Plain Text')).toBe(true)
   })
 })
 

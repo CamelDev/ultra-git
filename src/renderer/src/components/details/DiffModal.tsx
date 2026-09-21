@@ -35,6 +35,7 @@ import { ImageDiffView } from './ImageDiffView'
 import { useUndoStore } from '../../store/useUndoStore'
 import type { PartialDiff, PartialPatchTarget, PartialSelection } from '../../../../shared/conflicts'
 import {
+  CodeLanguage,
   CodeToken,
   HunkChangeType,
   isRasterImage,
@@ -43,6 +44,7 @@ import {
   resolveCodeLanguage,
   resolveHunkChangeType,
   resolveRenameLanguages,
+  SUPPORTED_LANGUAGES,
   tokenizeCode,
   writeCodeViewPreference
 } from './codeView'
@@ -403,6 +405,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     return !!p && (isRasterImage(p) || isSvg(p))
   })
   const [codeViewEnabled, setCodeViewEnabled] = useState(() => readCodeViewPreference(typeof window === 'undefined' ? undefined : window.localStorage))
+  const [languageOverride, setLanguageOverride] = useState<CodeLanguage | 'auto'>('auto')
   const viewMode: 'chunks' | 'full' | 'preview' = isPreviewActive ? 'preview' : diffExtent
   const [activeChunkIndex, setActiveChunkIndex] = useState(0)
   const [selectedLineIndices, setSelectedLineIndices] = useState<Set<number>>(new Set())
@@ -522,7 +525,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     !isBinary &&
     !!currentFilePath &&
     currentFilePath !== 'No file selected' &&
-    resolveCodeLanguage(currentFilePath) !== 'text'
+    (resolveCodeLanguage(currentFilePath) !== 'text' || languageOverride !== 'auto')
 
   const isPreviewable = isMarkdown || isImage
 
@@ -533,6 +536,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     if (previousFilePathRef.current === currentFilePath) return
     const isInitialFile = previousFilePathRef.current === undefined
     previousFilePathRef.current = currentFilePath
+    setLanguageOverride('auto')
     if (isRaster || isSvgSource) {
       setPreviewActive(true)
     } else if (!isMarkdown && !(isInitialFile && initialViewMode === 'preview')) {
@@ -625,8 +629,10 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     () => resolveRenameLanguages(currentOldPath || currentFilePath, currentFilePath),
     [currentOldPath, currentFilePath]
   )
-  const beforeCodeLines = useMemo(() => tokenizeCode(rawBefore, codeLanguages.before), [rawBefore, codeLanguages.before])
-  const afterCodeLines = useMemo(() => tokenizeCode(rawAfter, codeLanguages.after), [rawAfter, codeLanguages.after])
+  const activeBeforeLanguage = languageOverride === 'auto' ? codeLanguages.before : languageOverride
+  const activeAfterLanguage = languageOverride === 'auto' ? codeLanguages.after : languageOverride
+  const beforeCodeLines = useMemo(() => tokenizeCode(rawBefore, activeBeforeLanguage), [rawBefore, activeBeforeLanguage])
+  const afterCodeLines = useMemo(() => tokenizeCode(rawAfter, activeAfterLanguage), [rawAfter, activeAfterLanguage])
   const selectedRowCount = useMemo(
     () => renderRows.filter((row) => row.diffIndices.some((idx) => selectedLineIndices.has(idx))).length,
     [renderRows, selectedLineIndices]
@@ -1513,6 +1519,24 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                   <span>Code view</span>
                 </button>
               )}
+              {supportsCodeView && codeViewEnabled && viewMode !== 'preview' && (
+                <select
+                  className="diff-lang-select"
+                  value={languageOverride}
+                  onChange={(e) => setLanguageOverride(e.target.value as CodeLanguage | 'auto')}
+                  title="Syntax highlighting language"
+                  data-testid="diff-language-select"
+                >
+                  <option value="auto">
+                    Auto ({SUPPORTED_LANGUAGES.find((l) => l.id === codeLanguages.after)?.label ?? 'Text'})
+                  </option>
+                  {SUPPORTED_LANGUAGES.map((lang) => (
+                    <option key={lang.id} value={lang.id}>
+                      {lang.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                 <FileText size={16} style={{ color: 'var(--accent-light)', flexShrink: 0 }} />
                 <div
@@ -1523,6 +1547,9 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                     fontWeight: 600,
                     fontSize: '14px',
                     wordBreak: 'break-all',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                     fontFamily: 'JetBrains Mono, monospace',
                     userSelect: 'text',
                     WebkitUserSelect: 'text',

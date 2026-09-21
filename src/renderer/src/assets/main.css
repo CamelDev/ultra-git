@@ -49,6 +49,11 @@
   --code-token-keyword: #c792ea;
   --code-token-number: #f78c6c;
   --code-token-property: #82aaff;
+  --code-token-function: #82aaff;
+  --code-token-punctuation: #89ddff;
+  --code-token-operator: #89ddff;
+  --code-token-selector: #ffcb6b;
+  --code-token-variable: #eeffff;
   --scrollbar-thumb: rgba(255, 255, 255, 0.45);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.7);
   --scrollbar-track: rgba(255, 255, 255, 0.06);
@@ -102,6 +107,11 @@
   --code-token-keyword: #7c3aed;
   --code-token-number: #c2410c;
   --code-token-property: #1d4ed8;
+  --code-token-function: #2563eb;
+  --code-token-punctuation: #475569;
+  --code-token-operator: #0284c7;
+  --code-token-selector: #d97706;
+  --code-token-variable: #0f172a;
   --scrollbar-thumb: rgba(15, 23, 42, 0.45);
   --scrollbar-thumb-hover: rgba(15, 23, 42, 0.7);
   --scrollbar-track: rgba(15, 23, 42, 0.06);
@@ -1686,6 +1696,30 @@ mark.diff-search-highlight.active {
   color: var(--text-primary);
 }
 
+.diff-lang-select {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+  outline: none;
+  height: 25px;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.diff-lang-select:hover {
+  border-color: var(--accent);
+  background: var(--bg-secondary);
+}
+
+.diff-lang-select:focus {
+  border-color: var(--accent);
+}
+
 .diff-table.code-view .diff-row,
 .diff-table.code-view .diff-row.type-add,
 .diff-table.code-view .diff-row.type-delete {
@@ -1798,6 +1832,11 @@ mark.diff-search-highlight.active {
 .diff-token.token-keyword { color: var(--code-token-keyword); font-weight: 600; }
 .diff-token.token-number { color: var(--code-token-number); }
 .diff-token.token-property { color: var(--code-token-property); }
+.diff-token.token-function { color: var(--code-token-function); }
+.diff-token.token-punctuation { color: var(--code-token-punctuation); opacity: 0.85; }
+.diff-token.token-operator { color: var(--code-token-operator); }
+.diff-token.token-selector { color: var(--code-token-selector); }
+.diff-token.token-variable { color: var(--code-token-variable); }
 
 /* Animations */
 @keyframes fadeIn {

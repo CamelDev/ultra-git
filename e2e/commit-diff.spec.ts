@@ -73,7 +73,7 @@ test.describe('Commit Changed Files and Split Diff Modal', () => {
       await expect(smallModCommit).toContainText('Modify sample.txt')
 
       // Select the commit
-      await smallModCommit.click()
+      await smallModCommit.locator('.commit-message').click()
       await page.waitForTimeout(500)
 
       // Verify commit highlight

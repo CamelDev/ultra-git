@@ -1,12 +1,27 @@
+import Prism from './prismSetup'
+
 export type CodeLanguage =
   | 'java' | 'csharp' | 'javascript' | 'typescript' | 'python' | 'go' | 'rust'
   | 'cpp' | 'html' | 'css' | 'json' | 'yaml' | 'markdown' | 'bash' | 'sql'
   | 'xml' | 'text'
 
+export type CodeTokenType =
+  | 'comment'
+  | 'string'
+  | 'keyword'
+  | 'number'
+  | 'property'
+  | 'function'
+  | 'punctuation'
+  | 'operator'
+  | 'selector'
+  | 'variable'
+  | 'plain'
+
 export interface CodeToken {
   start: number
   end: number
-  type: 'comment' | 'string' | 'keyword' | 'number' | 'property' | 'plain'
+  type: CodeTokenType
 }
 
 export interface CodeLine {
@@ -14,8 +29,31 @@ export interface CodeLine {
   tokens: CodeToken[]
 }
 
-// MDX intentionally uses the Markdown grammar and C headers use the C++ grammar. Unknown names
-// stay text; the viewer never guesses a language from source content.
+export interface LanguageOption {
+  id: CodeLanguage
+  label: string
+}
+
+export const SUPPORTED_LANGUAGES: LanguageOption[] = [
+  { id: 'css', label: 'CSS' },
+  { id: 'typescript', label: 'TypeScript' },
+  { id: 'javascript', label: 'JavaScript' },
+  { id: 'json', label: 'JSON' },
+  { id: 'html', label: 'HTML' },
+  { id: 'xml', label: 'XML' },
+  { id: 'python', label: 'Python' },
+  { id: 'rust', label: 'Rust' },
+  { id: 'go', label: 'Go' },
+  { id: 'cpp', label: 'C++' },
+  { id: 'csharp', label: 'C#' },
+  { id: 'java', label: 'Java' },
+  { id: 'yaml', label: 'YAML' },
+  { id: 'markdown', label: 'Markdown' },
+  { id: 'bash', label: 'Bash / Shell' },
+  { id: 'sql', label: 'SQL' },
+  { id: 'text', label: 'Plain Text' }
+]
+
 const extensionLanguages: Array<[RegExp, CodeLanguage]> = [
   [/\.(?:tsx)$/i, 'typescript'], [ /\.(?:mts|cts|ts)$/i, 'typescript'],
   [/\.(?:mjs|cjs|jsx|js)$/i, 'javascript'], [/\.(?:java)$/i, 'java'],
@@ -26,16 +64,24 @@ const extensionLanguages: Array<[RegExp, CodeLanguage]> = [
   [/\.(?:bash|zsh|sh)$/i, 'bash'], [/\.(?:sql)$/i, 'sql'], [/\.(?:svg|xml)$/i, 'xml']
 ]
 
-const KEYWORDS: Record<CodeLanguage, Set<string>> = {
-  java: new Set('abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while'.split(' ')),
-  csharp: new Set('abstract as base bool break byte case catch char class const continue decimal default delegate do double else enum event explicit extern false finally fixed float for foreach goto if implicit in int interface internal is lock long namespace new null object operator out override params private protected public readonly ref return sbyte sealed short sizeof stackalloc static string struct switch this throw true try typeof uint ulong unchecked unsafe ushort using virtual void volatile while'.split(' ')),
-  javascript: new Set('as async await break case catch class const continue debugger default delete do else export extends false finally for from function get if import in instanceof let new null of return set static super switch this throw true try typeof undefined var void while with yield'.split(' ')),
-  typescript: new Set('abstract any as asserts async await bigint boolean break case catch class const continue declare default delete do else enum export extends false finally for from function get if implements import in infer instanceof interface is keyof let namespace never new null number of private protected public readonly return set static string super switch symbol this throw true try type typeof undefined unique unknown var void while with yield'.split(' ')),
-  python: new Set('and as assert async await break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield'.split(' ')),
-  go: new Set('break default func interface select case defer go map struct chan else goto package switch const fallthrough if range type continue for import return var'.split(' ')),
-  rust: new Set('as async await break const continue crate else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while'.split(' ')),
-  cpp: new Set('alignas alignof and and_eq asm auto bitand bitor bool break case catch char char8_t char16_t char32_t class compl concept const consteval constexpr constinit const_cast continue co_await co_return co_yield decltype default delete do double dynamic_cast else enum explicit export extern false float for friend goto if inline int long mutable namespace new noexcept not not_eq nullptr operator or or_eq private protected public register reinterpret_cast requires return short signed sizeof static static_assert static_cast struct switch template this thread_local throw true try typedef typeid typename union unsigned using virtual void volatile wchar_t while xor xor_eq'.split(' ')),
-  html: new Set(), css: new Set(), json: new Set(), yaml: new Set(), markdown: new Set(), bash: new Set('case do done elif else esac fi for function if in select then until while'.split(' ')), sql: new Set('select from where join inner left right full outer on as insert into update delete create alter drop table view index primary key foreign references values set distinct group by order having limit offset union all null is not and or exists between like asc desc'.split(' ')), xml: new Set(), text: new Set()
+const languageToPrism: Record<CodeLanguage, string> = {
+  javascript: 'javascript',
+  typescript: 'typescript',
+  python: 'python',
+  csharp: 'csharp',
+  java: 'java',
+  cpp: 'cpp',
+  go: 'go',
+  rust: 'rust',
+  html: 'markup',
+  xml: 'markup',
+  css: 'css',
+  json: 'json',
+  yaml: 'yaml',
+  markdown: 'markdown',
+  bash: 'bash',
+  sql: 'sql',
+  text: 'plain'
 }
 
 const MAX_CACHE_ENTRIES = 48
@@ -61,11 +107,6 @@ export function isSvg(path?: string): boolean {
   return !!path && /\.svg$/i.test(path)
 }
 
-/**
- * Tokenizes the complete source before splitting lines so multi-line strings and comments retain
- * their type in collapsed-context rows. The cache is deliberately small and refuses very large
- * files/lines; in those cases callers still receive plain source and Code view markers.
- */
 export function tokenizeCode(source: string, language: CodeLanguage): CodeLine[] {
   const cacheKey = `${language}\u0000${source}`
   const existing = cache.get(cacheKey)
@@ -108,51 +149,96 @@ export function tokenizeCode(source: string, language: CodeLanguage): CodeLine[]
   return byLine
 }
 
-function scan(source: string, language: CodeLanguage): CodeToken[] {
-  const tokens: CodeToken[] = []
-  let cursor = 0
-  let state: 'block-comment' | null = null
-  const hashComments = language === 'python' || language === 'bash' || language === 'yaml' || language === 'markdown'
-  const markup = language === 'html' || language === 'xml'
-
-  const add = (start: number, end: number, type: CodeToken['type']) => tokens.push({ start, end, type })
-  while (cursor < source.length) {
-    const start = cursor
-    if (state === 'block-comment') {
-      const end = source.indexOf('*/', cursor)
-      cursor = end === -1 ? source.length : end + 2
-      add(start, cursor, 'comment')
-      state = end === -1 ? 'block-comment' : null
-      continue
-    }
-    if (source[cursor] === '"' || source[cursor] === "'" || (language === 'javascript' || language === 'typescript') && source[cursor] === '`') {
-      const quote = source[cursor++]
-      while (cursor < source.length) {
-        if (source[cursor] === '\\') { cursor += 2; continue }
-        if (source[cursor] === quote) { cursor++; break }
-        cursor++
-      }
-      add(start, cursor, 'string')
-      continue
-    }
-    if (source.startsWith('/*', cursor)) { cursor += 2; state = 'block-comment'; continue }
-    if (source.startsWith('//', cursor) || (hashComments && source[cursor] === '#') || (markup && source.startsWith('<!--', cursor))) {
-      const close = markup && source.startsWith('<!--', cursor) ? source.indexOf('-->', cursor + 4) : source.indexOf('\n', cursor)
-      cursor = close === -1 ? source.length : close + (markup && source.startsWith('<!--', start) ? 3 : 0)
-      add(start, cursor, 'comment'); continue
-    }
-    const word = /^[A-Za-z_$][\w$]*/.exec(source.slice(cursor))?.[0]
-    if (word) {
-      cursor += word.length
-      if (KEYWORDS[language].has(word) || (language === 'sql' && KEYWORDS.sql.has(word.toLowerCase()))) add(start, cursor, 'keyword')
-      else if (markup && /^(?:[A-Za-z][\w:-]*)$/.test(word)) add(start, cursor, 'property')
-      continue
-    }
-    const number = /^(?:\d+(?:\.\d+)?)/.exec(source.slice(cursor))?.[0]
-    if (number) { cursor += number.length; add(start, cursor, 'number'); continue }
-    cursor++
+function mapPrismType(type: string): CodeTokenType {
+  switch (type) {
+    case 'comment':
+    case 'prolog':
+    case 'doctype':
+    case 'cdata':
+      return 'comment'
+    case 'string':
+    case 'char':
+    case 'attr-value':
+    case 'regex':
+    case 'url':
+      return 'string'
+    case 'keyword':
+    case 'atrule':
+    case 'rule':
+    case 'important':
+      return 'keyword'
+    case 'number':
+    case 'hexcode':
+    case 'unit':
+    case 'boolean':
+    case 'constant':
+      return 'number'
+    case 'property':
+    case 'attr-name':
+    case 'tag':
+      return 'property'
+    case 'function':
+      return 'function'
+    case 'selector':
+    case 'class-name':
+      return 'selector'
+    case 'variable':
+      return 'variable'
+    case 'operator':
+    case 'entity':
+      return 'operator'
+    case 'punctuation':
+      return 'punctuation'
+    default:
+      return 'plain'
   }
-  return tokens
+}
+
+function walkTokens(
+  items: Array<string | Prism.Token>,
+  offset: number,
+  tokens: CodeToken[],
+  inheritedType?: CodeTokenType
+): number {
+  let current = offset
+  for (const item of items) {
+    if (typeof item === 'string') {
+      const len = item.length
+      if (inheritedType && inheritedType !== 'plain') {
+        tokens.push({ start: current, end: current + len, type: inheritedType })
+      }
+      current += len
+    } else {
+      const mapped = mapPrismType(item.type)
+      const effectiveType = mapped === 'plain' && inheritedType ? inheritedType : mapped
+      if (Array.isArray(item.content)) {
+        current = walkTokens(item.content, current, tokens, effectiveType)
+      } else {
+        const len = item.length
+        if (effectiveType !== 'plain') {
+          tokens.push({ start: current, end: current + len, type: effectiveType })
+        }
+        current += len
+      }
+    }
+  }
+  return current
+}
+
+function scan(source: string, language: CodeLanguage): CodeToken[] {
+  if (language === 'text') return []
+  const prismLang = languageToPrism[language]
+  const grammar = prismLang ? Prism.languages[prismLang] : undefined
+  if (!grammar) return []
+
+  try {
+    const rawTokens = Prism.tokenize(source, grammar)
+    const tokens: CodeToken[] = []
+    walkTokens(rawTokens, 0, tokens)
+    return tokens
+  } catch {
+    return []
+  }
 }
 
 function fillPlainTokens(length: number, tokens: CodeToken[]): CodeToken[] {
@@ -196,4 +282,3 @@ export function resolveHunkChangeType(
     (renderRows ? renderRows.some((r) => r.rowType === 'delete' || r.rowType === 'change') : false)
   return hasAdd && hasDelete ? 'mixed' : hasAdd ? 'add' : hasDelete ? 'delete' : 'none'
 }
-
