@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { FileText, Copy, Check } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { getAuthorColor } from '../../utils/authorColor'
@@ -57,10 +57,11 @@ const DetailsPanel: React.FC = () => {
 
   const commit = activeRepo?.commits.find((c) => c.hash === selectedCommitHash)
 
-  // Reset copied state when selected commit changes
+  // Reset copied state and close diff modal when selected commit or active repo changes
   useEffect(() => {
+    setSelectedFileForDiff(null)
     setCopiedField(null)
-  }, [selectedCommitHash])
+  }, [activeRepo?.id, selectedCommitHash])
 
   const handleCopy = (text: string, field: CopiedField) => {
     window.api.app.copyToClipboard(text)
@@ -101,6 +102,19 @@ const DetailsPanel: React.FC = () => {
       isMounted = false
     }
   }, [selectedCommitHash, activeRepo?.path])
+
+  const modalFiles = useMemo(() => {
+    return files.map((f) => ({
+      path: f.path,
+      oldPath: f.oldPath,
+      status: f.status
+    }))
+  }, [files])
+
+  const initialModalFileIndex = useMemo(() => {
+    if (!selectedFileForDiff) return 0
+    return Math.max(0, files.findIndex((f) => f.path === selectedFileForDiff.path))
+  }, [files, selectedFileForDiff])
 
   return (
     <div className="details-panel">
@@ -249,12 +263,8 @@ const DetailsPanel: React.FC = () => {
           status={selectedFileForDiff.status}
           commitHash={selectedCommitHash}
           repoPath={activeRepo.path}
-          files={files.map((f) => ({
-            path: f.path,
-            oldPath: f.oldPath,
-            status: f.status
-          }))}
-          initialFileIndex={Math.max(0, files.findIndex((f) => f.path === selectedFileForDiff.path))}
+          files={modalFiles}
+          initialFileIndex={initialModalFileIndex}
         />
       )}
     </div>

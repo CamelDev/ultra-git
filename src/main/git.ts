@@ -165,6 +165,25 @@ function getGitInstance(repoPath: string): SimpleGit {
   return gitInstances.get(repoPath)!;
 }
 
+const commitParentsCache = new Map<string, string[]>();
+
+async function getCommitParents(git: SimpleGit, commitHash: string): Promise<string[]> {
+  const cached = commitParentsCache.get(commitHash);
+  if (cached) return cached;
+  try {
+    const parentResult = await git.raw(['rev-list', '--parents', '-n', '1', commitHash]);
+    const parents = parentResult.trim().split(/\s+/).slice(1);
+    commitParentsCache.set(commitHash, parents);
+    if (commitParentsCache.size > 500) {
+      const firstKey = commitParentsCache.keys().next().value;
+      if (firstKey) commitParentsCache.delete(firstKey);
+    }
+    return parents;
+  } catch (e) {
+    return [];
+  }
+}
+
 /**
  * Helper to check if an error is a Git lock contention error (index.lock, refs, HEAD, etc.).
  */
@@ -959,32 +978,38 @@ export const gitService = {
     const mime = getImageMimeType(filePath);
 
     if (mime) {
-      let before = '';
-      let after = '';
-
-      if (status !== 'D') {
-        const buf = await getGitBuffer(repoPath, ['show', `${commitHash}:${filePath}`]);
-        if (buf) {
-          after = mime === 'image/svg+xml' ? buf.toString('utf8') : `data:${mime};base64,${buf.toString('base64')}`;
-        }
-      }
-
-      if (status !== 'A') {
+      const getAfterImage = async (): Promise<string> => {
+        if (status === 'D') return '';
         try {
-          const parentResult = await git.raw(['rev-list', '--parents', '-n', '1', commitHash]);
-          const parents = parentResult.trim().split(/\s+/).slice(1);
+          const buf = await getGitBuffer(repoPath, ['show', `${commitHash}:${filePath}`]);
+          if (buf) {
+            return mime === 'image/svg+xml' ? buf.toString('utf8') : `data:${mime};base64,${buf.toString('base64')}`;
+          }
+        } catch (e) {
+          console.warn(`Could not get image content for ${filePath} at ${commitHash}`, e);
+        }
+        return '';
+      };
+
+      const getBeforeImage = async (): Promise<string> => {
+        if (status === 'A') return '';
+        try {
+          const parents = await getCommitParents(git, commitHash);
           if (parents.length > 0) {
             const parentHash = parents[0];
             const pathBefore = oldPath || filePath;
             const buf = await getGitBuffer(repoPath, ['show', `${parentHash}:${pathBefore}`]);
             if (buf) {
-              before = mime === 'image/svg+xml' ? buf.toString('utf8') : `data:${mime};base64,${buf.toString('base64')}`;
+              return mime === 'image/svg+xml' ? buf.toString('utf8') : `data:${mime};base64,${buf.toString('base64')}`;
             }
           }
         } catch (e) {
           console.warn(`Could not get parent image content for ${filePath} at ${commitHash}`, e);
         }
-      }
+        return '';
+      };
+
+      const [after, before] = await Promise.all([getAfterImage(), getBeforeImage()]);
 
       return {
         before,
@@ -993,30 +1018,32 @@ export const gitService = {
       };
     }
 
-    let before = '';
-    let after = '';
-
-    if (status !== 'D') {
+    const getAfter = async (): Promise<string> => {
+      if (status === 'D') return '';
       try {
-        after = await git.show([`${commitHash}:${filePath}`]);
+        return await git.show([`${commitHash}:${filePath}`]);
       } catch (e) {
         console.warn(`Could not get content for ${filePath} at ${commitHash}`, e);
+        return '';
       }
-    }
+    };
 
-    if (status !== 'A') {
+    const getBefore = async (): Promise<string> => {
+      if (status === 'A') return '';
       try {
-        const parentResult = await git.raw(['rev-list', '--parents', '-n', '1', commitHash]);
-        const parents = parentResult.trim().split(/\s+/).slice(1);
+        const parents = await getCommitParents(git, commitHash);
         if (parents.length > 0) {
           const parentHash = parents[0];
           const pathBefore = oldPath || filePath;
-          before = await git.show([`${parentHash}:${pathBefore}`]);
+          return await git.show([`${parentHash}:${pathBefore}`]);
         }
       } catch (e) {
         console.warn(`Could not get parent content for ${filePath} at ${commitHash}`, e);
       }
-    }
+      return '';
+    };
+
+    const [after, before] = await Promise.all([getAfter(), getBefore()]);
 
     const isBinaryString = (str: string) => {
       for (let i = 0; i < Math.min(str.length, 1000); i++) {
@@ -1533,86 +1560,107 @@ export const gitService = {
     const mime = getImageMimeType(filePath);
 
     if (mime) {
-      let before = '';
-      let after = '';
-
       if (isStaged) {
-        const bufBefore = await getGitBuffer(repoPath, ['show', `HEAD:${oldPath || filePath}`]);
-        if (bufBefore) {
-          before = mime === 'image/svg+xml' ? bufBefore.toString('utf8') : `data:${mime};base64,${bufBefore.toString('base64')}`;
-        }
-        const bufAfter = await getGitBuffer(repoPath, ['show', `:${filePath}`]);
-        if (bufAfter) {
-          after = mime === 'image/svg+xml' ? bufAfter.toString('utf8') : `data:${mime};base64,${bufAfter.toString('base64')}`;
-        } else {
+        const getBefore = async (): Promise<string> => {
+          const bufBefore = await getGitBuffer(repoPath, ['show', `HEAD:${oldPath || filePath}`]);
+          if (bufBefore) {
+            return mime === 'image/svg+xml' ? bufBefore.toString('utf8') : `data:${mime};base64,${bufBefore.toString('base64')}`;
+          }
+          return '';
+        };
+
+        const getAfter = async (): Promise<string> => {
+          const bufAfter = await getGitBuffer(repoPath, ['show', `:${filePath}`]);
+          if (bufAfter) {
+            return mime === 'image/svg+xml' ? bufAfter.toString('utf8') : `data:${mime};base64,${bufAfter.toString('base64')}`;
+          }
           try {
             const fileBuf = await fs.promises.readFile(join(repoPath, filePath));
-            after = mime === 'image/svg+xml' ? fileBuf.toString('utf8') : `data:${mime};base64,${fileBuf.toString('base64')}`;
+            return mime === 'image/svg+xml' ? fileBuf.toString('utf8') : `data:${mime};base64,${fileBuf.toString('base64')}`;
           } catch {
-            after = '';
+            return '';
+          }
+        };
+
+        const [before, after] = await Promise.all([getBefore(), getAfter()]);
+        return {
+          before,
+          after,
+          isBinary: mime !== 'image/svg+xml'
+        };
+      } else {
+        const getBefore = async (): Promise<string> => {
+          let bufBefore = await getGitBuffer(repoPath, ['show', `:${filePath}`]);
+          if (!bufBefore) {
+            bufBefore = await getGitBuffer(repoPath, ['show', `HEAD:${filePath}`]);
+          }
+          if (bufBefore) {
+            return mime === 'image/svg+xml' ? bufBefore.toString('utf8') : `data:${mime};base64,${bufBefore.toString('base64')}`;
+          }
+          return '';
+        };
+
+        const getAfter = async (): Promise<string> => {
+          try {
+            const fileBuf = await fs.promises.readFile(join(repoPath, filePath));
+            return mime === 'image/svg+xml' ? fileBuf.toString('utf8') : `data:${mime};base64,${fileBuf.toString('base64')}`;
+          } catch {
+            return '';
+          }
+        };
+
+        const [before, after] = await Promise.all([getBefore(), getAfter()]);
+        return {
+          before,
+          after,
+          isBinary: mime !== 'image/svg+xml'
+        };
+      }
+    }
+
+    const getBefore = async (): Promise<string> => {
+      if (isStaged) {
+        try {
+          return await git.show([`HEAD:${oldPath || filePath}`]);
+        } catch {
+          return '';
+        }
+      } else {
+        try {
+          return await git.show([`:${filePath}`]);
+        } catch {
+          try {
+            return await git.show([`HEAD:${filePath}`]);
+          } catch {
+            return '';
+          }
+        }
+      }
+    };
+
+    const getAfter = async (): Promise<string> => {
+      if (isStaged) {
+        try {
+          return await git.show([`:${filePath}`]);
+        } catch {
+          try {
+            const fullPath = join(repoPath, filePath);
+            return await fs.promises.readFile(fullPath, 'utf8');
+          } catch {
+            return '';
           }
         }
       } else {
-        let bufBefore = await getGitBuffer(repoPath, ['show', `:${filePath}`]);
-        if (!bufBefore) {
-          bufBefore = await getGitBuffer(repoPath, ['show', `HEAD:${filePath}`]);
-        }
-        if (bufBefore) {
-          before = mime === 'image/svg+xml' ? bufBefore.toString('utf8') : `data:${mime};base64,${bufBefore.toString('base64')}`;
-        }
-        try {
-          const fileBuf = await fs.promises.readFile(join(repoPath, filePath));
-          after = mime === 'image/svg+xml' ? fileBuf.toString('utf8') : `data:${mime};base64,${fileBuf.toString('base64')}`;
-        } catch {
-          after = '';
-        }
-      }
-
-      return {
-        before,
-        after,
-        isBinary: mime !== 'image/svg+xml'
-      };
-    }
-
-    let before = '';
-    let after = '';
-
-    if (isStaged) {
-      // Staged file diff: before is HEAD version, after is Index version
-      try {
-        before = await git.show([`HEAD:${oldPath || filePath}`]);
-      } catch (e) {
-        before = '';
-      }
-      try {
-        after = await git.show([`:${filePath}`]);
-      } catch (e) {
         try {
           const fullPath = join(repoPath, filePath);
-          after = await fs.promises.readFile(fullPath, 'utf8');
-        } catch (e2) {
-          after = '';
+          return await fs.promises.readFile(fullPath, 'utf8');
+        } catch {
+          return '';
         }
       }
-    } else {
-      // Unstaged file diff: before is Index version (or HEAD if not in index), after is Working Tree version
-      try {
-        before = await git.show([`:${filePath}`]);
-      } catch (e) {
-        try {
-          before = await git.show([`HEAD:${filePath}`]);
-        } catch (e2) {
-          before = '';
-        }
-      }
-      try {
-        const fullPath = join(repoPath, filePath);
-        after = await fs.promises.readFile(fullPath, 'utf8');
-      } catch (e) {
-        after = '';
-      }
-    }
+    };
+
+    const [before, after] = await Promise.all([getBefore(), getAfter()]);
 
     const isBinaryString = (str: string) => {
       for (let i = 0; i < Math.min(str.length, 1000); i++) {

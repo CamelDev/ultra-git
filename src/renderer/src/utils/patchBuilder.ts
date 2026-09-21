@@ -73,50 +73,87 @@ export function computeDiff(beforeContent: string = '', afterContent: string = '
   const midBefore = beforeLines.slice(prefixCount, beforeLines.length - suffixCount)
   const midAfter = afterLines.slice(prefixCount, afterLines.length - suffixCount)
 
-  const db: number[][] = Array(midBefore.length + 1)
-    .fill(null)
-    .map(() => Array(midAfter.length + 1).fill(0))
-
-  for (let i = 1; i <= midBefore.length; i++) {
-    for (let j = 1; j <= midAfter.length; j++) {
-      if (midBefore[i - 1] === midAfter[j - 1]) {
-        db[i][j] = db[i - 1][j - 1] + 1
-      } else {
-        db[i][j] = Math.max(db[i - 1][j], db[i][j - 1])
-      }
-    }
-  }
-
-  let i = midBefore.length
-  let j = midAfter.length
   const midDiff: DiffItem[] = []
 
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && midBefore[i - 1] === midAfter[j - 1]) {
-      midDiff.unshift({
-        type: 'normal',
-        beforeLine: midBefore[i - 1],
-        afterLine: midAfter[j - 1],
-        beforeNum: prefixCount + i,
-        afterNum: prefixCount + j
-      })
-      i--
-      j--
-    } else if (j > 0 && (i === 0 || db[i][j - 1] >= db[i - 1][j])) {
-      midDiff.unshift({
+  if (midBefore.length === 0) {
+    for (let j = 0; j < midAfter.length; j++) {
+      midDiff.push({
         type: 'add',
-        afterLine: midAfter[j - 1],
-        afterNum: prefixCount + j
+        afterLine: midAfter[j],
+        afterNum: prefixCount + j + 1
       })
-      j--
-    } else {
-      midDiff.unshift({
-        type: 'delete',
-        beforeLine: midBefore[i - 1],
-        beforeNum: prefixCount + i
-      })
-      i--
     }
+  } else if (midAfter.length === 0) {
+    for (let i = 0; i < midBefore.length; i++) {
+      midDiff.push({
+        type: 'delete',
+        beforeLine: midBefore[i],
+        beforeNum: prefixCount + i + 1
+      })
+    }
+  } else if (midBefore.length * midAfter.length > 2_000_000) {
+    // Large diff fallback: treat midBefore as deletes and midAfter as adds to prevent freezing the UI thread
+    for (let i = 0; i < midBefore.length; i++) {
+      midDiff.push({
+        type: 'delete',
+        beforeLine: midBefore[i],
+        beforeNum: prefixCount + i + 1
+      })
+    }
+    for (let j = 0; j < midAfter.length; j++) {
+      midDiff.push({
+        type: 'add',
+        afterLine: midAfter[j],
+        afterNum: prefixCount + j + 1
+      })
+    }
+  } else {
+    const db: number[][] = Array(midBefore.length + 1)
+      .fill(null)
+      .map(() => Array(midAfter.length + 1).fill(0))
+
+    for (let i = 1; i <= midBefore.length; i++) {
+      for (let j = 1; j <= midAfter.length; j++) {
+        if (midBefore[i - 1] === midAfter[j - 1]) {
+          db[i][j] = db[i - 1][j - 1] + 1
+        } else {
+          db[i][j] = Math.max(db[i - 1][j], db[i][j - 1])
+        }
+      }
+    }
+
+    let i = midBefore.length
+    let j = midAfter.length
+
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && midBefore[i - 1] === midAfter[j - 1]) {
+        midDiff.push({
+          type: 'normal',
+          beforeLine: midBefore[i - 1],
+          afterLine: midAfter[j - 1],
+          beforeNum: prefixCount + i,
+          afterNum: prefixCount + j
+        })
+        i--
+        j--
+      } else if (j > 0 && (i === 0 || db[i][j - 1] >= db[i - 1][j])) {
+        midDiff.push({
+          type: 'add',
+          afterLine: midAfter[j - 1],
+          afterNum: prefixCount + j
+        })
+        j--
+      } else {
+        midDiff.push({
+          type: 'delete',
+          beforeLine: midBefore[i - 1],
+          beforeNum: prefixCount + i
+        })
+        i--
+      }
+    }
+
+    midDiff.reverse()
   }
 
   const diff: DiffItem[] = []

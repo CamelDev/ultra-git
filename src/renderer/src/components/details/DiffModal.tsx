@@ -94,8 +94,8 @@ function computeInlineDiff(
   const m = a.length
   const n = b.length
 
-  const MAX = 2000
-  if (m > MAX || n > MAX) {
+  const MAX = 500
+  if (m > MAX || n > MAX || m * n > 100_000) {
     return {
       oldSpans: [{ text: oldStr, highlight: true }],
       newSpans: [{ text: newStr, highlight: true }]
@@ -434,21 +434,72 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const [activeMatchIndex, setActiveMatchIndex] = useState(0)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
+  // Caching and request concurrency refs
+  const diffCacheRef = useRef<Map<string, { isBinary: boolean; diffItems: DiffItem[]; rawBefore: string; rawAfter: string }>>(new Map())
+  const loadRequestIdRef = useRef(0)
+  const wasOpenRef = useRef(false)
+  const currentPathRef = useRef<string | null>(null)
+  const prevRepoPathRef = useRef<string | null>(null)
+
   // Sync currentFileIndex when modal opens or initialFileIndex/files/filePath changes
   useEffect(() => {
     if (isOpen) {
+      if (prevRepoPathRef.current !== repoPath) {
+        prevRepoPathRef.current = repoPath ?? null
+        wasOpenRef.current = false
+        currentPathRef.current = null
+        diffCacheRef.current.clear()
+      }
+
       if (files && files.length > 0) {
-        if (initialFileIndex !== undefined && initialFileIndex >= 0 && initialFileIndex < files.length) {
-          setCurrentFileIndex(initialFileIndex)
+        if (!wasOpenRef.current) {
+          // Modal just opened: initialize from initialFileIndex or filePath
+          wasOpenRef.current = true
+          diffCacheRef.current.clear()
+          if (initialFileIndex !== undefined && initialFileIndex >= 0 && initialFileIndex < files.length) {
+            setCurrentFileIndex(initialFileIndex)
+            currentPathRef.current = files[initialFileIndex]?.path ?? null
+          } else {
+            const foundIdx = files.findIndex((f) => f.path === filePath)
+            const resolvedIdx = foundIdx >= 0 ? foundIdx : 0
+            setCurrentFileIndex(resolvedIdx)
+            currentPathRef.current = files[resolvedIdx]?.path ?? null
+          }
         } else {
-          const foundIdx = files.findIndex((f) => f.path === filePath)
-          setCurrentFileIndex(foundIdx >= 0 ? foundIdx : 0)
+          // Modal was already open:
+          // If filePath changed externally to a different file, jump to it
+          if (filePath && filePath !== currentPathRef.current) {
+            const foundIdx = files.findIndex((f) => f.path === filePath)
+            if (foundIdx >= 0) {
+              setCurrentFileIndex(foundIdx)
+              currentPathRef.current = filePath
+              return
+            }
+          }
+          // Otherwise, files array was updated (e.g. background repo refresh):
+          // Preserve the currently active file by path rather than resetting to initialFileIndex
+          if (currentPathRef.current) {
+            const foundIdx = files.findIndex((f) => f.path === currentPathRef.current)
+            if (foundIdx >= 0) {
+              setCurrentFileIndex(foundIdx)
+              return
+            }
+          }
+          const nextIdx = Math.max(0, Math.min(currentFileIndex, files.length - 1))
+          setCurrentFileIndex(nextIdx)
+          currentPathRef.current = files[nextIdx]?.path ?? null
         }
       } else {
         setCurrentFileIndex(0)
+        currentPathRef.current = null
       }
+    } else {
+      wasOpenRef.current = false
+      currentPathRef.current = null
+      diffCacheRef.current.clear()
+      prevRepoPathRef.current = null
     }
-  }, [isOpen, filePath, initialFileIndex, files])
+  }, [isOpen, filePath, initialFileIndex, files, repoPath])
 
   // Active file derived properties
   const activeFile = useMemo(() => {
@@ -474,14 +525,15 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       return
     }
     const target: PartialPatchTarget = currentIsStaged ? 'unstage' : 'stage'
-    window.api.git.getPartialDiff(repoPath, currentFilePath, target).then((res) => {
-      if (!cancelled) setPartialDiff(res.success && res.data ? res.data : null)
+    const targetPath = currentFilePath
+    window.api.git.getPartialDiff(repoPath, targetPath, target).then((res) => {
+      if (!cancelled && currentPathRef.current === targetPath) setPartialDiff(res.success && res.data ? res.data : null)
     }).catch(() => { if (!cancelled) setPartialDiff(null) })
     return () => { cancelled = true }
   }, [isOpen, isActiveChange, isStash, currentFilePath, currentIsStaged, repoPath])
 
   const effectiveRepoPath = repoPath || getActiveRepo()?.path || ''
-  const isMac = typeof window !== 'undefined' && Boolean(window.api?.isMac)
+  const isMac = typeof window !== 'undefined' && Boolean((window.api as any)?.isMac ?? navigator.platform?.toUpperCase().indexOf('MAC') >= 0)
   const undoShortcut = isMac ? 'Cmd+Z' : 'Ctrl+Z'
   const redoShortcut = isMac ? 'Cmd+Shift+Z' : 'Ctrl+Y'
   const undoDesc = getUndoDescription(effectiveRepoPath)
@@ -490,11 +542,21 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const redoTooltip = redoDesc ? `Redo: ${redoDesc} (${redoShortcut})` : `Redo (${redoShortcut})`
 
   const undoPartial = async () => {
-    const res = await undo(effectiveRepoPath, async () => { const active = getActiveRepo(); if (active) await refreshRepo(active.id); loadDiffContent() })
+    const res = await undo(effectiveRepoPath, async () => {
+      const active = getActiveRepo()
+      if (active) await refreshRepo(active.id)
+      diffCacheRef.current.clear()
+      loadDiffContent(true)
+    })
     if (!res.success) addToast({ variant: 'error', title: 'Undo unavailable', message: res.error || 'The transaction expired' })
   }
   const redoPartial = async () => {
-    const res = await redo(effectiveRepoPath, async () => { const active = getActiveRepo(); if (active) await refreshRepo(active.id); loadDiffContent() })
+    const res = await redo(effectiveRepoPath, async () => {
+      const active = getActiveRepo()
+      if (active) await refreshRepo(active.id)
+      diffCacheRef.current.clear()
+      loadDiffContent(true)
+    })
     if (!res.success) addToast({ variant: 'error', title: 'Redo unavailable', message: res.error || 'The transaction expired' })
   }
   const fullDiskPath = useMemo(() => {
@@ -573,13 +635,16 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       const curIdx = stashFiles.findIndex((f) => f.path === selectedStashFile?.path)
       if (curIdx > 0) {
         setSelectedStashFile(stashFiles[curIdx - 1])
+        currentPathRef.current = stashFiles[curIdx - 1]?.path ?? null
         setSelectedLineIndices(new Set())
         setActiveChunkIndex(0)
         setLastClickedIndex(null)
       }
     } else if (files && files.length > 1) {
       if (currentFileIndex > 0) {
-        setCurrentFileIndex((prev) => prev - 1)
+        const nextIdx = currentFileIndex - 1
+        setCurrentFileIndex(nextIdx)
+        currentPathRef.current = files[nextIdx]?.path ?? null
         setSelectedLineIndices(new Set())
         setActiveChunkIndex(0)
         setLastClickedIndex(null)
@@ -593,13 +658,16 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       const curIdx = stashFiles.findIndex((f) => f.path === selectedStashFile?.path)
       if (curIdx !== -1 && curIdx < stashFiles.length - 1) {
         setSelectedStashFile(stashFiles[curIdx + 1])
+        currentPathRef.current = stashFiles[curIdx + 1]?.path ?? null
         setSelectedLineIndices(new Set())
         setActiveChunkIndex(0)
         setLastClickedIndex(null)
       }
     } else if (files && files.length > 1) {
       if (currentFileIndex < files.length - 1) {
-        setCurrentFileIndex((prev) => prev + 1)
+        const nextIdx = currentFileIndex + 1
+        setCurrentFileIndex(nextIdx)
+        currentPathRef.current = files[nextIdx]?.path ?? null
         setSelectedLineIndices(new Set())
         setActiveChunkIndex(0)
         setLastClickedIndex(null)
@@ -790,11 +858,8 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   }
 
   // Reload diff content
-  const loadDiffContent = useCallback(() => {
+  const loadDiffContent = useCallback((bypassCache: boolean = false) => {
     if (!isOpen) return
-
-    setLoading(true)
-    setError(null)
 
     const targetFilePath = currentFilePath
     const targetOldPath = currentOldPath
@@ -814,6 +879,26 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       return
     }
 
+    currentPathRef.current = targetFilePath
+
+    const cacheKey = `${effectiveRepoPath}:${targetFilePath}:${targetOldPath || ''}:${targetStatus || ''}:${targetIsStaged ? '1' : '0'}:${commitHash || ''}:${stashIndex ?? ''}:${isUntracked ? '1' : '0'}`
+
+    if (!bypassCache && diffCacheRef.current.has(cacheKey)) {
+      const cached = diffCacheRef.current.get(cacheKey)!
+      setIsBinary(cached.isBinary)
+      setDiffItems(cached.diffItems)
+      setRawBefore(cached.rawBefore)
+      setRawAfter(cached.rawAfter)
+      setError(null)
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    const requestId = ++loadRequestIdRef.current
+
     const fetchDiff = isStash
       ? window.api.git.getStashFileDiff(repoPath, stashIndex!, targetFilePath, targetOldPath, targetStatus, isUntracked)
       : isActiveChange
@@ -822,12 +907,22 @@ export const DiffModal: React.FC<DiffModalProps> = ({
 
     fetchDiff
       .then((res) => {
+        if (loadRequestIdRef.current !== requestId) {
+          // Stale request discarded
+          return
+        }
         if (res.success && res.data) {
           if (res.data.isBinary) {
             setIsBinary(true)
             setDiffItems([])
             setRawBefore(res.data.before || '')
             setRawAfter(res.data.after || '')
+            diffCacheRef.current.set(cacheKey, {
+              isBinary: true,
+              diffItems: [],
+              rawBefore: res.data.before || '',
+              rawAfter: res.data.after || ''
+            })
           } else {
             setIsBinary(false)
             const beforeStr = res.data.before || ''
@@ -836,6 +931,12 @@ export const DiffModal: React.FC<DiffModalProps> = ({
             setRawAfter(afterStr)
             const computed = computeDiff(beforeStr, afterStr)
             setDiffItems(computed)
+            diffCacheRef.current.set(cacheKey, {
+              isBinary: false,
+              diffItems: computed,
+              rawBefore: beforeStr,
+              rawAfter: afterStr
+            })
           }
         } else {
           setError(res.error || 'Failed to retrieve diff')
@@ -843,6 +944,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
         setLoading(false)
       })
       .catch((err) => {
+        if (loadRequestIdRef.current !== requestId) return
         setError(err.message || 'Error fetching diff')
         setLoading(false)
       })
@@ -855,6 +957,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     currentIsUntracked,
     commitHash,
     repoPath,
+    effectiveRepoPath,
     isActiveChange,
     isStash,
     stashIndex,
@@ -881,15 +984,19 @@ export const DiffModal: React.FC<DiffModalProps> = ({
       if (res.success && res.data) {
         setSelectedLineIndices(new Set())
         pushAction({ type: 'PARTIAL', repoPath, transactionId: res.data.transactionId, description: successMsg })
+        diffCacheRef.current.clear()
         const activeRepo = getActiveRepo()
         if (activeRepo) {
           await refreshRepo(activeRepo.id)
         }
         addToast({ variant: 'success', title: 'Success', message: successMsg })
-        loadDiffContent()
+        loadDiffContent(true)
       } else {
         addToast({ variant: 'error', title: res.error === 'STALE_DIFF' ? 'Diff Changed' : 'Apply Failed', message: res.error || 'Failed to apply changes' })
-        if (res.error === 'STALE_DIFF') loadDiffContent()
+        if (res.error === 'STALE_DIFF') {
+          diffCacheRef.current.clear()
+          loadDiffContent(true)
+        }
       }
     } catch (err: any) {
       addToast({ variant: 'error', title: 'Apply Error', message: err.message || 'Error applying changes' })
@@ -1362,7 +1469,8 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                     <ChevronLeft size={14} />
                     <span>Prev</span>
                   </button>
-                  <span className="diff-file-counter" data-testid="file-counter">
+                  <span className="diff-file-counter" data-testid="file-counter" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    {loading && <Loader2 size={12} className="spinning" style={{ color: 'var(--accent-color, #3b82f6)' }} />}
                     File {fileIndex + 1} of {totalFiles}
                   </span>
                   <button
@@ -1708,7 +1816,17 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           </div>
         </div>
 
-
+        {loading && (
+          <div
+            data-testid="diff-loading-bar"
+            style={{
+              height: '2px',
+              width: '100%',
+              backgroundColor: 'var(--accent-color, #3b82f6)',
+              opacity: 0.85
+            }}
+          />
+        )}
 
         <div className="diff-modal-body">
           {isStash && (

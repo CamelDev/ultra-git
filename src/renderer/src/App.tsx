@@ -13,6 +13,7 @@ import { useTheme } from "./hooks/useTheme"
 import { useUndoShortcuts } from "./hooks/useUndoShortcuts"
 import { ToasterProvider } from "./components/toaster/ToasterContext"
 import { Toaster } from "./components/toaster/Toaster"
+import { ErrorBoundary } from "./components/common/ErrorBoundary"
 
 if (typeof window !== 'undefined') {
   ;(window as any).useRepoStore = useRepoStore
@@ -366,23 +367,27 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
             onToggleChangesViewMode={toggleChangesViewMode}
           />
           {hasActiveChanges && (
-            <>
+            <ErrorBoundary fallbackTitle="Unable to load changes" resetKey={activeRepo?.id}>
               <ActiveChanges viewMode={changesViewMode} />
               <div 
                 className={`active-changes-resizer ${isActiveChangesDragging ? 'is-dragging' : ''}`}
                 onPointerDown={startActiveChangesResize}
                 data-testid="active-changes-resizer"
               />
-            </>
+            </ErrorBoundary>
           )}
           <div className="git-log-and-details">
-            <GraphView onOpenConflictResolver={openConflictResolver} onConflictOperation={handleConflictOperation} />
+            <ErrorBoundary fallbackTitle="Unable to load commit graph" resetKey={activeRepo?.id}>
+              <GraphView onOpenConflictResolver={openConflictResolver} onConflictOperation={handleConflictOperation} />
+            </ErrorBoundary>
             <div
               className={`details-resizer ${isDetailsDragging ? "is-dragging" : ""}`}
               onPointerDown={startDetailsResize}
               data-testid="details-resizer"
             />
-            <DetailsPanel />
+            <ErrorBoundary fallbackTitle="Unable to load details panel" resetKey={activeRepo?.id}>
+              <DetailsPanel />
+            </ErrorBoundary>
           </div>
 
           {/* Conflict Resolver Modal Overlay */}

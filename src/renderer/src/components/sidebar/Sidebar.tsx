@@ -392,6 +392,19 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isWorktreeModalOpen])
 
+  // Close modals and stash viewer when repo switches
+  React.useEffect(() => {
+    setIsStashDetailsOpen(false)
+    setDetailsStashIndex(null)
+    setDetailsStashMessage(null)
+    setIsBranchModalOpen(false)
+    setMergeModalOpen(false)
+    setIsWorktreeModalOpen(false)
+    setConflictWarning(false)
+    setPopStashIndex(null)
+    setDeleteStashIndex(null)
+  }, [activeRepo?.id])
+
   const handlePopStash = (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
     if (!activeRepo) return

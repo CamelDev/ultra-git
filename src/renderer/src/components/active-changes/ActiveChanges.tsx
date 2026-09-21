@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { FileText, Folder, ChevronRight, ChevronDown, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw, Trash2, EyeOff, MoreVertical } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { useUndoStore } from '../../store/useUndoStore'
@@ -252,18 +252,21 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
     }
   }, [])
 
-  if (!activeRepo || !activeRepo.status || !activeRepo.status.files) {
-    return null
-  }
-
-  const files = activeRepo.status.files as any[]
-  const ignoredTrackedSet = new Set((activeRepo.status as any)?.ignoredTrackedFiles || [])
+  const files = (activeRepo?.status?.files || []) as any[]
+  const ignoredTrackedSet = new Set((activeRepo?.status as any)?.ignoredTrackedFiles || [])
 
   // Staged files: index is not space (' ') and not untracked ('?')
   const stagedFiles = files.filter((f) => f.index !== ' ' && f.index !== '?')
 
   // Unstaged files: working_dir is not space (' '), or index is untracked ('?')
   const unstagedFiles = files.filter((f) => f.working_dir !== ' ' || f.index === '?')
+
+  // Clear selections and close open diff modal when active repository switches
+  useEffect(() => {
+    setSelectedUnstaged(new Set())
+    setSelectedStaged(new Set())
+    setSelectedFileForDiff(null)
+  }, [activeRepo?.id])
 
   // Sync selection sets whenever files change to prune deleted/staged paths
   useEffect(() => {
@@ -300,11 +303,8 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedFileForDiff])
 
-  if (files.length === 0) {
-    return null
-  }
-
   const handleStageFile = async (filePath: string, force = false) => {
+    if (!activeRepo) return
     try {
       const res = await window.api.git.add(activeRepo.path, filePath, force)
       if (res.success) {
@@ -333,6 +333,7 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
   }
 
   const handleUnstageFile = async (filePath: string) => {
+    if (!activeRepo) return
     try {
       const res = await window.api.git.reset(activeRepo.path, filePath)
       if (res.success) {
@@ -357,6 +358,7 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
   }
 
   const handleBatchStage = async (force = false) => {
+    if (!activeRepo) return
     const paths = Array.from(selectedUnstaged)
     if (paths.length === 0) return
     try {
@@ -384,6 +386,7 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
   }
 
   const handleUntrackFile = async (filePath: string | string[]) => {
+    if (!activeRepo) return
     const paths = Array.isArray(filePath) ? filePath : [filePath]
     if (paths.length === 0) return
     try {
@@ -435,7 +438,7 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
   }
 
   const handleConfirmAddToGitignore = async () => {
-    if (!ignoreModal) return
+    if (!ignoreModal || !activeRepo) return
     const pattern =
       ignoreModal.selectedPattern === '__custom__'
         ? ignoreModal.customValue.trim()
@@ -482,6 +485,7 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
   }
 
   const handleBatchUnstage = async () => {
+    if (!activeRepo) return
     const paths = Array.from(selectedStaged)
     if (paths.length === 0) return
     try {
@@ -594,10 +598,33 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
   }
 
   const getRenamedOldPath = (filePath: string) => {
-    if (!activeRepo.status.renamed) return undefined
+    if (!activeRepo?.status?.renamed) return undefined
     const renameInfo = activeRepo.status.renamed.find((r: any) => r.to === filePath)
     return renameInfo ? renameInfo.from : undefined
   }
+
+  const diffModalFiles = useMemo(() => {
+    if (!selectedFileForDiff) return []
+    return selectedFileForDiff.isStaged
+      ? stagedFiles.map((f) => ({
+          path: f.path,
+          oldPath: getRenamedOldPath(f.path),
+          status: f.index,
+          isStaged: true
+        }))
+      : unstagedFiles.map((f) => ({
+          path: f.path,
+          status: f.working_dir === ' ' && f.index === '?' ? '?' : f.working_dir,
+          isStaged: false
+        }))
+  }, [selectedFileForDiff?.isStaged, stagedFiles, unstagedFiles, activeRepo?.status?.renamed])
+
+  const initialDiffFileIndex = useMemo(() => {
+    if (!selectedFileForDiff) return 0
+    return selectedFileForDiff.isStaged
+      ? Math.max(0, stagedFiles.findIndex((f) => f.path === selectedFileForDiff.path))
+      : Math.max(0, unstagedFiles.findIndex((f) => f.path === selectedFileForDiff.path))
+  }, [selectedFileForDiff, stagedFiles, unstagedFiles])
 
   const isIdentityRequiredAndMissing = !!(activeRepo && identities.length > 1 && !activeRepo.identityId)
 
@@ -606,6 +633,10 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
       ? `Are you sure you want to discard changes in "${discardTarget.filePaths[0]}"? This operation cannot be undone.`
       : `Are you sure you want to discard changes in ${discardTarget.filePaths.length} selected files? This operation cannot be undone.`
     : ''
+
+  if (!activeRepo || !activeRepo.status || !activeRepo.status.files || files.length === 0) {
+    return null
+  }
 
   return (
     <div className="active-changes-panel" data-testid="active-changes-panel">
@@ -1053,25 +1084,8 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
           repoPath={activeRepo.path}
           isActiveChange={true}
           isStaged={selectedFileForDiff.isStaged}
-          files={
-            selectedFileForDiff.isStaged
-              ? stagedFiles.map((f) => ({
-                  path: f.path,
-                  oldPath: getRenamedOldPath(f.path),
-                  status: f.index,
-                  isStaged: true
-                }))
-              : unstagedFiles.map((f) => ({
-                  path: f.path,
-                  status: f.working_dir === ' ' && f.index === '?' ? '?' : f.working_dir,
-                  isStaged: false
-                }))
-          }
-          initialFileIndex={
-            selectedFileForDiff.isStaged
-              ? Math.max(0, stagedFiles.findIndex((f) => f.path === selectedFileForDiff.path))
-              : Math.max(0, unstagedFiles.findIndex((f) => f.path === selectedFileForDiff.path))
-          }
+          files={diffModalFiles}
+          initialFileIndex={initialDiffFileIndex}
         />
       )}
 
@@ -1088,7 +1102,7 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
           { label: 'Discard', value: 'discard', variant: 'danger', setsBusy: true }
         ]}
         onResolve={async (val) => {
-          if (val === 'discard' && discardTarget) {
+          if (val === 'discard' && discardTarget && activeRepo) {
             const { filePaths, isStaged } = discardTarget
             setDiscardTarget(null)
             try {
