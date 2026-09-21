@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react"
-import { X, Folder, GitBranch, AlertTriangle, Loader, Search, ChevronRight, ChevronDown } from "lucide-react"
+import { X, Folder, GitBranch, AlertTriangle, Loader, Search, ChevronRight, ChevronDown, CheckCircle2 } from "lucide-react"
 import { Repository } from "../../store/useRepoStore"
 
 const normalizePath = (p: string) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
@@ -112,12 +112,19 @@ const TriStateCheckbox: React.FC<{
   );
 };
 
+export interface DeleteBranchesResult {
+  success: boolean
+  errors?: string[]
+  deletedBranches?: string[]
+  failedBranches?: string[]
+}
+
 interface DeleteBranchesModalProps {
   isOpen: boolean
   onClose: () => void
   activeRepo: Repository
   initialBranchName?: string
-  onConfirm: (branches: string[], force: boolean) => Promise<{ success: boolean; errors?: string[] }>
+  onConfirm: (branches: string[], force: boolean) => Promise<DeleteBranchesResult>
 }
 
 export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
@@ -133,6 +140,7 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({})
   const [isDeleting, setIsDeleting] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
+  const [recentlyDeleted, setRecentlyDeleted] = useState<string[]>([])
 
   useEffect(() => {
     if (!isOpen) return
@@ -162,6 +170,26 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
   const localBranches = useMemo(() => {
     return activeRepo?.branches?.local ?? [];
   }, [activeRepo?.branches?.local]);
+
+  // Synchronize checkedBranches with updated localBranches (prune deleted or missing branches)
+  useEffect(() => {
+    if (!isOpen) return;
+    const validNames = new Set(
+      localBranches.map((b) => (typeof b === 'string' ? b : b.name))
+    );
+    setCheckedBranches((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const name of prev) {
+        if (validNames.has(name) && isBranchDeletable(name)) {
+          next.add(name);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [localBranches, isOpen]);
 
   // Expand folders that have matching branches when searching
   useEffect(() => {
@@ -195,6 +223,7 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
       setForceDelete(false);
       setSearchText("");
       setErrors([]);
+      setRecentlyDeleted([]);
       setIsDeleting(false);
 
       // Expand parent folders of the initial pre-selected branch
@@ -278,11 +307,33 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
     setIsDeleting(true);
     setErrors([]);
     try {
-      const result = await onConfirm(Array.from(checkedBranches), forceDelete);
+      const branchesToProcess = Array.from(checkedBranches);
+      const result = await onConfirm(branchesToProcess, forceDelete);
+
+      const deleted = result.deletedBranches || [];
+      if (deleted.length > 0) {
+        setRecentlyDeleted((prev) => Array.from(new Set([...prev, ...deleted])));
+        setCheckedBranches((prev) => {
+          const next = new Set(prev);
+          deleted.forEach((b) => next.delete(b));
+          return next;
+        });
+      }
+
       if (result.success) {
         onClose();
-      } else if (result.errors && result.errors.length > 0) {
-        setErrors(result.errors);
+      } else {
+        if (result.errors && result.errors.length > 0) {
+          setErrors(result.errors);
+          const hasUnmerged = result.errors.some((err) =>
+            err.toLowerCase().includes('not fully merged') ||
+            err.includes('-D') ||
+            err.toLowerCase().includes('force')
+          );
+          if (hasUnmerged) {
+            setForceDelete(true);
+          }
+        }
       }
     } catch (err: any) {
       setErrors([err.message || "An unexpected error occurred during deletion."]);
@@ -529,6 +580,35 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
           )}
         </div>
 
+        {/* Recently deleted branches display */}
+        {recentlyDeleted.length > 0 && (
+          <div
+            style={{
+              margin: "12px 20px 0 20px",
+              padding: "10px 12px",
+              borderRadius: "6px",
+              background: "rgba(34, 197, 94, 0.08)",
+              border: "1px solid rgba(34, 197, 94, 0.25)",
+              color: "#4ade80",
+              fontSize: "12px",
+              maxHeight: "80px",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "4px"
+            }}
+            data-testid="delete-branches-successes"
+          >
+            <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
+              <CheckCircle2 size={13} />
+              <span>Successfully deleted {recentlyDeleted.length} branch{recentlyDeleted.length > 1 ? 'es' : ''}:</span>
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginLeft: "19px", wordBreak: "break-word" }}>
+              {recentlyDeleted.join(', ')}
+            </div>
+          </div>
+        )}
+
         {/* Errors display */}
         {errors.length > 0 && (
           <div style={{
@@ -549,7 +629,7 @@ export const DeleteBranchesModal: React.FC<DeleteBranchesModalProps> = ({
           >
             <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
               <AlertTriangle size={13} />
-              <span>Failed to delete some branches:</span>
+              <span>Failed to delete {errors.length} branch{errors.length > 1 ? 'es' : ''}:</span>
             </div>
             <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
               {errors.map((err, idx) => <li key={idx} style={{ wordBreak: "break-word" }}>{err}</li>)}

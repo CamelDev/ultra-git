@@ -513,34 +513,56 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const handleDeleteBranchesConfirm = async (
     branches: string[],
     force: boolean
-  ): Promise<{ success: boolean; errors?: string[] }> => {
-    if (!activeRepo) return { success: false, errors: ["No active repository."] }
+  ): Promise<{
+    success: boolean
+    errors?: string[]
+    deletedBranches: string[]
+    failedBranches: string[]
+  }> => {
+    if (!activeRepo) {
+      return { success: false, errors: ["No active repository."], deletedBranches: [], failedBranches: [] }
+    }
 
     const errors: string[] = []
-    let successCount = 0
+    const deletedBranches: string[] = []
+    const failedBranches: string[] = []
 
-    for (const branchName of branches) {
-      try {
-        const res = await window.api.git.deleteBranch(activeRepo.path, branchName, force)
-        if (res.success) {
-          successCount++
-        } else {
-          errors.push(`Branch '${branchName}': ${res.error || 'Unknown error'}`)
+    try {
+      for (const branchName of branches) {
+        try {
+          const res = await window.api.git.deleteBranch(activeRepo.path, branchName, force)
+          if (res.success) {
+            deletedBranches.push(branchName)
+          } else {
+            errors.push(`Branch '${branchName}': ${res.error || 'Unknown error'}`)
+            failedBranches.push(branchName)
+          }
+        } catch (err: any) {
+          errors.push(`Branch '${branchName}': ${err.message || err}`)
+          failedBranches.push(branchName)
         }
-      } catch (err: any) {
-        errors.push(`Branch '${branchName}': ${err.message || err}`)
+      }
+    } finally {
+      try {
+        await refreshRepo(activeRepo.id)
+      } catch (refreshErr) {
+        console.error('Failed to refresh repo after branch deletion:', refreshErr)
       }
     }
 
-    if (successCount > 0) {
-      await refreshRepo(activeRepo.id)
+    if (deletedBranches.length > 0 && errors.length === 0) {
+      addToast({
+        variant: 'success',
+        title: 'Branches Deleted',
+        message: `Successfully deleted ${deletedBranches.length} branch${deletedBranches.length > 1 ? 'es' : ''}.`
+      })
     }
 
     if (errors.length > 0) {
-      return { success: false, errors }
+      return { success: false, errors, deletedBranches, failedBranches }
     }
 
-    return { success: true }
+    return { success: true, deletedBranches, failedBranches: [] }
   }
 
   const isGitLockErrorMsg = (errorMsg: string) =>
