@@ -38,7 +38,8 @@ test('temporary diagnosis: fetch then refresh updates inactive branch divergence
       await page.locator('[data-testid="repo-tab"]').last().click()
       const branch = page.locator('[data-testid="sidebar-branch-feature-sync-diagnosis"]')
       await expect(branch).toBeVisible()
-      await expect(branch.locator('[data-testid="branch-sync-badge"]')).not.toBeVisible()
+      await expect(branch.locator('[data-testid="sync-ahead"]')).toHaveText('↑2')
+      await expect(branch.locator('[data-testid="sync-behind"]')).not.toBeVisible()
 
       await page.locator('[data-testid="fetch-remote-branches-btn"]').click()
       await expect(branch.locator('[data-testid="sync-ahead"]')).toHaveText('↑2')
