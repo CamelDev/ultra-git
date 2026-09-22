@@ -16,7 +16,7 @@ const transactions = new Map<string, Transaction>()
 export class PartialPatchError extends Error { constructor(public code: 'STALE_DIFF' | 'PREFLIGHT_FAILED' | 'PATH_CONTAINMENT' | 'UNSUPPORTED_CONFLICT' | 'UNDO_EXPIRED', message: string) { super(message) } }
 const digest = (v: string | Buffer) => createHash('sha256').update(v).digest('hex')
 async function git(repo: string, args: string[], input?: string): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const child = spawn('git', ['-C', repo, ...args]); let stdout = ''; let stderr = ''
     child.stdout.on('data', value => { stdout += value; if (Buffer.byteLength(stdout) > 32 * 1024 * 1024) child.kill() })
     child.stderr.on('data', value => { stderr += value })
@@ -39,13 +39,34 @@ async function exclusive<T>(repo: string, fn: () => Promise<T>) {
 function parseHunks(raw: string, file: string, generation: string): PartialHunk[] {
   const lines = raw.split('\n'), out: PartialHunk[] = []
   let header = '', body: string[] = []
-  const flush = () => { if (!header) return; const m = header.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/) ; if (!m) return; const oldStart = Number(m[1]), oldCount = Number(m[2] || 1), newStart = Number(m[3]), newCount = Number(m[4] || 1); const id = digest(`${generation}:${file}:${out.length}:${header}:${body.join('\n')}`); out.push({ id, path: file, header, lines: body, lineIds: body.map((line, index) => digest(`${id}:${index}:${line}`)), oldStart, oldCount, newStart, newCount }); body = [] }
-  for (const line of lines) { if (line.startsWith('@@ ')) { flush(); header = line } else if (header) body.push(line) }
-  flush(); return out
+  const flush = () => {
+    if (!header) return
+    const m = header.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/)
+    if (!m) return
+    const oldStart = Number(m[1]), oldCount = m[2] !== undefined ? Number(m[2]) : 1, newStart = Number(m[3]), newCount = m[4] !== undefined ? Number(m[4]) : 1
+    const id = digest(`${generation}:${file}:${out.length}:${header}:${body.join('\n')}`)
+    out.push({ id, path: file, header, lines: body, lineIds: body.map((line, index) => digest(`${id}:${index}:${line}`)), oldStart, oldCount, newStart, newCount })
+    body = []
+  }
+  for (const line of lines) {
+    if (line.startsWith('@@ ')) {
+      flush()
+      header = line
+    } else if (header) {
+      if (line.startsWith('+') || line.startsWith('-') || line.startsWith(' ') || line.startsWith('\\')) {
+        body.push(line)
+      }
+    }
+  }
+  flush()
+  return out
 }
 function patchFor(raw: string, selected: Array<{ hunk: PartialHunk; lineIds?: string[] }>) {
-  const first = raw.split('\n').findIndex(x => x.startsWith('diff --git ')); if (first < 0) throw new PartialPatchError('STALE_DIFF', 'Diff no longer exists')
-  const prefix = raw.split('\n').slice(first).filter(x => x.startsWith('diff --git ') || x.startsWith('index ') || x.startsWith('--- ') || x.startsWith('+++ ')).slice(0, 4)
+  const rawLines = raw.split('\n')
+  const first = rawLines.findIndex(x => x.startsWith('diff --git '))
+  if (first < 0) throw new PartialPatchError('STALE_DIFF', 'Diff no longer exists')
+  const firstHunk = rawLines.findIndex((x, idx) => idx >= first && x.startsWith('@@ '))
+  const prefix = firstHunk >= 0 ? rawLines.slice(first, firstHunk) : rawLines.slice(first, first + 4)
   const chunks = selected.map(({ hunk, lineIds }) => {
     if (!lineIds || lineIds.length === 0) return `${hunk.header}\n${hunk.lines.join('\n')}`
     const wanted = new Set(lineIds), ids = hunk.lineIds || []
@@ -68,7 +89,9 @@ function patchFor(raw: string, selected: Array<{ hunk: PartialHunk; lineIds?: st
         for (const line of lines) { if (line[0] !== '+') oldCount++; if (line[0] !== '-') newCount++ }
         const oldStart = hunk.oldStart + oldOffset - before.length
         const newStart = hunk.newStart + newOffset - before.length
-        chunks.push(`@@ -${Math.max(1, oldStart)},${oldCount} +${Math.max(1, newStart)},${newCount} @@\n${lines.join('\n')}`)
+        const formattedOldStart = oldCount === 0 ? 0 : Math.max(1, oldStart)
+        const formattedNewStart = newCount === 0 ? 0 : Math.max(1, newStart)
+        chunks.push(`@@ -${formattedOldStart},${oldCount} +${formattedNewStart},${newCount} @@\n${lines.join('\n')}`)
       }
       for (const line of group) { if (line[0] !== '+') oldOffset++; if (line[0] !== '-') newOffset++ }
     }
@@ -76,6 +99,30 @@ function patchFor(raw: string, selected: Array<{ hunk: PartialHunk; lineIds?: st
     return chunks.join('\n')
   })
   return `${prefix.join('\n')}\n${chunks.join('\n')}\n`
+}
+async function applyPatchWithFallback(repo: string, patch: string, baseArgs: string[]): Promise<void> {
+  const tryApply = (extra: string[]) => git(repo, ['apply', '--whitespace=nowarn', '--recount', '--unidiff-zero', ...extra, ...baseArgs, '-'], patch)
+  try {
+    await tryApply([])
+  } catch (err) {
+    try {
+      await tryApply(['--ignore-whitespace'])
+    } catch {
+      try {
+        await tryApply(['--ignore-space-change'])
+      } catch {
+        try {
+          await tryApply(['-C1', '--ignore-whitespace'])
+        } catch {
+          try {
+            await tryApply(['-C0', '--ignore-whitespace'])
+          } catch {
+            throw err
+          }
+        }
+      }
+    }
+  }
 }
 async function rawDiff(repo: string, file: string, target: PartialPatchTarget) {
   const args = ['diff', '--binary', '--full-index', '--no-ext-diff', '--unified=3']
@@ -111,11 +158,19 @@ export const partialPatchService = {
     if (!Array.isArray(selections) || selections.length === 0 || selections.length > MAX_SELECTIONS) throw new PartialPatchError('PREFLIGHT_FAILED', 'Invalid selection count')
     if (typeof generation !== 'string' || generation.length === 0) throw new PartialPatchError('STALE_DIFF', 'Missing diff generation')
     const grouped = new Map<string, PartialSelection[]>(); for (const s of selections) { safePath(repo, s.path); grouped.set(s.path, [...(grouped.get(s.path) || []), s]) }
-    const diffs: Array<{ diff: PartialDiff; raw: string; chosen: PartialHunk[] }> = []
+    const diffs: Array<{ diff: PartialDiff; raw: string; chosen: Array<{ hunk: PartialHunk; lineIds?: string[] }> }> = []
     for (const [file, selected] of grouped) { const raw = await rawDiff(repo, file, target), actual = digest(raw); if (selected.some(x => x.generation !== actual)) throw new PartialPatchError('STALE_DIFF', 'The diff changed; refresh before applying'); const d = { repository: fs.realpathSync(repo), path: file, target, generation: actual, hunks: parseHunks(raw, file, actual), binary: /Binary files/.test(raw) }; const byId = new Map(d.hunks.map(x => [x.id, x])); const chosen = selected.map(x => { const hunk = byId.get(x.hunkId); if (!hunk) throw new PartialPatchError('STALE_DIFF', 'A selected hunk is stale or ambiguous'); return { hunk, lineIds: x.lineIds } }); if (d.binary) throw new PartialPatchError('PREFLIGHT_FAILED', 'Binary files do not support partial selection'); diffs.push({ diff: d, raw, chosen }) }
     const files = [...grouped.keys()], before = await snapshot(repo, files)
     try {
-      for (const item of diffs) { const patch = patchFor(item.raw, item.chosen); if (Buffer.byteLength(patch) > MAX_PATCH_BYTES) throw new PartialPatchError('PREFLIGHT_FAILED', 'Patch is too large'); const args = ['apply', '--whitespace=nowarn', '--recount']; if (target === 'stage' || target === 'unstage') args.push('--cached'); if (target === 'unstage' || target === 'discard' || target === 'staged-discard') args.push('--reverse'); if (target === 'staged-discard') await git(repo, ['reset', 'HEAD', '--', item.diff.path]); await git(repo, [...args, '-'], patch) }
+      for (const item of diffs) {
+        const patch = patchFor(item.raw, item.chosen)
+        if (Buffer.byteLength(patch) > MAX_PATCH_BYTES) throw new PartialPatchError('PREFLIGHT_FAILED', 'Patch is too large')
+        const baseArgs: string[] = []
+        if (target === 'stage' || target === 'unstage') baseArgs.push('--cached')
+        if (target === 'unstage' || target === 'discard' || target === 'staged-discard') baseArgs.push('--reverse')
+        if (target === 'staged-discard') await git(repo, ['reset', 'HEAD', '--', item.diff.path])
+        await applyPatchWithFallback(repo, patch, baseArgs)
+      }
     } catch (e) { await restore(repo, before); throw e }
     const after = await snapshot(repo, files), id = randomUUID(); transactions.set(id, { repo: fs.realpathSync(repo), before, after, generation, undone: false }); return { transactionId: id, generation: digest(JSON.stringify(after)), undoAvailable: true, redoAvailable: false }
   }),

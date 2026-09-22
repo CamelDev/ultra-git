@@ -967,7 +967,13 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   const selectedCanonical = (selectedHunks: DiffHunk[], lineIndices?: Set<number>): PartialSelection[] => {
     if (!partialDiff) return []
     return selectedHunks.flatMap((hunk) => {
-      const canonical = partialDiff.hunks[hunk.hunkIndex]
+      let canonical = partialDiff.hunks[hunk.hunkIndex]
+      if (!canonical || (canonical.oldStart !== hunk.oldStart && canonical.newStart !== hunk.newStart)) {
+        canonical = partialDiff.hunks.find(c =>
+          (c.oldStart <= hunk.oldStart + hunk.oldCount && c.oldStart + c.oldCount >= hunk.oldStart) ||
+          (c.newStart <= hunk.newStart + hunk.newCount && c.newStart + c.newCount >= hunk.newStart)
+        ) || canonical
+      }
       if (!canonical) return []
       const lineIds = lineIndices
         ? hunk.lines.flatMap((line, index) => lineIndices.has(line.indexInDiff) ? [canonical.lineIds?.[index]].filter(Boolean) as string[] : [])
