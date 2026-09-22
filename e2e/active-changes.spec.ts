@@ -186,9 +186,10 @@ test.describe('Active Changes Panel', () => {
 
       const panel = page.locator('[data-testid="active-changes-panel"]')
       const unstagedColumn = panel.locator('.unstaged-column')
+      const stagedColumn = panel.locator('.staged-column')
       const sourceFolder = unstagedColumn.locator('[data-testid="folder-checkbox-unstaged-src"]')
       await expect(sourceFolder).toHaveCount(0)
-      await page.locator('[data-testid="changes-view-toggle-btn"]').click()
+      await page.locator('[data-testid="changes-view-toggle-unstaged"]').click()
       await expect(sourceFolder).toBeVisible()
       await sourceFolder.check()
       await expect(panel.locator('[data-testid="batch-stage-btn"]')).toContainText('Stage (2)')
@@ -200,6 +201,14 @@ test.describe('Active Changes Panel', () => {
 
       await panel.locator('[data-testid="batch-stage-btn"]').click()
       await expect(panel.locator('.staged-column .file-item')).toHaveCount(2)
+
+      // Staged files remain in list mode independently
+      const stagedSourceFolder = stagedColumn.locator('[data-testid="folder-checkbox-staged-src"]')
+      await expect(stagedSourceFolder).toHaveCount(0)
+
+      // Staged view mode toggle controls staged files independently
+      await page.locator('[data-testid="changes-view-toggle-staged"]').click()
+      await expect(stagedSourceFolder).toBeVisible()
     } finally {
       await app.close()
     }

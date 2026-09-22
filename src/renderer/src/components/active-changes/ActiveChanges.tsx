@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { FileText, Folder, ChevronRight, ChevronDown, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw, Trash2, EyeOff, MoreVertical } from 'lucide-react'
+import { FileText, Folder, ChevronRight, ChevronDown, ArrowRight, ArrowLeft, AlertTriangle, RotateCcw, Trash2, EyeOff, MoreVertical, ListTree } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { useUndoStore } from '../../store/useUndoStore'
 import { useToaster } from '../toaster/ToasterContext'
@@ -197,10 +197,67 @@ function getIgnoreOptions(filePath: string): Array<{ label: string; value: strin
   return options
 }
 
-export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMode }) => {
+export interface ActiveChangesProps {
+  viewMode?: 'list' | 'tree'
+  initialUnstagedViewMode?: 'list' | 'tree'
+  initialStagedViewMode?: 'list' | 'tree'
+}
+
+export const resolveViewModePreference = (
+  panel: 'unstaged' | 'staged',
+  initialMode?: 'list' | 'tree',
+  legacyMode?: 'list' | 'tree',
+  storage?: Pick<Storage, 'getItem' | 'setItem'>
+): 'list' | 'tree' => {
+  if (initialMode) return initialMode
+  const s = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null)
+  const key = panel === 'unstaged' ? 'unstaged-changes-view-mode' : 'staged-changes-view-mode'
+  const saved = s?.getItem(key) ?? legacyMode ?? s?.getItem('changes-view-mode')
+  return saved === 'tree' ? 'tree' : 'list'
+}
+
+export const saveViewModePreference = (
+  panel: 'unstaged' | 'staged',
+  mode: 'list' | 'tree',
+  storage?: Pick<Storage, 'getItem' | 'setItem'>
+): void => {
+  const s = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null)
+  const key = panel === 'unstaged' ? 'unstaged-changes-view-mode' : 'staged-changes-view-mode'
+  s?.setItem(key, mode)
+}
+
+export const ActiveChanges: React.FC<ActiveChangesProps> = ({
+  viewMode,
+  initialUnstagedViewMode,
+  initialStagedViewMode
+}) => {
   const { getActiveRepo, refreshRepo, identities } = useRepoStore()
   const { addToast } = useToaster()
   const activeRepo = getActiveRepo()
+
+  const [unstagedViewMode, setUnstagedViewMode] = useState<'list' | 'tree'>(() => {
+    return resolveViewModePreference('unstaged', initialUnstagedViewMode, viewMode)
+  })
+
+  const [stagedViewMode, setStagedViewMode] = useState<'list' | 'tree'>(() => {
+    return resolveViewModePreference('staged', initialStagedViewMode, viewMode)
+  })
+
+  const toggleUnstagedViewMode = () => {
+    setUnstagedViewMode((prev) => {
+      const next = prev === 'list' ? 'tree' : 'list'
+      saveViewModePreference('unstaged', next)
+      return next
+    })
+  }
+
+  const toggleStagedViewMode = () => {
+    setStagedViewMode((prev) => {
+      const next = prev === 'list' ? 'tree' : 'list'
+      saveViewModePreference('staged', next)
+      return next
+    })
+  }
 
   const [selectedUnstaged, setSelectedUnstaged] = useState<Set<string>>(new Set())
   const [selectedStaged, setSelectedStaged] = useState<Set<string>>(new Set())
@@ -667,6 +724,17 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
         <div className="active-changes-column unstaged-column">
           <div className="column-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                className="header-view-toggle-btn"
+                onClick={toggleUnstagedViewMode}
+                aria-pressed={unstagedViewMode === 'tree'}
+                data-tooltip={unstagedViewMode === 'tree' ? 'Show changed files as a list' : 'Show changed files as a folder tree'}
+                data-testid="changes-view-toggle-unstaged"
+                aria-label={unstagedViewMode === 'tree' ? 'Show changed files as a list' : 'Show changed files as a folder tree'}
+              >
+                <ListTree size={14} />
+              </button>
               {unstagedFiles.length > 0 && (
                 <input
                   type="checkbox"
@@ -721,7 +789,7 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
               <FileTree
                 files={unstagedFiles}
                 selectedPaths={selectedUnstaged}
-                treeMode={viewMode === 'tree'}
+                treeMode={unstagedViewMode === 'tree'}
                 panel="unstaged"
                 collapsedFolders={collapsedFolders}
                 onToggleFolder={toggleFolder}
@@ -893,6 +961,17 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
         <div className="active-changes-column staged-column">
           <div className="column-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                className="header-view-toggle-btn"
+                onClick={toggleStagedViewMode}
+                aria-pressed={stagedViewMode === 'tree'}
+                data-tooltip={stagedViewMode === 'tree' ? 'Show staged files as a list' : 'Show staged files as a folder tree'}
+                data-testid="changes-view-toggle-staged"
+                aria-label={stagedViewMode === 'tree' ? 'Show staged files as a list' : 'Show staged files as a folder tree'}
+              >
+                <ListTree size={14} />
+              </button>
               {stagedFiles.length > 0 && (
                 <input
                   type="checkbox"
@@ -947,7 +1026,7 @@ export const ActiveChanges: React.FC<{ viewMode: 'list' | 'tree' }> = ({ viewMod
               <FileTree
                 files={stagedFiles}
                 selectedPaths={selectedStaged}
-                treeMode={viewMode === 'tree'}
+                treeMode={stagedViewMode === 'tree'}
                 panel="staged"
                 collapsedFolders={collapsedFolders}
                 onToggleFolder={toggleFolder}

@@ -104,17 +104,6 @@ function App() {
     return saved ? parseInt(saved, 10) : window.innerHeight / 2
   })
   const [isActiveChangesDragging, setIsActiveChangesDragging] = useState(false)
-  const [changesViewMode, setChangesViewMode] = useState<'list' | 'tree'>(() => {
-    return localStorage.getItem('changes-view-mode') === 'tree' ? 'tree' : 'list'
-  })
-
-  const toggleChangesViewMode = () => {
-    setChangesViewMode((previous) => {
-      const next = previous === 'list' ? 'tree' : 'list'
-      localStorage.setItem('changes-view-mode', next)
-      return next
-    })
-  }
 
   // Use a ref to access the active width inside listeners without re-binding them
   const sidebarWidthRef = useRef(sidebarWidth)
@@ -363,12 +352,10 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
             onMergeConflicts={handleMergeConflicts}
             onOpenConflictResolver={openConflictResolver}
             onConflictOperation={handleConflictOperation}
-            changesViewMode={changesViewMode}
-            onToggleChangesViewMode={toggleChangesViewMode}
           />
           {hasActiveChanges && (
             <ErrorBoundary fallbackTitle="Unable to load changes" resetKey={activeRepo?.id}>
-              <ActiveChanges viewMode={changesViewMode} />
+              <ActiveChanges />
               <div 
                 className={`active-changes-resizer ${isActiveChangesDragging ? 'is-dragging' : ''}`}
                 onPointerDown={startActiveChangesResize}

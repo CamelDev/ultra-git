@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package, ListTree, Undo2, Redo2, GitMerge, AlertTriangle, SkipForward, XCircle } from 'lucide-react'
+import { GitBranch, X, Tag, Cherry, Network, Plus, Minus, Package, Undo2, Redo2, GitMerge, AlertTriangle, SkipForward, XCircle } from 'lucide-react'
 import { useRepoStore } from '../../store/useRepoStore'
 import { useUndoStore } from '../../store/useUndoStore'
 import { useToaster } from '../toaster/ToasterContext'
@@ -13,8 +13,8 @@ interface ToolbarProps {
   onMergeConflicts?: (conflictedFiles: Array<{ path: string; status: string }>, isRebase: boolean, isCherryPick?: boolean) => void
   onOpenConflictResolver?: () => void
   onConflictOperation?: (operation: 'continue' | 'skip' | 'abort') => Promise<void>
-  changesViewMode: 'list' | 'tree'
-  onToggleChangesViewMode: () => void
+  changesViewMode?: 'list' | 'tree'
+  onToggleChangesViewMode?: () => void
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResolver, onConflictOperation, changesViewMode, onToggleChangesViewMode }) => {
@@ -620,16 +620,6 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResol
                 >
                   <Package size={16} />
                   <span className="sr-only">Stash all</span>
-                </button>
-                <button
-                  className="btn-stash btn-icon"
-                  onClick={onToggleChangesViewMode}
-                  aria-pressed={changesViewMode === 'tree'}
-                  data-tooltip={changesViewMode === 'tree' ? 'Show changed files as a list' : 'Show changed files as a folder tree'}
-                  data-testid="changes-view-toggle-btn"
-                >
-                  <ListTree size={16} />
-                  <span className="sr-only">Toggle changed files folder tree</span>
                 </button>
 
                 <div className="commit-section" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
