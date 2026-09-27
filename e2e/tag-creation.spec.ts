@@ -373,7 +373,6 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       console.log(`[Commit Tag Test] Selecting commit row for ${targetCommit.hash}...`)
       const commitRow = commitList.locator('.commit-item', { hasText: 'First custom commit' })
       await expect(commitRow).toBeVisible()
-      await commitRow.click()
       await commitRow.hover()
       await page.waitForTimeout(300)
 
