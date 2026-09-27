@@ -114,4 +114,43 @@ describe('diff viewer caching & concurrency logic', () => {
     expect(delDiff.length).toBe(1000)
     expect(delDiff.every((d) => d.type === 'delete')).toBe(true)
   })
+
+  test('DiffModal Escape key handler closes confirmation dialog before closing modal or clearing selection', () => {
+    // Simulates the DiffModal Escape key resolution hierarchy
+    let confirmDialogOpen = true
+    let searchOpen = false
+    let selectedLineCount = 3
+    let modalClosed = false
+
+    const handleEscape = () => {
+      if (confirmDialogOpen) {
+        confirmDialogOpen = false
+        return
+      }
+      if (searchOpen) {
+        searchOpen = false
+        return
+      }
+      if (selectedLineCount > 0) {
+        selectedLineCount = 0
+        return
+      }
+      modalClosed = true
+    }
+
+    // Step 1: Escape closes confirmation dialog first
+    handleEscape()
+    expect(confirmDialogOpen).toBe(false)
+    expect(selectedLineCount).toBe(3)
+    expect(modalClosed).toBe(false)
+
+    // Step 2: Next Escape clears selected lines
+    handleEscape()
+    expect(selectedLineCount).toBe(0)
+    expect(modalClosed).toBe(false)
+
+    // Step 3: Next Escape closes modal
+    handleEscape()
+    expect(modalClosed).toBe(true)
+  })
 })

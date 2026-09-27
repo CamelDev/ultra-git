@@ -1120,6 +1120,12 @@ export const DiffModal: React.FC<DiffModalProps> = ({
           return next
         })
       } else if (e.key === 'Escape') {
+        if (confirmDialog && confirmDialog.isOpen) {
+          e.preventDefault()
+          e.stopPropagation()
+          setConfirmDialog(null)
+          return
+        }
         if (searchOpen) {
           e.preventDefault()
           e.stopPropagation()
@@ -1186,6 +1192,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
   }, [
     isOpen,
     onClose,
+    confirmDialog,
     searchOpen,
     selectedLineIndices,
     activeChunkIndex,
