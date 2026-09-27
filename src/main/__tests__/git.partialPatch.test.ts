@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import fs from 'node:fs'
 import path from 'node:path'
-import simpleGit from 'simple-git'
+import { simpleGit } from 'simple-git'
 import { partialPatchService, PartialPatchError } from '../partialPatchService'
 
 describe('ordinary partial patch transactions', () => {

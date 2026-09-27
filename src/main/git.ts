@@ -1,4 +1,4 @@
-import simpleGit, { SimpleGit, SimpleGitOptions } from 'simple-git';
+import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';
 import fs from 'fs';
 import { join, resolve } from 'path';
 import { execFile } from 'child_process';
@@ -140,15 +140,54 @@ export const SMART_PULL_STASH_MESSAGE = 'ultra-git: auto-stash before pull';
 
 // Manage simple-git instances per repository path
 const gitInstances = new Map<string, SimpleGit>();
+let gitInstanceFactory: ((repoPath: string) => SimpleGit | null) | null = null;
 
-function getGitInstance(repoPath: string): SimpleGit {
+export function setGitInstanceFactory(factory: ((repoPath: string) => SimpleGit | null) | null): void {
+  gitInstanceFactory = factory;
+}
+
+export function getGitInstance(repoPath: string): SimpleGit {
+  if (gitInstanceFactory) {
+    const custom = gitInstanceFactory(repoPath);
+    if (custom) return custom;
+  }
   if (!gitInstances.has(repoPath)) {
+    const allowedGitEnvs = [
+      'GIT_TERMINAL_PROMPT',
+      'GIT_OPTIONAL_LOCKS',
+      'GIT_CONFIG_GLOBAL',
+      'GIT_CONFIG_SYSTEM',
+      'GIT_CONFIG_NOSYSTEM',
+      'GIT_SSH_COMMAND',
+      'GIT_SSL_NO_VERIFY',
+      'GIT_ASKPASS',
+      'GIT_AUTHOR_NAME',
+      'GIT_AUTHOR_EMAIL',
+      'GIT_AUTHOR_DATE',
+      'GIT_COMMITTER_NAME',
+      'GIT_COMMITTER_EMAIL',
+      'GIT_COMMITTER_DATE',
+      'GIT_PREFIX',
+      'GIT_EXEC_PATH',
+      'GIT_TRACE',
+      'GIT_DIR',
+      'GIT_WORK_TREE',
+      'GIT_INDEX_FILE',
+      'GIT_OBJECT_DIRECTORY',
+      'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+      'GIT_CEILING_DIRECTORIES',
+      'GIT_DISCOVERY_ACROSS_FILESYSTEM',
+      'GIT_COMMON_DIR',
+      ...Object.keys(process.env).filter(k => k.toUpperCase().startsWith('GIT_'))
+    ];
+
     const options: any = {
       baseDir: repoPath,
       binary: 'git',
       maxConcurrentProcesses: 6,
       trimmed: false,
       config: ['core.editor=true'],
+      allowEnvironment: allowedGitEnvs,
       spawnOptions: {
         env: {
           ...process.env,
@@ -163,6 +202,15 @@ function getGitInstance(repoPath: string): SimpleGit {
     gitInstances.set(repoPath, simpleGit(options));
   }
   return gitInstances.get(repoPath)!;
+}
+
+export function setGitInstance(repoPath: string, instance: SimpleGit): void {
+  gitInstances.set(repoPath, instance);
+}
+
+export function clearGitInstances(): void {
+  gitInstances.clear();
+  gitInstanceFactory = null;
 }
 
 const commitParentsCache = new Map<string, string[]>();
@@ -2343,5 +2391,10 @@ export const gitService = {
     } catch {
       return { success: false };
     }
-  }
+  },
+
+  getGitInstance,
+  setGitInstance,
+  setGitInstanceFactory,
+  clearGitInstances
 };

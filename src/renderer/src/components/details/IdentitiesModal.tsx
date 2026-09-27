@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { X, Plus, Trash2, FolderOpen, Github, Gitlab, Check, Loader2, Pencil, AlertCircle } from 'lucide-react'
+import { X, Plus, Trash2, FolderOpen, Check, Loader2, Pencil, AlertCircle } from 'lucide-react'
+import { Github, Gitlab, Bitbucket } from '../common/BrandIcons'
 import { useRepoStore, Identity } from '../../store/useRepoStore'
 
 interface IdentitiesModalProps {
   isOpen: boolean
   onClose: () => void
 }
-
-const BitbucketIcon = (props: any) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
-    <path d="M22.3 3.4c-.2-.4-.6-.7-1-.7H2.7c-.5 0-.9.3-1 .7L.1 19.3c-.1.5.1 1 .5 1.3.3.3.7.4 1.1.4h18.6c.4 0 .8-.2 1-.6l2.1-15.6c.1-.5-.1-1-.4-1.4zM15.4 15H8.6l-1-6.8h8.8l-1 6.8z"/>
-  </svg>
-)
 
 export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClose }) => {
   const { identities, addIdentity, removeIdentity, updateIdentity } = useRepoStore()
@@ -194,7 +189,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
       case 'gitlab':
         return <Gitlab size={size} style={{ color: '#fc6d26' }} />
       case 'bitbucket':
-        return <BitbucketIcon width={size} height={size} style={{ color: '#0052cc' }} />
+        return <Bitbucket size={size} style={{ color: '#0052cc' }} />
       default:
         return null
     }

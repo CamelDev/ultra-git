@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import * as fs from 'fs'
 import * as path from 'path'
-import simpleGit from 'simple-git'
+import { simpleGit } from 'simple-git'
 import { gitService } from '../git'
 
 describe('Git Service Undo & Safety Snapshot Tests', () => {

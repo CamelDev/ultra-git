@@ -1,4 +1,4 @@
-import simpleGit, { SimpleGit } from 'simple-git';
+import { simpleGit, SimpleGit } from 'simple-git';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -19,8 +19,14 @@ export class GitSandbox {
     fs.mkdirSync(this.dir, { recursive: true });
     this.git = simpleGit({
       baseDir: this.dir,
+      allowEnvironment: [
+        'GIT_TERMINAL_PROMPT',
+        'GIT_OPTIONAL_LOCKS',
+        ...Object.keys(process.env).filter(k => k.toUpperCase().startsWith('GIT_'))
+      ],
       unsafe: {
-        allowUnsafeCredentialHelper: true
+        allowUnsafeCredentialHelper: true,
+        allowUnsafeEditor: true
       }
     } as any);
   }

@@ -86,7 +86,7 @@ test.describe('Active Changes Panel', () => {
 
       // 4. Click a file item to open the diff modal
       const readmeItem = unstagedItems.first()
-      await readmeItem.click()
+      await readmeItem.locator('.file-status').click()
       await page.waitForTimeout(500)
 
       const diffModal = page.locator('.diff-modal-overlay')
@@ -491,7 +491,7 @@ test.describe('Active Changes Panel', () => {
       expect(initialCount).toBeGreaterThanOrEqual(3)
 
       // Click the first file to open DiffModal
-      await unstagedItems.first().click()
+      await unstagedItems.first().locator('.file-status').click()
       await page.waitForTimeout(500)
 
       const diffModal = page.locator('.diff-modal-overlay')

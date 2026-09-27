@@ -95,7 +95,7 @@ describe('real Git conflict characterization', () => {
     expect((await gitService.getMergeStatus(dir)).isCherryPick).toBe(true);
     expect((await unmerged(dir)).length).toBeGreaterThan(0);
     await git(dir, ['cherry-pick', '--abort']);
-    expect(fs.readFileSync(path.join(dir, 'conflict.txt'), 'utf8')).toBe('main\n');
+    expect(fs.readFileSync(path.join(dir, 'conflict.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe('main\n');
     expect((await git(dir, ['status', '--porcelain'])).trim()).toBe('');
   });
 

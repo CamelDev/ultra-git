@@ -15,8 +15,8 @@ const undoEntries = new Map<string, { repo: string; generation: string; path: st
 
 export class ConflictServiceError extends Error { constructor(public code: ConflictErrorCode, message: string) { super(message) } }
 const hash = (v: Buffer | string) => createHash('sha256').update(v).digest('hex')
-async function run(repo: string, args: string[], input?: string | Buffer) {
-  try { return (await exec('git', ['-C', repo, ...args], { input, maxBuffer: 16 * 1024 * 1024 })).stdout }
+async function run(repo: string, args: string[], input?: string | Buffer): Promise<string> {
+  try { return String((await exec('git', ['-C', repo, ...args], { input, maxBuffer: 16 * 1024 * 1024 } as any)).stdout) }
   catch (e: any) { throw new ConflictServiceError('PREFLIGHT_FAILED', e.stderr || e.message || 'Git command failed') }
 }
 async function runIndexInfo(repo: string, input: string) {
@@ -64,7 +64,7 @@ async function snapshot(repo: string): Promise<OperationSnapshot> {
   const phase = conflicts.length ? 'conflicted' : status.inProgress ? 'ready-to-continue' : 'completed'
   return { repoId: real, generation, kind, phase, roles: { current: status.branchName ?? 'current', incoming: status.currentCommitSubject ?? 'incoming', currentRole: status.isRebase ? 'onto' : 'current', incomingRole: status.isRebase ? 'replayed' : 'incoming' }, currentStep: status.currentStep, totalSteps: status.totalSteps, subject: status.currentCommitSubject, conflicts, nextConflict: conflicts[0]?.path }
 }
-async function mutate(repo: string, fn: () => Promise<void>) { return withLock(fs.realpathSync(repo), fn) }
+async function mutate<T>(repo: string, fn: () => Promise<T>): Promise<T> { return withLock(fs.realpathSync(repo), fn) }
 
 export const conflictService = {
   getSnapshot: snapshot,

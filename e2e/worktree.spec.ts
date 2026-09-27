@@ -30,7 +30,7 @@ test.describe('Git Worktrees Integration', () => {
     await sandbox.git.raw(['worktree', 'add', wtPath, 'feature/wt-test']);
     
     // Add a commit inside the worktree to make it have distinct history/files
-    const wtGit = require('simple-git')(wtPath);
+    const wtGit = require('simple-git').simpleGit(wtPath);
     fs.writeFileSync(path.join(wtPath, 'wt-only-file.txt'), 'Worktree file content');
     await wtGit.add('wt-only-file.txt');
     await wtGit.commit('Commit in worktree');
@@ -359,7 +359,7 @@ test.describe('Git Worktrees Integration', () => {
       await expect(rebaseModal).toBeHidden();
 
       // Verify no rebase occurred yet
-      const wtGitPre = require('simple-git')(wtPath);
+      const wtGitPre = require('simple-git').simpleGit(wtPath);
       const preLog = await wtGitPre.log();
       const preMessages = preLog.all.map((c: any) => c.message);
       expect(preMessages).not.toContain('Commit in main branch');
@@ -378,7 +378,7 @@ test.describe('Git Worktrees Integration', () => {
       await page.waitForTimeout(1000); // wait for git rebase and UI sync
 
       console.log('[Worktree Rebase Test] 9. Verifying history directly in worktree directory...');
-      const wtGit = require('simple-git')(wtPath);
+      const wtGit = require('simple-git').simpleGit(wtPath);
       const log = await wtGit.log();
       const messages = log.all.map((c: any) => c.message);
       expect(messages).toContain('Commit in main branch');

@@ -1,12 +1,13 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterAll } from 'bun:test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { gitService } from '../git';
 
 /**
  * Unit tests for gitService.pullPreflight / gitService.smartPull.
- * simple-git is mocked at the module level; each test programs the raw/status
- * responses it needs and asserts on the typed results and call ordering.
+ * simple-git is mocked via setGitInstance per repository path; each test programs
+ * the raw/status responses it needs and asserts on the typed results and call ordering.
  */
 
 const calls: string[][] = [];
@@ -24,10 +25,6 @@ const fakeGit = {
     if (fetchError) throw fetchError;
   }
 };
-
-mock.module('simple-git', () => ({ default: () => fakeGit }));
-
-const { gitService } = await import('../git');
 
 const UPSTREAM = 'origin/main';
 
@@ -48,6 +45,17 @@ beforeEach(() => {
   rawHandler = defaultRaw;
   statusHandler = cleanStatus;
   fetchError = null;
+  gitService.setGitInstanceFactory((repoPath: string) => {
+    if (repoPath.startsWith('/tmp/repo-') || repoPath.includes('ultragit-preflight') || repoPath.includes('ultragit-smart-pull')) {
+      return fakeGit as any;
+    }
+    return null;
+  });
+});
+
+afterAll(() => {
+  gitService.setGitInstanceFactory(null);
+  gitService.clearGitInstances();
 });
 
 const callsMatching = (prefix: string[]) =>
@@ -84,6 +92,7 @@ describe('pullPreflight', () => {
     try {
       fs.mkdirSync(path.join(tmp, '.git'));
       fs.writeFileSync(path.join(tmp, '.git', 'MERGE_HEAD'), 'abc123\n');
+      gitService.setGitInstance(tmp, fakeGit as any);
       const plan = await gitService.pullPreflight(tmp);
       expect(plan.ok).toBe(false);
       expect(plan.blocker).toBe('MERGE_IN_PROGRESS');

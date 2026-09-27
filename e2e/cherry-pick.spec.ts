@@ -187,7 +187,7 @@ test.describe('Cherry Pick Feature', () => {
     // Create a commit inside the worktree directory
     const wtFile = path.join(wtDir, 'worktree-file.txt')
     fs.writeFileSync(wtFile, 'Worktree commit content\n')
-    const wtGit = (await import('simple-git')).default(wtDir)
+    const wtGit = (await import('simple-git')).simpleGit(wtDir)
     await wtGit.addConfig('user.name', 'Test User', false, 'local')
     await wtGit.addConfig('user.email', 'test@example.com', false, 'local')
     await wtGit.add('worktree-file.txt')

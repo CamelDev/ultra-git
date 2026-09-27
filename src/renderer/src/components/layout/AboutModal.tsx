@@ -1,6 +1,7 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { X, Github, Heart, Info, ExternalLink, RefreshCw } from 'lucide-react'
+import { X, Heart, Info, ExternalLink, RefreshCw } from 'lucide-react'
+import { Github } from '../common/BrandIcons'
 import './AboutModal.css'
 import logoIcon from '../../assets/icon.png'
 import pkg from '../../../../../package.json'

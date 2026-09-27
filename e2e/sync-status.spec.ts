@@ -18,7 +18,7 @@ test.describe('Branch Sync Status', () => {
     localSandbox = new GitSandbox()
     fs.rmSync(localSandbox.dir, { recursive: true, force: true })
     
-    const baseGit = require('simple-git')()
+    const baseGit = require('simple-git').simpleGit()
     await baseGit.clone(remoteSandbox.dir, localSandbox.dir)
     
     // Configure local sandbox user info

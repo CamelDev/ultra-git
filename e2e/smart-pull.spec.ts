@@ -23,7 +23,7 @@ test.describe('Smart Pull', () => {
     // Local repository cloned from the remote sandbox
     localSandbox = new GitSandbox()
     fs.rmSync(localSandbox.dir, { recursive: true, force: true })
-    const baseGit = require('simple-git')()
+    const baseGit = require('simple-git').simpleGit()
     await baseGit.clone(remoteSandbox.dir, localSandbox.dir)
     await localSandbox.git.addConfig('user.name', 'Test User', false, 'local')
     await localSandbox.git.addConfig('user.email', 'test@example.com', false, 'local')

@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import * as fs from 'fs'
 import * as path from 'path'
 import { execFile } from 'child_process'
-import simpleGit from 'simple-git'
+import { simpleGit } from 'simple-git'
 import { gitService } from '../git'
 import { buildHunksFromDiffItems, buildHunkPatch, computeDiff, DiffItem } from '../../renderer/src/utils/patchBuilder'
 
@@ -33,6 +33,7 @@ describe('Git Patch Discard Tests', () => {
     await git.init()
     await git.addConfig('user.name', 'Test')
     await git.addConfig('user.email', 'test@example.com')
+    await git.addConfig('core.autocrlf', 'false')
   })
 
   afterEach(() => {
@@ -317,7 +318,7 @@ describe('Git Patch Discard Tests', () => {
     const fullPath = path.join(tmpDir, filePath)
 
     fs.writeFileSync(fullPath, 'line 1\r\nline 2\r\nline 3\r\n')
-    const git = (gitService as any).getGitInstance ? (gitService as any).getGitInstance(tmpDir) : (await import('simple-git')).default(tmpDir)
+    const git = (gitService as any).getGitInstance ? (gitService as any).getGitInstance(tmpDir) : (await import('simple-git')).simpleGit(tmpDir)
     await git.add(filePath)
     await git.commit('initial')
 

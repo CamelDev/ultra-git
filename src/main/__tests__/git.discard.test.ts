@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import * as fs from 'fs'
 import * as path from 'path'
-import simpleGit from 'simple-git'
+import { simpleGit } from 'simple-git'
 import { gitService } from '../git'
 
 describe('Git Service Discard Changes Tests', () => {
@@ -17,6 +17,7 @@ describe('Git Service Discard Changes Tests', () => {
     await git.init()
     await git.addConfig('user.name', 'Test User')
     await git.addConfig('user.email', 'test@example.com')
+    await git.addConfig('core.autocrlf', 'false')
   })
 
   afterEach(() => {

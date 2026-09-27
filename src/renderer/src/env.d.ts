@@ -151,6 +151,11 @@ declare global {
         createSafetySnapshot: (repoPath: string, filePaths?: string[]) => Promise<{ success: boolean; snapshotId?: string; error?: string }>;
         restoreSafetySnapshot: (repoPath: string, snapshotId: string) => Promise<{ success: boolean; error?: string }>;
         deleteSafetySnapshot: (repoPath: string, snapshotId: string) => Promise<{ success: boolean; error?: string }>;
+        getConflictCandidates: (repoPath: string, filePath: string, generation: string) => Promise<{ success: boolean; data?: any[]; code?: string; error?: string }>;
+        previewConflictCandidate: (repoPath: string, filePath: string, generation: string, candidateId: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
+        getConflictCandidateSettings: (repoPath: string) => Promise<{ success: boolean; data?: { enabled: boolean }; code?: string; error?: string }>;
+        setConflictCandidateEnabled: (repoPath: string, enabled: boolean) => Promise<{ success: boolean; code?: string; error?: string }>;
+        forgetConflictCandidateRecords: (repoPath: string, recordId?: string) => Promise<{ success: boolean; code?: string; error?: string }>;
       };
       app: {
         openDirectory: () => Promise<{ canceled: boolean; path?: string }>;

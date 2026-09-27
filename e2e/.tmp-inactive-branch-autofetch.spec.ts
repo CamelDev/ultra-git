@@ -10,7 +10,7 @@ test('temporary diagnosis: fetch then refresh updates inactive branch divergence
 
   const local = new GitSandbox()
   fs.rmSync(local.dir, { recursive: true, force: true })
-  await require('simple-git')().clone(remote.dir, local.dir)
+  await require('simple-git').simpleGit().clone(remote.dir, local.dir)
   await local.git.addConfig('user.name', 'Test User', false, 'local')
   await local.git.addConfig('user.email', 'test@example.com', false, 'local')
   await remote.git.addConfig('receive.denyCurrentBranch', 'ignore', false, 'local')
