@@ -340,4 +340,46 @@ describe('real Git conflict characterization', () => {
       expect(finalSnap.phase).toBe('completed');
     });
   });
+
+  describe('textarea manual edits persistence (TE1)', () => {
+    test('TE1: custom edited result passed in options is written to disk and staged', async () => {
+      const dir = await repo();
+      fs.writeFileSync(path.join(dir, 'editable.txt'), 'line 1\nbase content\nline 3\n');
+      await commit(dir, 'base commit');
+
+      await git(dir, ['checkout', '-b', 'incoming']);
+      fs.writeFileSync(path.join(dir, 'editable.txt'), 'line 1\nincoming content\nline 3\n');
+      await commit(dir, 'incoming commit');
+
+      await git(dir, ['checkout', 'main']);
+      fs.writeFileSync(path.join(dir, 'editable.txt'), 'line 1\ncurrent content\nline 3\n');
+      await commit(dir, 'current commit');
+
+      await git(dir, ['merge', 'incoming'], true);
+
+      const snap = await conflictService.getSnapshot(dir);
+      const doc = await conflictService.getDocument(dir, 'editable.txt', snap.generation);
+
+      // Select current for region, but specify a custom textarea edit in options.result
+      const selections = doc.regions.map(r => ({
+        documentGeneration: snap.generation,
+        regionId: r.id,
+        choice: 'current' as const
+      }));
+
+      const customText = 'line 1\nMANUALLY TYPED CUSTOM CONTENT\nline 3\n';
+      const res = await conflictService.apply(dir, 'editable.txt', selections, snap.generation, {
+        fileChoice: 'manual',
+        result: customText
+      });
+
+      expect(res.token).toBeDefined();
+      const contentOnDisk = fs.readFileSync(path.join(dir, 'editable.txt'), 'utf8');
+      expect(contentOnDisk).toBe(customText);
+      expect((await unmerged(dir)).filter(s => s.path === 'editable.txt')).toHaveLength(0);
+
+      const finalSnap = await conflictService.continue(dir);
+      expect(finalSnap.phase).toBe('completed');
+    });
+  });
 });
