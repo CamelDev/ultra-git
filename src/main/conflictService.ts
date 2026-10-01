@@ -47,7 +47,17 @@ async function blob(repo: string, oid?: string, mode?: string): Promise<BlobView
   const text = value.toString('utf8'); const eols = [...text.matchAll(/\r\n|\n|\r/g)].map(m => m[0]); const eol = eols.length === 0 ? 'none' : eols.every(x => x === '\r\n') ? 'crlf' : eols.every(x => x === '\n') ? 'lf' : 'mixed'
   return { oid, mode, bytes: text, hash: hash(value), byteLength: value.length, eol, hasFinalNewline: /\r$|\n$/.test(text), isBinary: value.includes(0) }
 }
-function kindFor(entries: Stage[]): ConflictType { const s = new Set(entries.map(x => x.stage)); if (s.has(1)) return 'both-modified'; if (s.has(2) && !s.has(3)) return 'added-by-us'; if (s.has(3) && !s.has(2)) return 'added-by-them'; return 'other' }
+export function kindFor(entries: { stage: number }[]): ConflictType {
+  const s = new Set(entries.map(x => x.stage))
+  if (s.has(1) && s.has(2) && s.has(3)) return 'both-modified'
+  if (s.has(2) && s.has(3) && !s.has(1)) return 'both-added'
+  if (s.has(1) && s.has(2) && !s.has(3)) return 'deleted-by-them'
+  if (s.has(1) && s.has(3) && !s.has(2)) return 'deleted-by-us'
+  if (s.has(2) && !s.has(1) && !s.has(3)) return 'added-by-us'
+  if (s.has(3) && !s.has(1) && !s.has(2)) return 'added-by-them'
+  if (s.has(1)) return 'both-modified'
+  return 'other'
+}
 async function document(repo: string, generation: string, file: string, entries: Stage[]): Promise<ConflictDocument> {
   const get = (n: number) => entries.find(x => x.stage === n)
   const base = await blob(repo, get(1)?.oid, get(1)?.mode), stage2 = await blob(repo, get(2)?.oid, get(2)?.mode), stage3 = await blob(repo, get(3)?.oid, get(3)?.mode)

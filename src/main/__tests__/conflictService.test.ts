@@ -5,7 +5,7 @@ import path from 'path';
 import { promisify } from 'util';
 import { execFile } from 'child_process';
 import { gitService } from '../git';
-import { conflictService } from '../conflictService';
+import { conflictService, kindFor } from '../conflictService';
 
 const exec = promisify(execFile);
 const repos = new Set<string>();
@@ -182,5 +182,36 @@ describe('real Git conflict characterization', () => {
     const skipRes = await gitService.skipRebase(dir);
     expect(skipRes.success).toBe(true);
     expect((await gitService.getMergeStatus(dir)).inProgress).toBe(false);
+  });
+
+  describe('kindFor classification (K1-K6)', () => {
+    test('K1: Stages 1+2+3 -> both-modified', () => {
+      expect(kindFor([{ stage: 1 }, { stage: 2 }, { stage: 3 }])).toBe('both-modified');
+    });
+
+    test('K2: Stages 2+3 (no base) -> both-added', () => {
+      expect(kindFor([{ stage: 2 }, { stage: 3 }])).toBe('both-added');
+    });
+
+    test('K3: Stages 1+2 (no stage 3) -> deleted-by-them', () => {
+      expect(kindFor([{ stage: 1 }, { stage: 2 }])).toBe('deleted-by-them');
+    });
+
+    test('K4: Stages 1+3 (no stage 2) -> deleted-by-us', () => {
+      expect(kindFor([{ stage: 1 }, { stage: 3 }])).toBe('deleted-by-us');
+    });
+
+    test('K5: Stage 2 only -> added-by-us', () => {
+      expect(kindFor([{ stage: 2 }])).toBe('added-by-us');
+    });
+
+    test('K6: Stage 3 only -> added-by-them', () => {
+      expect(kindFor([{ stage: 3 }])).toBe('added-by-them');
+    });
+
+    test('Fallback / other stages', () => {
+      expect(kindFor([{ stage: 1 }])).toBe('both-modified');
+      expect(kindFor([])).toBe('other');
+    });
   });
 });
