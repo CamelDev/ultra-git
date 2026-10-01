@@ -214,4 +214,81 @@ describe('real Git conflict characterization', () => {
       expect(kindFor([])).toBe('other');
     });
   });
+
+  describe('modify/delete resolution (MD1-MD3)', () => {
+    test('MD1 & MD2 & MD3: resolving deleted-by-them by keeping or deleting, and undoing deletion', async () => {
+      // Setup repo with base file
+      const dir = await repo();
+      fs.writeFileSync(path.join(dir, 'target.txt'), 'base line 1\nbase line 2\n');
+      await commit(dir, 'initial base');
+
+      // branch deleter deletes target.txt
+      await git(dir, ['checkout', '-b', 'deleter']);
+      fs.unlinkSync(path.join(dir, 'target.txt'));
+      await git(dir, ['add', '-A']);
+      await commit(dir, 'delete target');
+
+      // main modifies target.txt
+      await git(dir, ['checkout', 'main']);
+      fs.writeFileSync(path.join(dir, 'target.txt'), 'base line 1\nmodified line 2\n');
+      await commit(dir, 'modify target');
+
+      // Merge deleter into main -> CONFLICT (modify/delete)
+      await git(dir, ['merge', 'deleter'], true);
+
+      // Verify snapshot and document
+      const snap = await conflictService.getSnapshot(dir);
+      expect(snap.conflicts.some(c => c.path === 'target.txt')).toBe(true);
+
+      const doc = await conflictService.getDocument(dir, 'target.txt', snap.generation);
+      expect(doc.conflictType).toBe('deleted-by-them');
+      expect(doc.stage2?.bytes).toContain('modified line 2');
+      expect(doc.stage3?.oid).toBeUndefined();
+
+      // Test MD2: Accept deletion (incoming)
+      const selectionsForDelete = doc.regions.map(r => ({
+        documentGeneration: snap.generation,
+        regionId: r.id,
+        choice: 'incoming' as const
+      }));
+      const resDelete = await conflictService.apply(dir, 'target.txt', selectionsForDelete, snap.generation);
+      expect(resDelete.token).toBeDefined();
+
+      // File should NOT exist on disk (not 0-byte)
+      expect(fs.existsSync(path.join(dir, 'target.txt'))).toBe(false);
+
+      // File should NOT be in unmerged stages
+      const stagesAfterDelete = await unmerged(dir);
+      expect(stagesAfterDelete.filter(s => s.path === 'target.txt')).toHaveLength(0);
+
+      // Test MD3: Undo resolution restores the conflict and file
+      const resUndo = await conflictService.undo(resDelete.token!);
+      expect(resUndo.conflicts.some(c => c.path === 'target.txt')).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'target.txt'))).toBe(true);
+      expect(fs.readFileSync(path.join(dir, 'target.txt'), 'utf8')).toContain('modified line 2');
+      const stagesAfterUndo = await unmerged(dir);
+      expect(stagesAfterUndo.filter(s => s.path === 'target.txt').length).toBeGreaterThan(0);
+
+      // Test MD1: Accept modification (current)
+      const freshSnap = await conflictService.getSnapshot(dir);
+      const freshDoc = await conflictService.getDocument(dir, 'target.txt', freshSnap.generation);
+      const selectionsForKeep = freshDoc.regions.map(r => ({
+        documentGeneration: freshSnap.generation,
+        regionId: r.id,
+        choice: 'current' as const
+      }));
+      const resKeep = await conflictService.apply(dir, 'target.txt', selectionsForKeep, freshSnap.generation);
+      expect(resKeep.token).toBeDefined();
+
+      // File exists and has modified content
+      expect(fs.existsSync(path.join(dir, 'target.txt'))).toBe(true);
+      expect(fs.readFileSync(path.join(dir, 'target.txt'), 'utf8')).toContain('modified line 2');
+
+      // Staged clean and continue completes merge
+      const stagesAfterKeep = await unmerged(dir);
+      expect(stagesAfterKeep.filter(s => s.path === 'target.txt')).toHaveLength(0);
+      const finalSnap = await conflictService.continue(dir);
+      expect(finalSnap.phase).toBe('completed');
+    });
+  });
 });

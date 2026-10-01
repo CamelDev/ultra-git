@@ -79,10 +79,40 @@ async function mutate<T>(repo: string, fn: () => Promise<T>): Promise<T> { retur
 export const conflictService = {
   getSnapshot: snapshot,
   getDocument: async (repo: string, file: string, expectedGeneration?: string) => { safePath(repo, file); const snap = await snapshot(repo); if (expectedGeneration && expectedGeneration !== snap.generation) throw new ConflictServiceError('STALE_GENERATION', 'Conflict operation has advanced'); const xs = (await stages(repo)).filter(x => x.file === file); if (!xs.length) throw new ConflictServiceError('STALE_OID', 'File is no longer conflicted'); return document(repo, snap.generation, file, xs) },
-  apply: async (repo: string, file: string, selections: ResolutionSelection[], expectedGeneration: string) => mutate(repo, async () => {
+  apply: async (repo: string, file: string, selections: ResolutionSelection[], expectedGeneration: string, options?: { fileChoice?: string; result?: string }) => mutate(repo, async () => {
     const snap = await snapshot(repo); if (snap.generation !== expectedGeneration) throw new ConflictServiceError('STALE_GENERATION', 'Conflict operation has advanced'); const doc = await conflictService.getDocument(repo, file, expectedGeneration); if (doc.isBinary) throw new ConflictServiceError('UNSUPPORTED_CONFLICT', 'Binary conflicts require file-level replacement');
     const choices: Record<string, any> = {}; for (const region of doc.regions) { const selected = selections.find(x => x.regionId === region.id); if (!selected) throw new ConflictServiceError('STALE_REGION', 'Every conflict region must be resolved'); validateRegionSelection(region, expectedGeneration, selected); choices[region.id] = selected }
-    const result = composeConflictResult(doc, choices); const bytes = Buffer.from(result); if (bytes.length > MAX_BYTES) throw new ConflictServiceError('SIZE_LIMIT', 'Resolved file exceeds size limit'); const full = safePath(repo, file); const undo = path.join(repo, '.git', 'ultra-git-conflict-undo', randomUUID()); fs.mkdirSync(undo, { recursive: true }); const old = fs.existsSync(full) ? fs.readFileSync(full) : null; const oldStages = (await stages(repo)).filter(x => x.file === file); fs.writeFileSync(path.join(undo, 'worktree'), old ?? Buffer.alloc(0)); fs.writeFileSync(path.join(undo, 'metadata.json'), JSON.stringify({ existed: !!old, stages: oldStages }));
+    const full = safePath(repo, file); const undo = path.join(repo, '.git', 'ultra-git-conflict-undo', randomUUID()); fs.mkdirSync(undo, { recursive: true }); const old = fs.existsSync(full) ? fs.readFileSync(full) : null; const oldStages = (await stages(repo)).filter(x => x.file === file); fs.writeFileSync(path.join(undo, 'worktree'), old ?? Buffer.alloc(0)); fs.writeFileSync(path.join(undo, 'metadata.json'), JSON.stringify({ existed: !!old, stages: oldStages }));
+
+    const isDeletedByThem = doc.conflictType === 'deleted-by-them' || (!doc.stage3?.oid && !!doc.stage2?.oid);
+    const isDeletedByUs = doc.conflictType === 'deleted-by-us' || (!doc.stage2?.oid && !!doc.stage3?.oid);
+    const choseDeletion =
+      (isDeletedByThem && doc.regions.length > 0 && doc.regions.every(r => choices[r.id]?.choice === 'incoming')) ||
+      (isDeletedByUs && doc.regions.length > 0 && doc.regions.every(r => choices[r.id]?.choice === 'current')) ||
+      (isDeletedByThem && options?.fileChoice === 'incoming') ||
+      (isDeletedByUs && options?.fileChoice === 'current');
+
+    if (choseDeletion) {
+      try {
+        if (fs.existsSync(full)) {
+          fs.rmSync(full, { force: true });
+        }
+        await run(repo, ['rm', '-f', '--', file]).catch(async () => {
+          await run(repo, ['update-index', '--force-remove', '--', file]);
+        });
+        const remaining = (await stages(repo)).some(x => x.file === file);
+        if (remaining) throw new ConflictServiceError('POSTCONDITION_FAILED', 'Git did not stage a complete resolution');
+        const after = await snapshot(repo);
+        const token = randomUUID();
+        undoEntries.set(token, { repo: fs.realpathSync(repo), generation: after.generation, path: file, snapshot: { dir: undo, resultHash: hash('') } });
+        return { token, snapshot: after };
+      } catch (e) {
+        await restore(repo, file, undo);
+        throw e;
+      }
+    }
+
+    const result = composeConflictResult(doc, choices); const bytes = Buffer.from(result); if (bytes.length > MAX_BYTES) throw new ConflictServiceError('SIZE_LIMIT', 'Resolved file exceeds size limit');
     const dir = path.dirname(full);
     fs.mkdirSync(dir, { recursive: true });
     const temp = path.join(dir, `.${path.basename(full)}.${randomUUID()}.tmp`);
