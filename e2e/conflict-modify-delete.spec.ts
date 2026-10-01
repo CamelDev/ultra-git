@@ -77,7 +77,9 @@ test.describe('Modify/Delete Conflict Resolution', () => {
       await page.waitForTimeout(800)
 
       // Continue merge
-      await page.getByRole('button', { name: 'Continue' }).click()
+      const continueBtn = resolver.locator('[data-testid="conflict-continue-btn"]')
+      await expect(continueBtn).toBeEnabled()
+      await continueBtn.click()
       await expect(resolver).toBeHidden()
       await page.waitForTimeout(1000)
 
@@ -130,7 +132,9 @@ test.describe('Modify/Delete Conflict Resolution', () => {
       await page.waitForTimeout(800)
 
       // Continue merge
-      await page.getByRole('button', { name: 'Continue' }).click()
+      const continueBtn = resolver.locator('[data-testid="conflict-continue-btn"]')
+      await expect(continueBtn).toBeEnabled()
+      await continueBtn.click()
       await expect(resolver).toBeHidden()
       await page.waitForTimeout(1000)
 
@@ -194,7 +198,7 @@ test.describe('Modify/Delete Conflict Resolution', () => {
       // Assertion: file is back in conflicted state
       await expect(fileItem.locator('.lucide-circle-check-big')).not.toBeVisible()
 
-      const continueBtn = page.getByRole('button', { name: 'Continue' })
+      const continueBtn = resolver.locator('[data-testid="conflict-continue-btn"]')
       await expect(continueBtn).toBeDisabled()
 
       const status = await sandbox.git.status()

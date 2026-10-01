@@ -83,7 +83,7 @@ test.describe('Both-Added Conflict Resolution', () => {
       await page.waitForTimeout(800)
 
       // Continue merge
-      const continueBtn = page.getByRole('button', { name: 'Continue' })
+      const continueBtn = resolver.locator('[data-testid="conflict-continue-btn"]')
       await expect(continueBtn).toBeEnabled()
       await continueBtn.click()
       await expect(resolver).toBeHidden()
@@ -128,8 +128,14 @@ test.describe('Both-Added Conflict Resolution', () => {
       await branchSelect.selectOption('branch-a')
       await page.waitForTimeout(300)
 
+      // Wait for commits to load and commit select to appear
+      const commitSelect = page.locator('[data-testid="cherry-pick-commit-select"]')
+      await expect(commitSelect).toBeVisible()
+
       // Pick the commit
-      await page.locator('[data-testid="cherry-pick-action-btn"]').click()
+      const actionBtn = page.locator('[data-testid="cherry-pick-action-btn"]')
+      await expect(actionBtn).toBeEnabled()
+      await actionBtn.click()
 
       // Workbench should open with cherry-pick header
       const resolver = page.locator('[data-testid="conflict-resolver"]')
@@ -143,7 +149,7 @@ test.describe('Both-Added Conflict Resolution', () => {
       await expect(resolver).not.toBeVisible()
 
       // Verify CHERRY_PICK_HEAD is gone
-      expect(fs.existsSync(path.join(sandbox.dir, '.git', 'CHERRY_PICK_HEAD'))).toBe(false)
+      await expect.poll(() => fs.existsSync(path.join(sandbox.dir, '.git', 'CHERRY_PICK_HEAD'))).toBe(false)
     } finally {
       await app.close()
     }

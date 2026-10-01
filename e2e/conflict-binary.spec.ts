@@ -90,7 +90,9 @@ test.describe('Binary Conflict Resolution', () => {
       await page.waitForTimeout(800)
 
       // Continue merge
-      await page.getByRole('button', { name: 'Continue' }).click()
+      const continueBtn = resolver.locator('[data-testid="conflict-continue-btn"]')
+      await expect(continueBtn).toBeEnabled()
+      await continueBtn.click()
       await expect(resolver).toBeHidden()
       await page.waitForTimeout(1000)
 
@@ -137,9 +139,10 @@ test.describe('Binary Conflict Resolution', () => {
       // Choose "Keep Incoming file" (branch-a's binary)
       await page.locator('[data-testid="conflict-keep-incoming"]').click()
       await page.locator('[data-testid="conflict-apply-stage"]').click()
-      await page.waitForTimeout(800)
-
-      await page.getByRole('button', { name: 'Continue' }).click()
+      // Continue merge
+      const continueBtn = resolver.locator('[data-testid="conflict-continue-btn"]')
+      await expect(continueBtn).toBeEnabled()
+      await continueBtn.click()
       await expect(resolver).toBeHidden()
       await page.waitForTimeout(1000)
 
