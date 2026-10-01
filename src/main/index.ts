@@ -770,8 +770,8 @@ app.whenReady().then(() => {
     try { return { success: true, data: await conflictService.getDocument(repoPath, filePath, generation) } }
     catch (error: any) { return { success: false, code: error.code ?? 'PREFLIGHT_FAILED', error: error.message } }
   })
-  ipcMain.handle('conflict:apply', async (_, repoPath, filePath, selections, generation) => {
-    try { return { success: true, data: await conflictService.apply(repoPath, filePath, selections, generation) } }
+  ipcMain.handle('conflict:apply', async (_, repoPath, filePath, selections, generation, options) => {
+    try { return { success: true, data: await conflictService.apply(repoPath, filePath, selections, generation, options) } }
     catch (error: any) { return { success: false, code: error.code ?? 'PREFLIGHT_FAILED', error: error.message } }
   })
   ipcMain.handle('conflict:undo', async (_, token) => {

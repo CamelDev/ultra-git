@@ -344,7 +344,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const started = conflictSessionReducer(session, { type: 'action-start', action: 'apply' });
     set({ conflictSessions: { ...get().conflictSessions, [repoId]: started } });
     try {
-      const response = await window.api.git.applyConflictResolution(repo.path, path, selections, session.generation);
+      const options = { fileChoice: draft.fileChoice, result: draft.result };
+      const response = await window.api.git.applyConflictResolution(repo.path, path, selections, session.generation, options);
       if (!response.success || !response.data) throw new Error(response.error || 'Unable to apply conflict resolution');
       const result = response.data as OperationActionResult & { token?: string };
       const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'action-result', result });

@@ -76,7 +76,8 @@ const api = {
       ipcRenderer.invoke('git:resolveConflict', repoPath, filePath, resolvedContent),
     conflictSnapshot: (repoPath: string) => ipcRenderer.invoke('conflict:snapshot', repoPath),
     conflictDocument: (repoPath: string, filePath: string, generation: string) => ipcRenderer.invoke('conflict:document', repoPath, filePath, generation),
-    applyConflictResolution: (repoPath: string, filePath: string, selections: unknown[], generation: string) => ipcRenderer.invoke('conflict:apply', repoPath, filePath, selections, generation),
+    applyConflictResolution: (repoPath: string, filePath: string, selections: unknown[], generation: string, options?: any) =>
+      ipcRenderer.invoke('conflict:apply', repoPath, filePath, selections, generation, options),
     undoConflictResolution: (token: string) => ipcRenderer.invoke('conflict:undo', token),
     continueConflictOperation: (repoPath: string) => ipcRenderer.invoke('conflict:continue', repoPath),
     skipConflictOperation: (repoPath: string) => ipcRenderer.invoke('conflict:skip', repoPath),

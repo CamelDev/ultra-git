@@ -61,7 +61,7 @@ declare global {
         deleteSafetySnapshot: (repoPath: string, snapshotId: string) => Promise<{ success: boolean }>;
         conflictSnapshot: (repoPath: string) => Promise<IpcResponse<OperationSnapshot>>;
         conflictDocument: (repoPath: string, filePath: string, generation: string) => Promise<IpcResponse<ConflictDocument>>;
-        applyConflictResolution: (repoPath: string, filePath: string, selections: ResolutionSelection[], generation: string) => Promise<IpcResponse<OperationActionResult & { token?: string }>>;
+        applyConflictResolution: (repoPath: string, filePath: string, selections: ResolutionSelection[], generation: string, options?: { fileChoice?: string; result?: string }) => Promise<IpcResponse<OperationActionResult & { token?: string }>>;
         undoConflictResolution: (token: string) => Promise<IpcResponse<OperationActionResult>>;
         continueConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;
         skipConflictOperation: (repoPath: string) => Promise<IpcResponse<OperationActionResult>>;

@@ -291,4 +291,53 @@ describe('real Git conflict characterization', () => {
       expect(finalSnap.phase).toBe('completed');
     });
   });
+
+  describe('binary conflict resolution (BIN1-BIN4)', () => {
+    test('BIN1-BIN4: binary conflict detected, resolves with current/incoming, and undo works', async () => {
+      const dir = await repo();
+      const baseBin = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x00, 0x01, 0x02, 0x03]);
+      const currentBin = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x00, 0xAA, 0xBB, 0xCC]);
+      const incomingBin = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x00, 0xDD, 0xEE, 0xFF]);
+
+      fs.writeFileSync(path.join(dir, 'image.png'), baseBin);
+      await commit(dir, 'base image');
+
+      await git(dir, ['checkout', '-b', 'incoming']);
+      fs.writeFileSync(path.join(dir, 'image.png'), incomingBin);
+      await commit(dir, 'incoming image');
+
+      await git(dir, ['checkout', 'main']);
+      fs.writeFileSync(path.join(dir, 'image.png'), currentBin);
+      await commit(dir, 'current image');
+
+      await git(dir, ['merge', 'incoming'], true);
+
+      // BIN1: Conflict snapshot & document detects isBinary
+      const snap = await conflictService.getSnapshot(dir);
+      expect(snap.conflicts.some(c => c.path === 'image.png')).toBe(true);
+      const doc = await conflictService.getDocument(dir, 'image.png', snap.generation);
+      expect(doc.isBinary).toBe(true);
+
+      // BIN2: Keep Current resolves with current binary bytes
+      const resCurrent = await conflictService.apply(dir, 'image.png', [], snap.generation, { fileChoice: 'current' });
+      expect(resCurrent.token).toBeDefined();
+      expect(fs.readFileSync(path.join(dir, 'image.png'))).toEqual(currentBin);
+      expect((await unmerged(dir)).filter(s => s.path === 'image.png')).toHaveLength(0);
+
+      // BIN4: Undo restores binary conflict
+      const resUndo = await conflictService.undo(resCurrent.token!);
+      expect(resUndo.conflicts.some(c => c.path === 'image.png')).toBe(true);
+      expect((await unmerged(dir)).filter(s => s.path === 'image.png').length).toBeGreaterThan(0);
+
+      // BIN3: Keep Incoming resolves with incoming binary bytes
+      const freshSnap = await conflictService.getSnapshot(dir);
+      const resIncoming = await conflictService.apply(dir, 'image.png', [], freshSnap.generation, { fileChoice: 'incoming' });
+      expect(resIncoming.token).toBeDefined();
+      expect(fs.readFileSync(path.join(dir, 'image.png'))).toEqual(incomingBin);
+      expect((await unmerged(dir)).filter(s => s.path === 'image.png')).toHaveLength(0);
+
+      const finalSnap = await conflictService.continue(dir);
+      expect(finalSnap.phase).toBe('completed');
+    });
+  });
 });
