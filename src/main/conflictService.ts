@@ -157,6 +157,18 @@ export const conflictService = {
       bytes = Buffer.from(resultText, 'utf8');
     }
     if (bytes.length > MAX_BYTES) throw new ConflictServiceError('SIZE_LIMIT', 'Resolved file exceeds size limit');
+    const candidateSettings = await conflictCandidateService.getSettings(repo).catch(() => ({ enabled: false }));
+    if (candidateSettings.enabled) {
+      for (const region of doc.regions) {
+        const choice = choices[region.id];
+        if (choice && choice.choice !== 'unresolved') {
+          const proposed = choice.choice === 'current' ? region.current : choice.choice === 'incoming' ? region.incoming : (choice.selected ?? '');
+          if (proposed) {
+            await conflictCandidateService.recordConfirmed(repo, doc, region.id, proposed).catch(() => {});
+          }
+        }
+      }
+    }
     const dir = path.dirname(full);
     fs.mkdirSync(dir, { recursive: true });
     const temp = path.join(dir, `.${path.basename(full)}.${randomUUID()}.tmp`);

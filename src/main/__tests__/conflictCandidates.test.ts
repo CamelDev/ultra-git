@@ -5,6 +5,7 @@ import path from 'path'
 import { execFileSync } from 'child_process'
 import { deriveConflictRegions } from '../conflictRegions'
 import { conflictCandidateService, generateConflictCandidates } from '../conflictCandidates'
+import { conflictService } from '../conflictService'
 import type { ConflictDocument } from '../../shared/conflicts'
 
 const repos = new Set<string>()
@@ -59,5 +60,50 @@ describe('deterministic conflict candidates', () => {
     const before = fs.readFileSync(path.join(repo, '.git', 'ultra-git', 'conflict-records.json'), 'utf8')
     await conflictCandidateService.preview(repo, document, candidates[0].id)
     expect(fs.readFileSync(path.join(repo, '.git', 'ultra-git', 'conflict-records.json'), 'utf8')).toBe(before)
+  })
+
+  test('CM4 & CM5: conflictService.apply records confirmed resolutions when enabled, and future identical conflict suggests it', async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'ultra-git-candidates-apply-')); repos.add(repo)
+    execFileSync('git', ['-C', repo, 'init', '-b', 'main'], { stdio: 'ignore' })
+    execFileSync('git', ['-C', repo, 'config', 'user.name', 'Test'], { stdio: 'ignore' })
+    execFileSync('git', ['-C', repo, 'config', 'user.email', 'test@test.com'], { stdio: 'ignore' })
+
+    fs.writeFileSync(path.join(repo, 'file.txt'), 'one\ntwo\n')
+    execFileSync('git', ['-C', repo, 'add', '.'], { stdio: 'ignore' })
+    execFileSync('git', ['-C', repo, 'commit', '-m', 'base'], { stdio: 'ignore' })
+
+    execFileSync('git', ['-C', repo, 'checkout', '-b', 'branch-a'], { stdio: 'ignore' })
+    fs.writeFileSync(path.join(repo, 'file.txt'), 'one\nthree\n')
+    execFileSync('git', ['-C', repo, 'commit', '-am', 'branch-a'], { stdio: 'ignore' })
+
+    execFileSync('git', ['-C', repo, 'checkout', 'main'], { stdio: 'ignore' })
+    fs.writeFileSync(path.join(repo, 'file.txt'), 'one\nfour\n')
+    execFileSync('git', ['-C', repo, 'commit', '-am', 'main'], { stdio: 'ignore' })
+
+    try { execFileSync('git', ['-C', repo, 'merge', 'branch-a'], { stdio: 'ignore' }) } catch {}
+
+    // Enable candidate reuse
+    await conflictCandidateService.setEnabled(repo, true)
+
+    // Snapshot and document
+    const snap = await conflictService.getSnapshot(repo)
+    const document = await conflictService.getDocument(repo, 'file.txt', snap.generation)
+
+    // Apply resolution choosing current
+    const selections = document.regions.map(r => ({
+      documentGeneration: snap.generation,
+      regionId: r.id,
+      choice: 'current' as const
+    }))
+    await conflictService.apply(repo, 'file.txt', selections, snap.generation)
+
+    // CM4: Verified that record was saved into store
+    const records = await conflictCandidateService.listRecords(repo)
+    expect(records.length).toBeGreaterThan(0)
+    expect(records[0].path).toBe('file.txt')
+
+    // CM5: Same conflict suggests confirmed-record
+    const candidates = await conflictCandidateService.generate(repo, document)
+    expect(candidates.some(c => c.ruleId === 'confirmed-record')).toBe(true)
   })
 })

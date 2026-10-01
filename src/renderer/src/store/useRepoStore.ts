@@ -126,6 +126,7 @@ interface RepoState {
   rejectConflictCandidate: (repoId: string, candidateId: string) => void;
   setConflictCandidateReuse: (repoId: string, enabled: boolean) => Promise<ConflictSession | null>;
   forgetConflictCandidate: (repoId: string, recordId?: string) => Promise<ConflictSession | null>;
+  recordConflictCandidate: (repoId: string, regionId: string, proposedBytes: string, filePath?: string) => Promise<void>;
 }
 
 const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/').replace(/\/+$/, '').replace(/^\/private\/var\//, '/var/');
@@ -334,6 +335,16 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     }
   },
 
+  recordConflictCandidate: async (repoId, regionId, proposedBytes, filePath) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    const session = get().getConflictSession(repoId);
+    const path = filePath || session.activePath;
+    if (!repo || !path || !session.generation) return;
+    try {
+      await window.api.git.recordConflictCandidate(repo.path, path, session.generation, regionId, proposedBytes);
+    } catch {}
+  },
+
   applyConflictResolution: async (repoId, filePath) => {
     const repo = get().repositories.find(item => item.id === repoId);
     const session = get().getConflictSession(repoId);
@@ -344,6 +355,16 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const started = conflictSessionReducer(session, { type: 'action-start', action: 'apply' });
     set({ conflictSessions: { ...get().conflictSessions, [repoId]: started } });
     try {
+      if (session.candidateReuseEnabled) {
+        for (const region of draft.document.regions) {
+          if (region.choice !== 'unresolved') {
+            const proposed = region.choice === 'current' ? region.current : region.choice === 'incoming' ? region.incoming : (region.selected ?? '');
+            if (proposed) {
+              await window.api.git.recordConflictCandidate(repo.path, path, session.generation!, region.id, proposed).catch(() => {});
+            }
+          }
+        }
+      }
       const options = { fileChoice: draft.fileChoice, result: draft.result };
       const response = await window.api.git.applyConflictResolution(repo.path, path, selections, session.generation, options);
       if (!response.success || !response.data) throw new Error(response.error || 'Unable to apply conflict resolution');
