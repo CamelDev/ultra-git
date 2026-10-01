@@ -145,10 +145,15 @@ export function conflictSessionReducer(state: ConflictSession, action: ConflictS
     }
     case 'action-start': return { ...state, pending: action.action, error: null }
     case 'action-result': {
-      const snapshot = action.result.snapshot
+      const snapshot: OperationSnapshot = (action.result as any).snapshot ?? (action.result as any)
+      const conflictedPaths = new Set(snapshot?.conflicts?.map(c => c.path) ?? [])
       const updatedDrafts = { ...state.drafts }
       for (const [p, d] of Object.entries(updatedDrafts)) {
-        if (d.dirty) updatedDrafts[p] = { ...d, dirty: false }
+        if (conflictedPaths.has(p) && d.document.generation !== snapshot.generation) {
+          delete updatedDrafts[p]
+        } else if (d.dirty) {
+          updatedDrafts[p] = { ...d, dirty: false }
+        }
       }
       return { ...state, snapshot, generation: snapshot.generation, drafts: updatedDrafts, activePath: snapshot.nextConflict ?? state.activePath, activeRegionId: null, undo: state.undo, externalChange: false, pending: null, error: action.result.error?.message ?? null }
     }

@@ -115,6 +115,7 @@ export const ConflictWorkbench: React.FC<Props> = ({ repoId, onDismiss }) => {
         <button
           type="button"
           className="conflict-workbench-btn primary"
+          data-testid="conflict-continue-btn"
           disabled={!conflictSelectors.canContinue(session)}
           data-tooltip={!conflictSelectors.canContinue(session) ? "Resolve all conflicts before continuing" : `Continue ${operationName}`}
           onClick={() => void runAndClose('continue')}
