@@ -31,8 +31,9 @@ async function runIndexInfo(repo: string, input: string) {
   await new Promise<void>((resolve, reject) => { const child = spawn('git', ['-C', repo, 'update-index', '--index-info']); let stderr = ''; child.stderr.on('data', x => { stderr += x }); child.on('error', reject); child.on('close', code => code === 0 ? resolve() : reject(new ConflictServiceError('POSTCONDITION_FAILED', stderr || 'Unable to restore index'))); child.stdin.end(input) })
 }
 function safePath(repo: string, rel: string) {
-  if (!rel || path.isAbsolute(rel) || rel.includes('\0')) throw new ConflictServiceError('PATH_CONTAINMENT', 'Invalid conflict path')
-  const root = fs.realpathSync(repo), candidate = path.resolve(root, rel)
+  const cleanRel = (rel || '').replace(/^"|"$/g, '')
+  if (!cleanRel || path.isAbsolute(cleanRel) || cleanRel.includes('\0')) throw new ConflictServiceError('PATH_CONTAINMENT', 'Invalid conflict path')
+  const root = fs.realpathSync(repo), candidate = path.resolve(root, cleanRel)
   if (candidate !== root && !candidate.startsWith(root + path.sep)) throw new ConflictServiceError('PATH_CONTAINMENT', 'Conflict path escapes repository')
   try { const real = fs.realpathSync(candidate); if (real !== root && !real.startsWith(root + path.sep)) throw new ConflictServiceError('PATH_CONTAINMENT', 'Conflict path escapes repository') } catch (e: any) { if (e instanceof ConflictServiceError) throw e }
   return candidate
@@ -201,7 +202,21 @@ export const conflictService = {
     }
   }),
   undo: async (token: string) => { const entry = undoEntries.get(token); if (!entry) throw new ConflictServiceError('UNDO_EXPIRED', 'Undo Resolution has expired'); return mutate(entry.repo, async () => { const snap = await snapshot(entry.repo); if (snap.generation !== entry.generation) throw new ConflictServiceError('UNDO_EXPIRED', 'Operation has advanced'); await restore(entry.repo, entry.path, entry.snapshot.dir); undoEntries.delete(token); return snapshot(entry.repo) }) },
-  continue: async (repo: string) => mutate(repo, async () => { const s = await snapshot(repo); if (s.phase === 'conflicted') throw new ConflictServiceError('PREFLIGHT_FAILED', 'Resolve all conflicts before continuing'); await run(repo, ['-c', 'core.editor=true', s.kind === 'rebase' ? 'rebase' : s.kind === 'cherry-pick' ? 'cherry-pick' : 'merge', s.kind === 'rebase' ? '--continue' : '--continue']); return snapshot(repo) }),
+  continue: async (repo: string) => mutate(repo, async () => {
+    const s = await snapshot(repo);
+    if (s.phase === 'conflicted') throw new ConflictServiceError('PREFLIGHT_FAILED', 'Resolve all conflicts before continuing');
+    const op = s.kind === 'rebase' ? 'rebase' : s.kind === 'cherry-pick' ? 'cherry-pick' : 'merge';
+    try {
+      await run(repo, ['-c', 'core.editor=true', op, '--continue']);
+    } catch (err: any) {
+      const msg = err.message || '';
+      if (s.kind === 'rebase' && (msg.includes('is now empty') || msg.includes('No changes - did you forget') || msg.includes('patch is empty'))) {
+        throw new ConflictServiceError('PREFLIGHT_FAILED', "The current commit is empty. Click 'Skip commit' to continue the rebase.");
+      }
+      throw err;
+    }
+    return snapshot(repo);
+  }),
   skip: async (repo: string) => mutate(repo, async () => { const s = await snapshot(repo); if (s.kind !== 'rebase') throw new ConflictServiceError('PREFLIGHT_FAILED', 'Skip is only available during rebase'); await run(repo, ['rebase', '--skip']); return snapshot(repo) }),
   abort: async (repo: string) => mutate(repo, async () => { const s = await snapshot(repo); const command = s.kind === 'rebase' ? ['rebase', '--abort'] : s.kind === 'cherry-pick' ? ['cherry-pick', '--abort'] : ['merge', '--abort']; await run(repo, command); return snapshot(repo) })
   , candidates: conflictCandidateService

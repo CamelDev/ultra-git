@@ -1940,7 +1940,10 @@ export const gitService = {
     for (const line of raw.split('\n')) {
       if (line.length < 3) continue;
       const xy = line.substring(0, 2);
-      const path = line.substring(3).trim();
+      let path = line.substring(3).trim();
+      if (path.startsWith('"') && path.endsWith('"')) {
+        path = path.slice(1, -1).replace(/\\"/g, '"');
+      }
       const conflictCodes = ['UU', 'AA', 'DD', 'AU', 'UA', 'DU', 'UD'];
       if (conflictCodes.includes(xy)) {
         files.push({ path, status: xy as ConflictedFile['status'] });
@@ -1950,7 +1953,8 @@ export const gitService = {
   },
 
   getConflictFileDiff: async (repoPath: string, filePath: string) => {
-    const fullPath = join(repoPath, filePath);
+    const cleanPath = filePath.replace(/^"|"$/g, '');
+    const fullPath = join(repoPath, cleanPath);
     let raw = '';
     try {
       raw = await fs.promises.readFile(fullPath, 'utf8');
@@ -2007,11 +2011,12 @@ export const gitService = {
     filePath: string,
     resolvedContent: string
   ) => {
-    const fullPath = join(repoPath, filePath);
+    const cleanPath = filePath.replace(/^"|"$/g, '');
+    const fullPath = join(repoPath, cleanPath);
     await fs.promises.writeFile(fullPath, resolvedContent, 'utf8');
     // Stage the resolved file
     const git = getGitInstance(repoPath);
-    await git.add(filePath);
+    await git.add(cleanPath);
     return { success: true };
   },
 

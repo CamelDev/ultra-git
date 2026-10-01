@@ -155,7 +155,7 @@ describe('real Git conflict characterization', () => {
     await commit(dir, 'current structural changes');
     await git(dir, ['merge', 'incoming'], true);
     const files = await gitService.getConflictedFiles(dir);
-    expect(files.map(file => file.path)).toEqual(expect.arrayContaining(['"folder with spaces/added.txt"', 'crlf.txt', 'binary.bin']));
+    expect(files.map(file => file.path)).toEqual(expect.arrayContaining(['folder with spaces/added.txt', 'crlf.txt', 'binary.bin']));
     expect((await unmerged(dir)).every(item => item.stage === '1' || item.stage === '2' || item.stage === '3')).toBe(true);
     fs.writeFileSync(path.join(dir, 'crlf.txt'), 'manual edit\r\n');
     expect(fs.readFileSync(path.join(dir, 'crlf.txt'), 'utf8')).toContain('manual edit');
