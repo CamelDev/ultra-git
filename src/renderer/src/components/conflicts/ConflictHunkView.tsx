@@ -4,6 +4,24 @@ import type { ConflictDocument, ConflictRegion, RegionChoice } from '../../../..
 interface Props { document: ConflictDocument; region: ConflictRegion | null; onChoice: (choice: RegionChoice, selected?: string) => void }
 const text = (value: string | undefined) => value || '(empty)'
 
+export function getHunkResultContent(region: ConflictRegion | null): string {
+  if (!region || region.choice === 'unresolved') return ''
+  if (region.selected !== undefined) return region.selected
+  if (region.choice === 'current') return region.current
+  if (region.choice === 'incoming') return region.incoming
+  if (region.choice === 'both-current-first') {
+    if (region.current === region.incoming) return region.current
+    const sep = region.current.endsWith('\n') || region.current.length === 0 ? '' : '\n'
+    return `${region.current}${sep}${region.incoming}`
+  }
+  if (region.choice === 'both-incoming-first') {
+    if (region.incoming === region.current) return region.incoming
+    const sep = region.incoming.endsWith('\n') || region.incoming.length === 0 ? '' : '\n'
+    return `${region.incoming}${sep}${region.current}`
+  }
+  return ''
+}
+
 export const ConflictHunkView: React.FC<Props> = ({ document, region, onChoice }) => {
   if (document.isBinary || !region) return <div className="conflict-empty" role="status">{document.isBinary ? 'Binary or non-text conflict: choose a file-level action below.' : 'Select a conflict region to inspect.'}</div>
   return <>
@@ -21,7 +39,7 @@ export const ConflictHunkView: React.FC<Props> = ({ document, region, onChoice }
       <Pane label="Base" content={document.base?.bytes} testId="conflict-base-pane" />
       <Pane label="Current" content={region.current} testId="conflict-current-pane" />
       <Pane label="Incoming" content={region.incoming} testId="conflict-incoming-pane" />
-      <Pane label="Result" content={region.choice === 'unresolved' ? '' : region.selected || region[region.choice === 'current' ? 'current' : 'incoming']} result testId="conflict-result-pane" />
+      <Pane label="Result" content={getHunkResultContent(region)} result testId="conflict-result-pane" />
     </div>
   </>
 }
