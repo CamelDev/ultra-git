@@ -465,7 +465,7 @@ test.describe('Branch Creation from Latest Local Commit', () => {
   });
 
   test('should support copying branch name in rename dialog for local and remote branches', async () => {
-    const { app, page } = await launchElectronApp();
+    const { app, page } = await launchElectronApp({ disableDefaultTab: true });
 
     try {
       await page.evaluate(() => localStorage.clear());
@@ -483,11 +483,11 @@ test.describe('Branch Creation from Latest Local Commit', () => {
       await addRepoViaUI(page);
 
       const tabs = page.locator('[data-testid="repo-tab"]');
-      await tabs.last().click();
-      await page.waitForTimeout(1000);
+      await expect(tabs).toHaveCount(1);
 
       // 1. Local branch copy branch name test
       const activeBranch = page.locator('[data-testid="sidebar-active-branch"]');
+      await expect(activeBranch).toContainText('main');
       await activeBranch.hover();
       const renameActiveBtn = page.locator('[data-testid="sidebar-rename-branch-btn"]');
       await renameActiveBtn.dispatchEvent('click');

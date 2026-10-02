@@ -64,7 +64,8 @@ test.describe('Textarea Manual Edit Persistence', () => {
       await page.waitForTimeout(800)
 
       // Continue merge
-      await page.getByRole('button', { name: 'Continue' }).click()
+      const continueBtn = resolver.locator('[data-testid="conflict-continue-btn"]')
+      await continueBtn.click()
       await expect(resolver).toBeHidden()
       await page.waitForTimeout(1000)
 
