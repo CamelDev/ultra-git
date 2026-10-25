@@ -58,6 +58,10 @@ export async function launchElectronApp(options: LaunchOptions = {}): Promise<La
   const args = [mainPath, '--no-sandbox', `--user-data-dir=${currentUserDataDir}`, '--no-lock'];
   if (!isHeadful) {
     args.push('--headless');
+    // Headless Chromium defaults to an 800x600 virtual screen, which clamps the
+    // 1200x800 main window and squeezes the layout (center clicks on commit rows
+    // then land on row action buttons). Provide a realistic virtual display.
+    args.push('--screen-info={1920x1080}');
   }
 
   const app = await electron.launch({

@@ -84,7 +84,7 @@ export interface PullPlan {
   untrackedFiles: string[];
   /** Files the incoming upstream commits will touch. */
   incomingFiles: string[];
-  /** (changed ∪ untracked) ∩ incoming — files that make a plain pull fail. */
+  /** (changed Ä‚ËĂ‚ÂÄąĹľ untracked) Ä‚ËĂ‚ÂĂ‚Â© incoming Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ files that make a plain pull fail. */
   overlappingFiles: string[];
   hasStaged: boolean;
   needsStash: boolean;
@@ -146,6 +146,16 @@ export function setGitInstanceFactory(factory: ((repoPath: string) => SimpleGit 
   gitInstanceFactory = factory;
 }
 
+/**
+ * Environment for every simple-git child process. simple-git's `.env()` replaces the
+ * whole environment, so always start from process.env. GIT_EDITOR is forced to a no-op
+ * because it takes precedence over `-c core.editor=true` and an inherited value
+ * (e.g. GIT_EDITOR=false from an IDE/CI shell) would break `--continue` commands.
+ */
+function baseGitEnv(): Record<string, string | undefined> {
+  return { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_EDITOR: 'true' };
+}
+
 export function getGitInstance(repoPath: string): SimpleGit {
   if (gitInstanceFactory) {
     const custom = gitInstanceFactory(repoPath);
@@ -153,6 +163,7 @@ export function getGitInstance(repoPath: string): SimpleGit {
   }
   if (!gitInstances.has(repoPath)) {
     const allowedGitEnvs = [
+      'GIT_EDITOR',
       'GIT_TERMINAL_PROMPT',
       'GIT_OPTIONAL_LOCKS',
       'GIT_CONFIG_GLOBAL',
@@ -188,18 +199,14 @@ export function getGitInstance(repoPath: string): SimpleGit {
       trimmed: false,
       config: ['core.editor=true'],
       allowEnvironment: allowedGitEnvs,
-      spawnOptions: {
-        env: {
-          ...process.env,
-          GIT_OPTIONAL_LOCKS: '0'
-        }
-      },
       unsafe: {
         allowUnsafeCredentialHelper: true,
         allowUnsafeEditor: true
       }
     };
-    gitInstances.set(repoPath, simpleGit(options));
+    // NOTE: simple-git's spawnOptions only honours uid/gid (env is silently dropped),
+    // so the child-process environment must be supplied via .env().
+    gitInstances.set(repoPath, simpleGit(options).env(baseGitEnv()));
   }
   return gitInstances.get(repoPath)!;
 }
@@ -478,7 +485,7 @@ export const gitService = {
 
   /**
    * Read-only pre-pull analysis (Smart Pull phase 1).
-   * Fetches, then computes ahead/behind, working-tree state and — crucially —
+   * Fetches, then computes ahead/behind, working-tree state and Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ crucially Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ
    * the overlap between uncommitted changes and files touched by incoming
    * upstream commits. The renderer uses this to offer state-aware options
    * instead of letting `git pull` fail with a raw error.
@@ -539,7 +546,7 @@ export const gitService = {
     }
 
     // 5. Fast-forward is possible iff we have no local commits the upstream
-    //    lacks (HEAD is an ancestor of upstream ⟺ ahead === 0).
+    //    lacks (HEAD is an ancestor of upstream Ä‚ËÄąĹźÄąĹş ahead === 0).
     //    NOTE: not implemented via `merge-base --is-ancestor` because
     //    simple-git's raw() resolves instead of throwing on exit code 1.
     const canFastForward = ahead === 0;
@@ -597,7 +604,7 @@ export const gitService = {
 
   /**
    * Orchestrated pull (Smart Pull phase 3): optional app-managed autostash
-   * (stash → pull → pop) with a chosen integration strategy and typed,
+   * (stash Ä‚ËĂ˘â‚¬Â Ă˘â‚¬â„˘ pull Ä‚ËĂ˘â‚¬Â Ă˘â‚¬â„˘ pop) with a chosen integration strategy and typed,
    * step-attributed results. Never throws for expected git outcomes.
    */
   smartPull: async (repoPath: string, options?: SmartPullOptions): Promise<PullResult> => {
@@ -680,7 +687,7 @@ export const gitService = {
       if (opts.prune) pullArgs.push('--prune');
 
       // IMPORTANT: simple-git's raw() RESOLVES (does not throw) when git exits
-      // with code 1 — which is exactly how merge/rebase conflicts and dirty-tree
+      // with code 1 Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ which is exactly how merge/rebase conflicts and dirty-tree
       // refusals report themselves. Classify from BOTH the output text and the
       // repository state, not only from thrown errors.
       let pullOutput = '';
@@ -701,7 +708,7 @@ export const gitService = {
       return { status: 'failed', errorCode: 'UNRELATED_HISTORIES', stashedChanges: stillStashed, stashRef: stillStashed ? 'stash@{0}' : undefined, strategy: opts.strategy, detail: msg };
     }
     if (msg.includes('would be overwritten')) {
-      // Safety net — preflight should have caught this.
+      // Safety net Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ preflight should have caught this.
       const stillStashed = await restoreStash();
       return { status: 'failed', errorCode: 'DIRTY_OVERLAP', stashedChanges: stillStashed, stashRef: stillStashed ? 'stash@{0}' : undefined, strategy: opts.strategy, detail: msg };
     }
@@ -778,7 +785,7 @@ export const gitService = {
       try {
         const popRes = await gitService.stashPop(repoPath, 0);
         if (popRes.hadConflicts) {
-          // git keeps the stash on a conflicted pop — nothing is lost.
+          // git keeps the stash on a conflicted pop Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ nothing is lost.
           const conflictedFiles = await gitService.getConflictedFiles(repoPath);
           return {
             status: 'stash-pop-conflicts',
@@ -792,7 +799,7 @@ export const gitService = {
       } catch (err: any) {
         // Pop failed entirely (e.g. an untracked file from the stash now exists
         // in the pulled tree: "could not restore untracked files from stash").
-        // git keeps the stash — the pull succeeded, only the re-apply needs
+        // git keeps the stash Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ the pull succeeded, only the re-apply needs
         // manual attention. Report it as a re-apply conflict.
         const conflictedFiles = await gitService.getConflictedFiles(repoPath);
         return {
@@ -1985,7 +1992,7 @@ export const gitService = {
             continue;
           }
           if (lines[i].startsWith('|||||||')) {
-            // diff3 style — skip base section marker
+            // diff3 style Ä‚ËĂ˘â€šÂ¬Ă˘â‚¬ĹĄ skip base section marker
             section = 'base';
             i++;
             continue;
@@ -2128,7 +2135,7 @@ export const gitService = {
       const remoteName = remotes[0].name || 'origin';
       // Pass -c credential.helper= and GIT_TERMINAL_PROMPT=0 to prevent macOS osxkeychain popups
       const lsRemotePromise = git
-        .env({ GIT_TERMINAL_PROMPT: '0' })
+        .env({ ...baseGitEnv(), GIT_TERMINAL_PROMPT: '0' })
         .raw(['-c', 'credential.helper=', 'ls-remote', '--tags', remoteName]);
       lsRemotePromise.catch(() => {}); // Suppress dangling rejection on timeout
 

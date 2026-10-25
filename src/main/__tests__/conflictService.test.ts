@@ -184,6 +184,40 @@ describe('real Git conflict characterization', () => {
     expect((await gitService.getMergeStatus(dir)).inProgress).toBe(false);
   });
 
+  test('continue paths ignore an inherited hostile GIT_EDITOR (e.g. GIT_EDITOR=false from IDE/CI shells)', async () => {
+    const previous = process.env.GIT_EDITOR;
+    process.env.GIT_EDITOR = 'false';
+    const conflictedRebase = async () => {
+      const dir = await repo();
+      await git(dir, ['checkout', '-b', 'feature']);
+      fs.writeFileSync(path.join(dir, 'conflict.txt'), 'feature\n');
+      await commit(dir, 'feature commit');
+      await git(dir, ['checkout', 'main']);
+      fs.writeFileSync(path.join(dir, 'conflict.txt'), 'main\n');
+      await commit(dir, 'main commit');
+      await git(dir, ['checkout', 'feature']);
+      await git(dir, ['rebase', 'main'], true);
+      fs.writeFileSync(path.join(dir, 'conflict.txt'), 'resolved\n');
+      await git(dir, ['add', 'conflict.txt']);
+      return dir;
+    };
+    try {
+      // gitService.continueRebase path (simple-git)
+      const dirA = await conflictedRebase();
+      const res = await gitService.continueRebase(dirA);
+      expect(res.success).toBe(true);
+      expect((await gitService.getMergeStatus(dirA)).inProgress).toBe(false);
+
+      // conflictService.continue path (execFile)
+      const dirB = await conflictedRebase();
+      await conflictService.continue(dirB);
+      expect((await gitService.getMergeStatus(dirB)).inProgress).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.GIT_EDITOR;
+      else process.env.GIT_EDITOR = previous;
+    }
+  });
+
   describe('kindFor classification (K1-K6)', () => {
     test('K1: Stages 1+2+3 -> both-modified', () => {
       expect(kindFor([{ stage: 1 }, { stage: 2 }, { stage: 3 }])).toBe('both-modified');

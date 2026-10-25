@@ -9,7 +9,7 @@ const run = promisify(execFile);
 
 async function git(repo: string, args: string[], allowFailure = false): Promise<string> {
   try {
-    const result = await run('git', ['-C', repo, ...args], { maxBuffer: 4 * 1024 * 1024 });
+    const result = await run('git', ['-C', repo, ...args], { maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_EDITOR: 'true' } });
     return result.stdout;
   } catch (error: any) {
     if (allowFailure) return `${error.stdout ?? ''}${error.stderr ?? ''}`;

@@ -9,6 +9,9 @@ import type { BlobView, ConflictDocument, ConflictErrorCode, ConflictRegion, Con
 import { conflictCandidateService } from './conflictCandidates'
 
 const exec = promisify(execFile)
+// Force a no-op editor: GIT_EDITOR overrides `-c core.editor=true`, so an inherited
+// GIT_EDITOR (e.g. `false` from an IDE/CI shell) would break `--continue`.
+const gitEnv = () => ({ ...process.env, GIT_EDITOR: 'true' })
 const MAX_BYTES = 8 * 1024 * 1024
 const locks = new Map<string, Promise<unknown>>()
 const undoEntries = new Map<string, { repo: string; generation: string; path: string; snapshot: any }>()
@@ -16,12 +19,12 @@ const undoEntries = new Map<string, { repo: string; generation: string; path: st
 export class ConflictServiceError extends Error { constructor(public code: ConflictErrorCode, message: string) { super(message) } }
 const hash = (v: Buffer | string) => createHash('sha256').update(v).digest('hex')
 async function run(repo: string, args: string[], input?: string | Buffer): Promise<string> {
-  try { return String((await exec('git', ['-C', repo, ...args], { input, maxBuffer: 16 * 1024 * 1024 } as any)).stdout) }
+  try { return String((await exec('git', ['-C', repo, ...args], { input, env: gitEnv(), maxBuffer: 16 * 1024 * 1024 } as any)).stdout) }
   catch (e: any) { throw new ConflictServiceError('PREFLIGHT_FAILED', e.stderr || e.message || 'Git command failed') }
 }
 async function runBuffer(repo: string, args: string[]): Promise<Buffer> {
   try {
-    const res = await exec('git', ['-C', repo, ...args], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 } as any);
+    const res = await exec('git', ['-C', repo, ...args], { encoding: 'buffer', env: gitEnv(), maxBuffer: 16 * 1024 * 1024 } as any);
     return Buffer.isBuffer(res.stdout) ? res.stdout : Buffer.from(res.stdout);
   } catch (e: any) {
     throw new ConflictServiceError('PREFLIGHT_FAILED', e.stderr?.toString() || e.message || 'Git command failed');
