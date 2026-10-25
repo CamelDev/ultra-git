@@ -39,3 +39,6 @@ This document defines the specialized roles and guidelines for the AI agents col
   ```bash
   npx @opengsd/gsd-core@latest
   ```
+
+## Shared Project Skill
+- The cross-agent PR impact skill lives at [pr-impact/SKILL.md](pr-impact/SKILL.md). Its bundled viewer reads JSON reports; follow its data contract when analyzing a pull request.

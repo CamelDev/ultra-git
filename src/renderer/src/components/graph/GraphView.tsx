@@ -6,6 +6,7 @@ import { getAuthorColor } from '../../utils/authorColor'
 import { IdentitiesModal } from '../details/IdentitiesModal'
 import { AppDialog, AppDialogAction } from '../dialogs/AppDialog'
 import { useToaster } from '../toaster/ToasterContext'
+import { ManageRemotesModal } from '../remotes/ManageRemotesModal'
 
 interface GraphViewProps {
   onOpenConflictResolver?: () => void
@@ -66,6 +67,7 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
   const [showPullDropdown, setShowPullDropdown] = useState(false)
   const [isPushTagsConfirmOpen, setIsPushTagsConfirmOpen] = useState(false)
   const [identitiesModalOpen, setIdentitiesModalOpen] = useState(false)
+  const [isManageRemotesOpen, setIsManageRemotesOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const pullDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -1379,6 +1381,26 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
           }}
           data-testid="sync-actions-panel"
         >
+          <button
+            className="btn-secondary btn-icon"
+            onClick={() => setIsManageRemotesOpen(true)}
+            disabled={isFetching || isPulling || isPushing}
+            style={{
+              height: '29px',
+              width: '29px',
+              minWidth: '29px',
+              borderRadius: '4px',
+              color: 'var(--text-secondary)',
+              opacity: (isFetching || isPulling || isPushing) ? 0.6 : 1,
+              cursor: (isFetching || isPulling || isPushing) ? 'not-allowed' : 'pointer'
+            }}
+            data-testid="repo-setup-cog-btn"
+            data-tooltip="Manage Remotes (Origins)"
+          >
+            <Settings size={14} />
+            <span className="sr-only">Manage Remotes</span>
+          </button>
+
           <div ref={pullDropdownRef} style={{ display: 'inline-flex', position: 'relative', alignItems: 'stretch' }}>
             <button
               className="btn-secondary"
@@ -3624,6 +3646,15 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
         }}
         testId="pull-result-dialog"
       />
+
+      {isManageRemotesOpen && activeRepo && (
+        <ManageRemotesModal
+          isOpen={isManageRemotesOpen}
+          onClose={() => setIsManageRemotesOpen(false)}
+          repoPath={activeRepo.path}
+          repoId={activeRepo.id}
+        />
+      )}
 
       {/* Tag push confirmation dialog (in-app, replaces native confirm) — same UX as the sidebar Tags pane */}
       <AppDialog

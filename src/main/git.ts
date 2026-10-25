@@ -839,6 +839,12 @@ export const gitService = {
     return { success: true };
   },
 
+  removeRemote: async (repoPath: string, name: string) => {
+    const git = getGitInstance(repoPath);
+    await git.raw(['remote', 'remove', name]);
+    return { success: true };
+  },
+
   checkIndexLock: async (repoPath: string) => {
     const lockPath = join(repoPath, '.git', 'index.lock');
     try {

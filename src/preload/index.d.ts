@@ -28,6 +28,9 @@ declare global {
         status: (repoPath: string) => Promise<IpcResponse<any>>;
         log: (repoPath: string, maxCount?: number) => Promise<IpcResponse<any>>;
         fetch: (repoPath: string) => Promise<IpcResponse<void>>;
+        getRemotes: (repoPath: string) => Promise<IpcResponse<Array<{ name: string; refs: { fetch: string; push: string } }>>>;
+        addRemote: (repoPath: string, name: string, url: string) => Promise<IpcResponse<void>>;
+        removeRemote: (repoPath: string, name: string) => Promise<IpcResponse<void>>;
         checkout: (repoPath: string, branchName: string) => Promise<IpcResponse<any>>;
         createBranch: (repoPath: string, branchName: string, startPoint?: string) => Promise<IpcResponse<any>>;
         deleteBranch: (repoPath: string, branchName: string, force?: boolean) => Promise<IpcResponse<any>>;

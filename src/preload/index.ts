@@ -15,6 +15,7 @@ const api = {
       ipcRenderer.invoke('git:push', repoPath, force, remote, branch, setUpstream),
     getRemotes: (repoPath: string) => ipcRenderer.invoke('git:getRemotes', repoPath),
     addRemote: (repoPath: string, name: string, url: string) => ipcRenderer.invoke('git:addRemote', repoPath, name, url),
+    removeRemote: (repoPath: string, name: string) => ipcRenderer.invoke('git:removeRemote', repoPath, name),
     checkout: (repoPath: string, branchName: string) => ipcRenderer.invoke('git:checkout', repoPath, branchName),
     checkIndexLock: (repoPath: string) => ipcRenderer.invoke('git:checkIndexLock', repoPath),
     removeIndexLock: (repoPath: string) => ipcRenderer.invoke('git:removeIndexLock', repoPath),

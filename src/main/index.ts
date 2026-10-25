@@ -201,6 +201,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:removeRemote', async (_, repoPath, name) => {
+    try {
+      const data = await gitService.removeRemote(repoPath, name)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:checkIndexLock', async (_, repoPath) => {
     try {
       const data = await gitService.checkIndexLock(repoPath)
