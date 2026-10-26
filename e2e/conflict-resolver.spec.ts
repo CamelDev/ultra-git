@@ -149,7 +149,7 @@ test.describe('Interactive Conflict Resolver', () => {
       await expect(fileItemIcon).toBeVisible();
 
       console.log('[Test 1] Clicking Commit Merge...');
-      const completeBtn = page.getByRole('button', { name: 'Continue' });
+      const completeBtn = resolver.locator('[data-testid="conflict-continue-btn"]');
       await expect(completeBtn).toBeEnabled();
       await completeBtn.click();
 
