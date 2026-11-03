@@ -157,8 +157,8 @@ test.describe('Cherry Pick Feature', () => {
       await page.waitForTimeout(1000)
       const conflictResolver = page.locator('[data-testid="conflict-resolver"]')
       await expect(conflictResolver).toBeVisible()
-      const conflictTitle = conflictResolver.locator('span:has-text("Cherry-pick in progress")')
-      await expect(conflictTitle).toBeVisible()
+      await expect(conflictResolver.getByRole('heading', { name: 'Resolve conflicts', exact: true })).toBeVisible()
+      await expect(conflictResolver.getByText('Cherry-pick', { exact: true })).toBeVisible()
 
       console.log('11. Clicking Abort Cherry-pick button...')
       const abortBtn = page.locator('[data-testid="abort-merge-btn"]')

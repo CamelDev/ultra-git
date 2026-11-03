@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Minus, RotateCcw, SkipForward, XCircle } from 'lucide-react'
+import React, { useCallback, useEffect, useRef } from 'react'
+import { ArrowRight, CheckCircle2, ChevronDown, GitMerge, Minus, RotateCcw, SkipForward, Sparkles, XCircle } from 'lucide-react'
 import { createConflictSession, conflictSelectors } from '../../store/conflictSession'
 import { useRepoStore } from '../../store/useRepoStore'
 import { ConflictFileList } from './ConflictFileList'
@@ -13,11 +13,12 @@ export const ConflictWorkbench: React.FC<Props> = ({ repoId, onDismiss }) => {
   const session = sessionFromStore || createConflictSession(repoId)
   const loadSnapshot = useRepoStore(state => state.loadConflictSnapshot)
   const loadDocument = useRepoStore(state => state.loadConflictDocument)
-  const selectFile = useRepoStore(state => state.chooseConflictRegion)
+  const selectRegion = useRepoStore(state => state.chooseConflictRegion)
   const editResult = useRepoStore(state => state.editConflictResult)
   const apply = useRepoStore(state => state.applyConflictResolution)
   const undo = useRepoStore(state => state.undoConflictResolution)
   const runOperation = useRepoStore(state => state.runConflictOperation)
+  const refreshRepo = useRepoStore(state => state.refreshRepo)
   const loadCandidates = useRepoStore(state => state.loadConflictCandidates)
   const previewCandidate = useRepoStore(state => state.previewConflictCandidate)
   const acceptCandidate = useRepoStore(state => state.acceptConflictCandidate)
@@ -26,121 +27,117 @@ export const ConflictWorkbench: React.FC<Props> = ({ repoId, onDismiss }) => {
   const forgetCandidate = useRepoStore(state => state.forgetConflictCandidate)
   const active = conflictSelectors.activeDraft(session)
   const conflictFiles = session.snapshot?.conflicts || []
-  const allPaths = new Set(conflictFiles.map(f => f.path))
+  const allPaths = new Set(conflictFiles.map(file => file.path))
   const resolvedSummaries: import('../../../../shared/conflicts').ConflictFileSummary[] = Object.keys(session.drafts)
-    .filter(p => !allPaths.has(p))
-    .map(p => ({ path: p, status: 'RESOLVED', conflictType: session.drafts[p]?.document.conflictType }))
+    .filter(path => !allPaths.has(path))
+    .map(path => ({ path, status: 'RESOLVED', conflictType: session.drafts[path]?.document.conflictType }))
   const files = [...conflictFiles, ...resolvedSummaries]
-  const activeIndex = Math.max(0, files.findIndex(f => f.path === session.activePath))
+  const activeIndex = Math.max(0, files.findIndex(file => file.path === session.activePath))
+  const dialogRef = useRef<HTMLElement>(null)
   const firstFocus = useRef<HTMLButtonElement>(null)
-  const [closing, setClosing] = useState(false)
+
+  const chooseFile = useCallback((path: string) => {
+    const store = useRepoStore.getState()
+    const current = store.getConflictSession(repoId)
+    const draft = current.drafts[path]
+    if (!draft) {
+      // The active document is already loading through the effect below.
+      if (current.activePath !== path) void loadDocument(repoId, path)
+      return
+    }
+    useRepoStore.setState({ conflictSessions: { ...store.conflictSessions, [repoId]: { ...current, activePath: path, activeRegionId: draft.document.regions[0]?.id ?? null } } })
+  }, [repoId, loadDocument])
 
   useEffect(() => { if (!session.snapshot && !session.pending) void loadSnapshot(repoId) }, [repoId, session.snapshot, session.pending, loadSnapshot])
   useEffect(() => { if (session.activePath && session.generation && !session.drafts[session.activePath]) void loadDocument(repoId, session.activePath) }, [repoId, session.activePath, session.generation, session.drafts, loadDocument])
-  useEffect(() => { if (session.activePath && session.generation && active && conflictFiles.some(f => f.path === session.activePath)) void loadCandidates(repoId, session.activePath) }, [repoId, session.activePath, session.generation, active?.document.path, conflictFiles])
-  useEffect(() => { const repo = useRepoStore.getState().repositories.find(item => item.id === repoId); if (!repo) return; void window.api.git.getConflictCandidateSettings(repo.path).then(response => { if (response.success && response.data) useRepoStore.setState(state => ({ conflictSessions: { ...state.conflictSessions, [repoId]: { ...state.getConflictSession(repoId), candidateReuseEnabled: response.data!.enabled } } })) }) }, [repoId])
-  useEffect(() => { firstFocus.current?.focus() }, [repoId])
-  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); onDismiss?.() } if (event.altKey && event.key === 'ArrowRight') { event.preventDefault(); move(1) } if (event.altKey && event.key === 'ArrowLeft') { event.preventDefault(); move(-1) } }; const move = (delta: number) => { const next = files[activeIndex + delta]; if (next) void loadDocument(repoId, next.path) }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey) }, [activeIndex, files, loadDocument, onDismiss, repoId])
+  useEffect(() => { if (session.activePath && session.generation && active && conflictFiles.some(file => file.path === session.activePath)) void loadCandidates(repoId, session.activePath) }, [repoId, session.activePath, session.generation, active?.document.path, conflictFiles])
+  useEffect(() => {
+    const repo = useRepoStore.getState().repositories.find(item => item.id === repoId)
+    if (!repo) return
+    void window.api.git.getConflictCandidateSettings(repo.path).then(response => {
+      if (response.success && response.data) useRepoStore.setState(state => ({ conflictSessions: { ...state.conflictSessions, [repoId]: { ...state.getConflictSession(repoId), candidateReuseEnabled: response.data!.enabled } } }))
+    })
+  }, [repoId])
+  useEffect(() => {
+    const previous = window.document.activeElement as HTMLElement | null
+    firstFocus.current?.focus()
+    return () => previous?.focus()
+  }, [repoId, !!session.snapshot])
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); onDismiss?.() }
+      if (event.altKey && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+        event.preventDefault()
+        const next = files[activeIndex + (event.key === 'ArrowRight' ? 1 : -1)]
+        if (next) chooseFile(next.path)
+      }
+      if (event.key === 'Tab' && dialogRef.current) {
+        const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), textarea, input, summary, [tabindex="0"]')).filter(element => element.getClientRects().length > 0)
+        const first = focusable[0], last = focusable.at(-1)
+        if (event.shiftKey && window.document.activeElement === first) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && window.document.activeElement === last) { event.preventDefault(); first?.focus() }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [activeIndex, files, chooseFile, onDismiss])
 
-  const chooseRegion = (regionId: string, choice: Parameters<typeof selectFile>[3], selected?: string) => { if (session.activePath) selectFile(repoId, session.activePath, regionId, choice, selected) }
-  const statusText = session.pending ? `${session.pending}…` : `${conflictSelectors.unresolvedCount(session)} unresolved`
   const kind = session.snapshot?.kind || 'merge'
-  const sourceLabel = kind === 'rebase' ? 'Onto branch' : 'Current'
+  const emptyCherryPick = kind === 'cherry-pick' && session.snapshot?.phase === 'empty'
+  const showOperationSummary = emptyCherryPick || (session.snapshot?.phase === 'ready-to-continue' && files.length === 0)
+  const currentLabel = kind === 'rebase' ? 'Onto branch' : 'Current'
   const incomingLabel = kind === 'rebase' ? 'Replayed commit' : 'Incoming'
   const operationName = kind === 'cherry-pick' ? 'Cherry-pick' : kind[0].toUpperCase() + kind.slice(1)
+  const description = session.snapshot?.subject || (kind === 'rebase' ? session.snapshot?.roles.incoming : null) || `Review changes to finish your ${kind}.`
 
   if (session.error && !session.snapshot) return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-labelledby="conflict-title"><div className="conflict-error" role="alert"><h2 id="conflict-title">Unable to load conflict operation</h2><p>{session.error}</p><button className="conflict-workbench-btn" type="button" onClick={() => void loadSnapshot(repoId)}>Retry</button></div></main>
-  if (session.pending === 'load' && !session.snapshot) return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-labelledby="conflict-title"><div className="conflict-loading" role="status">Loading conflict operation…</div></main>
-  if (!session.snapshot) return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-labelledby="conflict-title"><div className="conflict-empty" role="status">No active conflict operation.</div></main>
+  if (session.pending === 'load' && !session.snapshot) return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-label="Loading conflict operation"><div className="conflict-loading" role="status">Loading conflict operation…</div></main>
+  if (!session.snapshot) return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-label="Conflict operation"><div className="conflict-empty" role="status">No active conflict operation.</div></main>
 
   const runAndClose = async (operation: 'continue' | 'skip' | 'abort') => {
-    if (operation === 'abort') { setClosing(true); onDismiss?.() }
-    try { await runOperation(repoId, operation) }
-    finally { if (operation === 'continue') { setClosing(true); onDismiss?.() } }
+    const next = await runOperation(repoId, operation)
+    if (next && !next.error && (next.snapshot?.phase === 'completed' || next.snapshot?.phase === 'aborted')) {
+      await refreshRepo(repoId)
+      onDismiss?.()
+    }
   }
+  const setRegion = (id: string | null) => useRepoStore.setState(state => ({ conflictSessions: { ...state.conflictSessions, [repoId]: { ...state.getConflictSession(repoId), activeRegionId: id } } }))
+  const setFileChoice = (choice: 'current' | 'incoming') => useRepoStore.setState(state => {
+    const current = state.getConflictSession(repoId)
+    if (!current.activePath || !current.drafts[current.activePath]) return state
+    return { conflictSessions: { ...state.conflictSessions, [repoId]: { ...current, drafts: { ...current.drafts, [current.activePath]: { ...current.drafts[current.activePath], fileChoice: choice, dirty: true } } } } }
+  })
 
-  if (closing) return null
-
-  return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-labelledby="conflict-title" aria-describedby="conflict-description" data-testid="conflict-resolver" data-workbench-testid="conflict-workbench">
+  return <main ref={dialogRef} className="conflict-workbench" role="dialog" aria-modal="true" aria-labelledby="conflict-title" aria-describedby="conflict-description" data-testid="conflict-resolver" data-workbench-testid="conflict-workbench" aria-busy={!!session.pending}>
     <header className="conflict-operation-strip">
-      <div>
-        <h2 id="conflict-title">{operationName} conflict workbench</h2>
-        <div className="conflict-operation-meta" id="conflict-description">
-          <span className="conflict-operation-status">{operationName} in progress</span>
-          <span>{sourceLabel}: {session.snapshot.roles.current}</span>
-          <span>{incomingLabel}: {session.snapshot.roles.incoming}</span>
-          {session.snapshot.currentStep && <span>Step {session.snapshot.currentStep}{session.snapshot.totalSteps ? ` of ${session.snapshot.totalSteps}` : ''}</span>}
-          <span>{session.snapshot.subject || 'Resolve changes explicitly'}</span>
-          <span data-testid="conflict-unresolved-count">{statusText}</span>
-        </div>
-      </div>
+      <div className="conflict-operation-identity"><span className="conflict-operation-icon"><GitMerge size={20} /></span><div><div className="conflict-title-row"><h2 id="conflict-title">{showOperationSummary ? `Finish ${kind}` : 'Resolve conflicts'}</h2><span className="conflict-operation-badge">{operationName}{session.snapshot.currentStep ? ` · ${session.snapshot.currentStep}${session.snapshot.totalSteps ? ` / ${session.snapshot.totalSteps}` : ''}` : ''}</span></div><p id="conflict-description" title={description}>{description}</p></div></div>
       <div className="conflict-operation-actions">
-        <button
-          ref={firstFocus}
-          type="button"
-          className="conflict-workbench-btn danger"
-          data-testid="abort-merge-btn"
-          aria-label="Abort"
-          data-tooltip={`Abort ${operationName} and restore previous state`}
-          disabled={!!session.pending}
-          onClick={() => void runAndClose('abort')}
-        >
-          <XCircle size={13} />
-          Abort {operationName}
-        </button>
-        {kind === 'rebase' && (
-          <button
-            type="button"
-            className="conflict-workbench-btn warning"
-            disabled={!!session.pending}
-            data-tooltip="Skip this commit in rebase"
-            onClick={() => void runAndClose('skip')}
-          >
-            <SkipForward size={13} />
-            Skip commit
-          </button>
-        )}
-        {conflictSelectors.canUndoResolution(session) && (
-          <button
-            type="button"
-            className="conflict-workbench-btn purple"
-            data-testid="conflict-undo-resolution"
-            data-tooltip="Undo previous conflict resolution"
-            onClick={() => void undo(repoId)}
-          >
-            <RotateCcw size={13} />
-            Undo Resolution
-          </button>
-        )}
-        <button
-          type="button"
-          className="conflict-workbench-btn primary"
-          data-testid="conflict-continue-btn"
-          disabled={!conflictSelectors.canContinue(session)}
-          data-tooltip={!conflictSelectors.canContinue(session) ? "Resolve all conflicts before continuing" : `Continue ${operationName}`}
-          onClick={() => void runAndClose('continue')}
-        >
-          Continue
-          <ArrowRight size={13} />
-        </button>
-        {onDismiss && (
-          <button
-            type="button"
-            className="conflict-workbench-btn"
-            onClick={onDismiss}
-            aria-label="Minimize conflict workbench"
-            data-tooltip="Minimize — conflicts remain active"
-          >
-            <Minus size={13} />
-            Minimize
-          </button>
-        )}
+        {conflictSelectors.canUndoResolution(session) && <button type="button" className="conflict-workbench-btn quiet" data-testid="conflict-undo-resolution" onClick={() => void undo(repoId)}><RotateCcw size={14} /> Undo Resolution</button>}
+        <button type="button" className="conflict-workbench-btn quiet danger" data-testid="abort-merge-btn" aria-label="Abort" title={`Abort ${operationName} and restore previous state`} disabled={!!session.pending} onClick={() => void runAndClose('abort')}><XCircle size={14} /> Abort {operationName}</button>
+        {(kind === 'rebase' || emptyCherryPick) && <button type="button" className={`conflict-workbench-btn ${emptyCherryPick ? 'primary' : 'quiet'}`} data-testid="conflict-skip-btn" disabled={!conflictSelectors.canSkip(session)} onClick={() => void runAndClose('skip')}><SkipForward size={14} /> Skip commit</button>}
+        {!emptyCherryPick && <button type="button" className="conflict-workbench-btn primary" data-testid="conflict-continue-btn" disabled={!conflictSelectors.canContinue(session)} title={conflictSelectors.canContinue(session) ? `Continue ${operationName}` : 'Stage all conflicted files to continue'} onClick={() => void runAndClose('continue')}>Continue {operationName}<ArrowRight size={14} /></button>}
+        {onDismiss && <button ref={firstFocus} type="button" className="conflict-workbench-btn quiet icon-only" onClick={onDismiss} aria-label="Minimize conflict workbench" title="Minimize (Esc)"><Minus size={18} /></button>}
       </div>
     </header>
-    {session.externalChange && <div className="conflict-error" role="alert">Files changed outside UltraGIT. Reload the operation before applying any resolution.</div>}
+    {session.externalChange && <div className="conflict-error" role="alert">Files changed outside UltraGIT. Reload the operation before applying any resolution.<button className="conflict-workbench-btn" type="button" onClick={() => void loadSnapshot(repoId)}>Reload</button></div>}
     {session.error && <div className="conflict-error" role="alert">{session.error}</div>}
-    <div className="conflict-workbench-body"><ConflictFileList files={files} activePath={session.activePath} drafts={session.drafts} onSelect={path => void loadDocument(repoId, path)} /><section className="conflict-workbench-content" aria-label="Conflict editor">{!active ? <div className="conflict-empty">Select a file to inspect its Base, {sourceLabel}, {incomingLabel}, and Result.</div> : <><CandidatePanel enabled={session.candidateReuseEnabled} candidates={active.candidates} previewedId={active.previewedCandidateId} acceptedId={active.acceptedCandidateId} onToggle={enabled => void setCandidateReuse(repoId, enabled)} onPreview={id => void previewCandidate(repoId, id)} onAccept={id => acceptCandidate(repoId, id)} onReject={id => rejectCandidate(repoId, id)} onForget={id => void forgetCandidate(repoId, id)} /><ResolutionEditor document={active.document} result={active.result} activeRegionId={session.activeRegionId} canApply={conflictSelectors.canApplyFile(session)} fileChoice={active.fileChoice} onEdit={value => session.activePath && editResult(repoId, session.activePath, value)} onChoice={chooseRegion} onRegion={id => { const store = useRepoStore.getState(); const current = store.getConflictSession(repoId); useRepoStore.setState({ conflictSessions: { ...store.conflictSessions, [repoId]: { ...current, activeRegionId: id } } }) }} onApply={() => void apply(repoId, session.activePath || undefined)} onFileChoice={choice => { const store = useRepoStore.getState(); const current = store.getConflictSession(repoId); const draft = session.activePath ? current.drafts[session.activePath] : undefined; if (draft && session.activePath) useRepoStore.setState({ conflictSessions: { ...store.conflictSessions, [repoId]: { ...current, drafts: { ...current.drafts, [session.activePath]: { ...draft, fileChoice: choice, dirty: true } } } } }) }} /></>}</section></div>
-    <footer className="conflict-summary">Keyboard: <kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd> previous/next file · <kbd>Esc</kbd> minimize · {activeIndex + 1} of {files.length}</footer>
+    <div className={`conflict-workbench-body${showOperationSummary ? ' empty-operation' : ''}`}>
+      {showOperationSummary ? <section className="conflict-operation-empty" data-testid={emptyCherryPick ? 'conflict-empty-cherry-pick' : 'conflict-ready-to-continue'} aria-labelledby="empty-cherry-pick-title">
+        <CheckCircle2 size={36} aria-hidden="true" />
+        <h3 id="empty-cherry-pick-title">{!emptyCherryPick ? 'Ready to continue' : session.snapshot.hasUnstagedChanges ? 'Changes still need staging' : 'No changes to apply'}</h3>
+        <p>{!emptyCherryPick ? `Your staged changes are ready. Continue to finish this ${kind} step.` : session.snapshot.hasUnstagedChanges ? 'There are unstaged changes in your working tree. Minimize this window to review and stage them, then reopen it to continue.' : 'This commit adds no changes to the current branch. Its changes may already be present, or your conflict resolution kept the current version.'}</p>
+        <code>{session.snapshot.roles.incoming}</code>
+        {emptyCherryPick && !session.snapshot.hasUnstagedChanges && <p>Choose <strong>Skip commit</strong> to finish this step and keep the current files.</p>}
+        <button type="button" className="conflict-workbench-btn quiet" disabled={!!session.pending} onClick={() => void loadSnapshot(repoId)}><RotateCcw size={13} /> Refresh status</button>
+      </section> : <>
+      <ConflictFileList files={files} activePath={session.activePath} drafts={session.drafts} onSelect={chooseFile} />
+      <section className="conflict-workbench-content" aria-label="Conflict editor">{!active ? <div className="conflict-empty">Select a file to compare changes and build the result.</div> : <>
+        <CandidatePanel enabled={session.candidateReuseEnabled} candidates={active.candidates} previewedId={active.previewedCandidateId} acceptedId={active.acceptedCandidateId} onToggle={enabled => void setCandidateReuse(repoId, enabled)} onPreview={id => void previewCandidate(repoId, id)} onAccept={id => acceptCandidate(repoId, id)} onReject={id => rejectCandidate(repoId, id)} onForget={id => void forgetCandidate(repoId, id)} />
+        <ResolutionEditor document={active.document} result={active.result} activeRegionId={session.activeRegionId} canApply={conflictSelectors.canApplyFile(session)} staged={!allPaths.has(active.document.path) && !active.dirty} fileChoice={active.fileChoice} currentLabel={currentLabel} incomingLabel={incomingLabel} currentRef={session.snapshot.roles.current} incomingRef={session.snapshot.roles.incoming} onEdit={value => session.activePath && editResult(repoId, session.activePath, value)} onChoice={(id, choice, selected) => { if (session.activePath) selectRegion(repoId, session.activePath, id, choice, selected) }} onRegion={setRegion} onApply={() => void apply(repoId, session.activePath || undefined)} onFileChoice={setFileChoice} />
+      </>}</section>
+      </>}
+    </div>
+    <footer className="conflict-status-bar"><span><span className="conflict-status-dot" /><span data-testid="conflict-unresolved-count">{session.pending ? `${session.pending}…` : emptyCherryPick ? 'Cherry-pick paused' : showOperationSummary ? 'Ready to continue' : `${conflictFiles.length} file${conflictFiles.length === 1 ? '' : 's'} left to stage`}</span></span><span><kbd>Alt</kbd> + <kbd>←</kbd> <kbd>→</kbd> switch file <span className="conflict-shortcut-divider" /><kbd>Esc</kbd> minimize</span>{!showOperationSummary && <span>File {files.length ? activeIndex + 1 : 0} of {files.length}</span>}</footer>
   </main>
 }
 
@@ -156,10 +153,13 @@ const CandidatePanel: React.FC<{
   onToggle: (enabled: boolean) => void; onPreview: (id: string) => void; onAccept: (id: string) => void; onReject: (id: string) => void; onForget: (id: string) => void;
 }> = ({ enabled, candidates, previewedId, acceptedId, onToggle, onPreview, onAccept, onReject, onForget }) => {
   const selected = candidates.find(candidate => candidate.id === previewedId)
-  return <section className="conflict-candidate-panel" aria-labelledby="candidate-heading">
-    <div className="conflict-candidate-header"><div><h3 id="candidate-heading">Resolution candidates</h3><p>Suggestions are preview-only. Accept edits Result; Apply &amp; Stage is always separate.</p></div><label><input type="checkbox" checked={enabled} onChange={event => onToggle(event.target.checked)} /> Enable repository-local reuse</label></div>
-    {!enabled ? <p className="conflict-candidate-muted">Candidate reuse is off by default. Records stay inside this repository; Git rerere is not used.</p> : candidates.length === 0 ? <p className="conflict-candidate-muted">No safe candidate found for this conflict. Choose regions manually.</p> : <div className="conflict-candidate-list">{candidates.map(candidate => <article key={candidate.id} className="conflict-candidate-card"><div><strong>{ruleLabel[candidate.ruleId] || candidate.ruleId}</strong><span> · {candidate.affectedRegionIds.length} affected region{candidate.affectedRegionIds.length === 1 ? '' : 's'}</span></div><p>{candidate.rationale}</p><small>{candidate.safety}</small><div className="conflict-candidate-actions"><button type="button" className="conflict-workbench-btn" onClick={() => onPreview(candidate.id)}>{previewedId === candidate.id ? 'Previewed' : 'Preview'}</button><button type="button" className="conflict-workbench-btn primary" disabled={previewedId !== candidate.id} onClick={() => onAccept(candidate.id)}>Accept into Result</button><button type="button" className="conflict-workbench-btn" onClick={() => onReject(candidate.id)}>Reject</button>{candidate.recordId && <button type="button" className="conflict-workbench-btn danger" onClick={() => onForget(candidate.recordId!)}>Forget record</button>}</div>{selected?.id === candidate.id && <div className="conflict-candidate-preview" aria-live="polite"><div><b>Before</b><pre>{candidate.beforePreview || '(empty)'}</pre></div><div><b>After</b><pre>{candidate.afterPreview || '(empty)'}</pre></div></div>}{acceptedId === candidate.id && <p role="status">Accepted into editable Result. Nothing has been written or staged.</p>}</article>)}</div>}
-  </section>
+  return <details className="conflict-candidate-panel">
+    <summary><span><Sparkles size={14} /> Resolution suggestions <span className="conflict-candidate-count">{enabled ? candidates.length : 'Off'}</span></span><span className="conflict-candidate-summary-hint">{enabled && candidates.length ? 'Review suggestions' : 'Optional'}</span><ChevronDown size={13} /></summary>
+    <div className="conflict-candidate-content">
+    <div className="conflict-candidate-header"><p>Preview a suggestion before accepting it into the result.</p><label><input type="checkbox" checked={enabled} onChange={event => onToggle(event.target.checked)} /> Reuse resolutions in this repository</label></div>
+    {!enabled ? <p className="conflict-candidate-muted">Enable reuse to see suggestions based on resolutions saved in this repository.</p> : candidates.length === 0 ? <p className="conflict-candidate-muted">No safe candidate found for this conflict. Choose regions manually.</p> : <div className="conflict-candidate-list">{candidates.map(candidate => <article key={candidate.id} className="conflict-candidate-card"><div><strong>{ruleLabel[candidate.ruleId] || candidate.ruleId}</strong><span> · {candidate.affectedRegionIds.length} affected region{candidate.affectedRegionIds.length === 1 ? '' : 's'}</span></div><p>{candidate.rationale}</p><small>{candidate.safety}</small><div className="conflict-candidate-actions"><button type="button" className="conflict-workbench-btn" onClick={() => onPreview(candidate.id)}>{previewedId === candidate.id ? 'Previewed' : 'Preview'}</button><button type="button" className="conflict-workbench-btn primary" disabled={previewedId !== candidate.id} onClick={() => onAccept(candidate.id)}>Accept into Result</button><button type="button" className="conflict-workbench-btn" onClick={() => onReject(candidate.id)}>Reject</button>{candidate.recordId && <button type="button" className="conflict-workbench-btn danger" onClick={() => onForget(candidate.recordId!)}>Forget record</button>}</div>{selected?.id === candidate.id && <div className="conflict-candidate-preview" aria-live="polite"><div><b>Before</b><pre>{candidate.beforePreview || '(empty)'}</pre></div><div><b>After</b><pre>{candidate.afterPreview || '(empty)'}</pre></div></div>}{acceptedId === candidate.id && <p role="status">Accepted into editable Result. Nothing has been written or staged.</p>}</article>)}</div>}
+    </div>
+  </details>
 }
 
 export default ConflictWorkbench

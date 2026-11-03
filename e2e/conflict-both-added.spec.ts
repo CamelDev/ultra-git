@@ -63,9 +63,10 @@ test.describe('Both-Added Conflict Resolution', () => {
       const fileItem = page.locator('[data-testid="conflict-file-newfile.txt"]')
       await expect(fileItem).toBeVisible()
 
-      // Base pane should show (empty) since no common ancestor
+      // Base context is available on demand and explains the missing ancestor.
+      await resolver.getByRole('button', { name: 'Base', exact: true }).click()
       const basePane = page.locator('[data-testid="conflict-base-pane"]')
-      await expect(basePane).toContainText('(empty)')
+      await expect(basePane).toContainText('No base content for this conflict.')
 
       // Current pane shows branch-b's content, Incoming shows branch-a's
       const currentPane = page.locator('[data-testid="conflict-current-pane"]')
@@ -140,7 +141,7 @@ test.describe('Both-Added Conflict Resolution', () => {
       // Workbench should open with cherry-pick header
       const resolver = page.locator('[data-testid="conflict-resolver"]')
       await expect(resolver).toBeVisible()
-      await expect(resolver.locator('span:has-text("Cherry-pick in progress")')).toBeVisible()
+      await expect(resolver.getByText('Cherry-pick', { exact: true })).toBeVisible()
 
       // Abort cherry-pick
       const abortBtn = page.locator('[data-testid="abort-merge-btn"]')

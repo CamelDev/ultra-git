@@ -168,5 +168,6 @@ export const conflictSelectors = {
   dirtyResult: (state: ConflictSession) => Object.values(state.drafts).some(draft => draft.dirty),
   canApplyFile: (state: ConflictSession) => { const draft = conflictSelectors.activeDraft(state); return !!draft && !state.pending && !state.externalChange && (draft.document.isBinary ? draft.fileChoice !== 'unresolved' : draft.document.regions.every(region => region.choice !== 'unresolved')) },
   canContinue: (state: ConflictSession) => !!state.snapshot && state.snapshot.phase === 'ready-to-continue' && !state.pending && !state.externalChange,
+  canSkip: (state: ConflictSession) => !!state.snapshot && !state.pending && !state.externalChange && (state.snapshot.kind === 'rebase' || (state.snapshot.kind === 'cherry-pick' && state.snapshot.phase === 'empty' && !state.snapshot.hasUnstagedChanges)),
   canUndoResolution: (state: ConflictSession) => !!state.undo && !state.pending && !state.externalChange && state.undo.generation === state.generation
 }

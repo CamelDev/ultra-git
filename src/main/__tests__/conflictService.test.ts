@@ -37,6 +37,19 @@ async function commit(repoPath: string, message: string) {
   await git(repoPath, ['commit', '-m', message]);
 }
 
+async function duplicateCherryPick(): Promise<{ dir: string; picked: string; head: string }> {
+  const dir = await repo();
+  await git(dir, ['checkout', '-b', 'picked']);
+  fs.writeFileSync(path.join(dir, 'conflict.txt'), 'picked\n');
+  await commit(dir, 'picked change');
+  const picked = (await git(dir, ['rev-parse', 'HEAD'])).trim();
+  await git(dir, ['checkout', 'main']);
+  fs.writeFileSync(path.join(dir, 'conflict.txt'), 'picked\n');
+  await commit(dir, 'squashed copy of picked change');
+  const head = (await git(dir, ['rev-parse', 'HEAD'])).trim();
+  return { dir, picked, head };
+}
+
 async function unmerged(repoPath: string): Promise<Array<{ path: string; stage: string }>> {
   const raw = await git(repoPath, ['ls-files', '-u', '-z']);
   return raw.split('\0').filter(Boolean).map(entry => {
@@ -53,6 +66,112 @@ afterEach(() => {
 });
 
 describe('real Git conflict characterization', () => {
+  test('already-applied cherry-pick has an explicit empty phase and skips without another commit', async () => {
+    const { dir, picked, head } = await duplicateCherryPick();
+    const started = await gitService.cherryPick(dir, picked);
+    expect(started.needsResolution).toBe(true);
+    expect(started.hadConflicts).toBe(false);
+    const empty = await conflictService.getSnapshot(dir);
+    expect(empty.kind).toBe('cherry-pick');
+    expect(empty.phase).toBe('empty');
+    expect(empty.conflicts).toHaveLength(0);
+    expect(empty.hasUnstagedChanges).toBe(false);
+    expect((await conflictService.continue(dir)).phase).toBe('empty');
+    expect((await git(dir, ['rev-parse', 'HEAD'])).trim()).toBe(head);
+    expect((await conflictService.skip(dir)).phase).toBe('completed');
+    expect((await git(dir, ['rev-parse', 'HEAD'])).trim()).toBe(head);
+    expect(fs.readFileSync(path.join(dir, 'conflict.txt'), 'utf8')).toBe('picked\n');
+    expect((await gitService.getMergeStatus(dir)).isCherryPick).toBe(false);
+    expect((await conflictService.continue(dir)).phase).toBe('completed');
+  });
+
+  test('keeping the current side can make a cherry-pick empty and supports resolution undo', async () => {
+    const dir = await repo();
+    await git(dir, ['checkout', '-b', 'picked']);
+    fs.writeFileSync(path.join(dir, 'conflict.txt'), 'incoming\n');
+    await commit(dir, 'incoming');
+    const picked = (await git(dir, ['rev-parse', 'HEAD'])).trim();
+    await git(dir, ['checkout', 'main']);
+    fs.writeFileSync(path.join(dir, 'conflict.txt'), 'current\n');
+    await commit(dir, 'current');
+    await git(dir, ['cherry-pick', picked], true);
+    const before = await conflictService.getSnapshot(dir);
+    const doc = await conflictService.getDocument(dir, 'conflict.txt', before.generation);
+    const applied = await conflictService.apply(dir, doc.path, doc.regions.map(region => ({ documentGeneration: before.generation, regionId: region.id, choice: 'current' as const })), before.generation);
+    expect(applied.snapshot.phase).toBe('empty');
+    expect((await conflictService.continue(dir)).phase).toBe('empty');
+    expect((await conflictService.undo(applied.token)).phase).toBe('conflicted');
+    await conflictService.abort(dir);
+    expect(fs.readFileSync(path.join(dir, 'conflict.txt'), 'utf8')).toBe('current\n');
+  });
+
+  test('an unstaged edit blocks skipping and becomes ready to continue when staged', async () => {
+    const { dir, picked } = await duplicateCherryPick();
+    await git(dir, ['cherry-pick', picked], true);
+    fs.writeFileSync(path.join(dir, 'conflict.txt'), 'manual edit\n');
+    const unstaged = await conflictService.getSnapshot(dir);
+    expect(unstaged.phase).toBe('empty');
+    expect(unstaged.hasUnstagedChanges).toBe(true);
+    await expect(conflictService.skip(dir)).rejects.toThrow('Review and stage your changes');
+    expect(fs.readFileSync(path.join(dir, 'conflict.txt'), 'utf8')).toBe('manual edit\n');
+    await git(dir, ['add', 'conflict.txt']);
+    const staged = await conflictService.getSnapshot(dir);
+    expect(staged.phase).toBe('ready-to-continue');
+    expect(staged.generation).not.toBe(unstaged.generation);
+    expect((await conflictService.continue(dir)).phase).toBe('completed');
+    expect((await git(dir, ['show', 'HEAD:conflict.txt'])).trim()).toBe('manual edit');
+  });
+
+  test('consecutive empty commits with the same subject still advance their identity', async () => {
+    const dir = await repo();
+    await git(dir, ['checkout', '-b', 'picked']);
+    fs.writeFileSync(path.join(dir, 'conflict.txt'), 'first\n');
+    await commit(dir, 'same subject');
+    const first = (await git(dir, ['rev-parse', 'HEAD'])).trim();
+    fs.writeFileSync(path.join(dir, 'second.txt'), 'second\n');
+    await commit(dir, 'same subject');
+    const second = (await git(dir, ['rev-parse', 'HEAD'])).trim();
+    await git(dir, ['checkout', 'main']);
+    fs.writeFileSync(path.join(dir, 'conflict.txt'), 'first\n');
+    fs.writeFileSync(path.join(dir, 'second.txt'), 'second\n');
+    await commit(dir, 'squashed first and second');
+    await git(dir, ['cherry-pick', first, second], true);
+    const before = await conflictService.getSnapshot(dir);
+    expect(before.phase).toBe('empty');
+    const next = await conflictService.skip(dir);
+    expect(next.phase).toBe('empty');
+    expect(next.generation).not.toBe(before.generation);
+    expect(next.roles.incoming).not.toBe(before.roles.incoming);
+    expect((await conflictService.skip(dir)).phase).toBe('completed');
+  });
+
+  test('skipping an empty cherry-pick advances a sequence to its next conflict', async () => {
+    const dir = await repo();
+    await git(dir, ['checkout', '-b', 'picked']);
+    fs.writeFileSync(path.join(dir, 'conflict.txt'), 'first\n');
+    await commit(dir, 'first');
+    const first = (await git(dir, ['rev-parse', 'HEAD'])).trim();
+    fs.writeFileSync(path.join(dir, 'second.txt'), 'incoming second\n');
+    await commit(dir, 'second');
+    const second = (await git(dir, ['rev-parse', 'HEAD'])).trim();
+    await git(dir, ['checkout', 'main']);
+    fs.writeFileSync(path.join(dir, 'conflict.txt'), 'first\n');
+    fs.writeFileSync(path.join(dir, 'second.txt'), 'current second\n');
+    await commit(dir, 'squashed first and another second');
+    await git(dir, ['cherry-pick', first, second], true);
+    expect((await conflictService.getSnapshot(dir)).phase).toBe('empty');
+    const next = await conflictService.skip(dir);
+    expect(next.kind).toBe('cherry-pick');
+    expect(next.phase).toBe('conflicted');
+    expect(next.conflicts.map(file => file.path)).toEqual(['second.txt']);
+    const doc = await conflictService.getDocument(dir, 'second.txt', next.generation);
+    const applied = await conflictService.apply(dir, doc.path, doc.regions.map(region => ({ documentGeneration: next.generation, regionId: region.id, choice: 'incoming' as const })), next.generation);
+    expect(applied.snapshot.phase).toBe('ready-to-continue');
+    expect((await conflictService.continue(dir)).phase).toBe('completed');
+    expect(fs.readFileSync(path.join(dir, 'conflict.txt'), 'utf8')).toBe('first\n');
+    expect(fs.readFileSync(path.join(dir, 'second.txt'), 'utf8')).toBe('incoming second\n');
+  });
+
   test('authoritative document resolves whole file and exposes generation-bound undo', async () => {
     const dir = await repo();
     await git(dir, ['checkout', '-b', 'incoming']); fs.writeFileSync(path.join(dir, 'conflict.txt'), 'incoming\n'); await commit(dir, 'incoming');
@@ -115,6 +234,9 @@ describe('real Git conflict characterization', () => {
     const firstStatus = await gitService.getMergeStatus(dir);
     expect(first).toHaveLength(1);
     expect(firstStatus.isRebase).toBe(true);
+    const firstSnapshot = await conflictService.getSnapshot(dir);
+    expect(firstSnapshot.roles.current).toBe('main');
+    expect(firstSnapshot.roles.incoming).toMatch(/^[0-9a-f]+ · replay one$/);
     fs.writeFileSync(path.join(dir, 'conflict.txt'), 'resolved first\n');
     await git(dir, ['add', 'conflict.txt']);
     const continueRes = await gitService.continueRebase(dir);
@@ -125,6 +247,7 @@ describe('real Git conflict characterization', () => {
     expect(second).toHaveLength(1);
     expect(secondStatus.isRebase).toBe(true);
     expect(secondStatus.currentStep).toBeGreaterThan(firstStatus.currentStep ?? 0);
+    expect((await conflictService.getSnapshot(dir)).roles.incoming).toMatch(/^[0-9a-f]+ · replay two$/);
 
     // Resolve second conflict and complete the rebase
     fs.writeFileSync(path.join(dir, 'conflict.txt'), 'resolved second\n');
@@ -135,6 +258,32 @@ describe('real Git conflict characterization', () => {
     const finalStatus = await gitService.getMergeStatus(dir);
     expect(finalStatus.inProgress).toBe(false);
     expect(finalStatus.isRebase).toBe(false);
+  });
+
+  test('workbench continue and skip return the next conflict stop as normal progress', async () => {
+    const dir = await repo();
+    await git(dir, ['checkout', '-b', 'rebased']);
+    for (const value of ['first', 'second', 'third']) {
+      fs.writeFileSync(path.join(dir, 'conflict.txt'), `${value}\n`);
+      await commit(dir, value);
+    }
+    await git(dir, ['checkout', 'main']);
+    fs.writeFileSync(path.join(dir, 'conflict.txt'), 'onto\n');
+    await commit(dir, 'onto');
+    await git(dir, ['checkout', 'rebased']);
+    await git(dir, ['rebase', 'main'], true);
+    const first = await conflictService.getSnapshot(dir);
+    const doc = await conflictService.getDocument(dir, 'conflict.txt', first.generation);
+    await conflictService.apply(dir, doc.path, doc.regions.map(region => ({ documentGeneration: first.generation, regionId: region.id, choice: 'current' as const })), first.generation, { fileChoice: 'manual', result: 'resolved first\n' });
+    const second = await conflictService.continue(dir);
+    expect(second.phase).toBe('conflicted');
+    expect(second.currentStep).toBe(2);
+    expect(second.conflicts).toHaveLength(1);
+    const third = await conflictService.skip(dir);
+    expect(third.phase).toBe('conflicted');
+    expect(third.currentStep).toBe(3);
+    expect(third.conflicts).toHaveLength(1);
+    expect((await conflictService.skip(dir)).phase).toBe('completed');
   });
 
   test('characterizes both-added, modify/delete, spaced paths, CRLF, binary, and manual edits', async () => {

@@ -1,6 +1,6 @@
 {
   "name": "ultra-git",
-  "version": "1.1.1",
+  "version": "1.1.8",
   "description": "UltraGIT - The ultimate git client",
   "author": "Kamil",
   "main": "./out/main/index.js",

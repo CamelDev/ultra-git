@@ -2261,9 +2261,10 @@ export const gitService = {
       return { success: true };
     } catch (err: any) {
       console.warn('gitService.cherryPick: error caught:', err.message);
-      const msg: string = err.message || '';
-      if (msg.includes('CONFLICT') || msg.includes('conflict') || msg.includes('Cherry-pick is not possible')) {
-        return { success: false, error: 'Conflicts detected during cherry-pick. Please resolve conflicts or abort.', hadConflicts: true };
+      const operation = await gitService.getMergeStatus(repoPath);
+      if (operation.isCherryPick) {
+        const conflicts = await gitService.getConflictedFiles(repoPath);
+        return { success: false, error: err.message, hadConflicts: conflicts.length > 0, needsResolution: true };
       }
       return { success: false, error: err.message || 'Cherry-pick failed' };
     }

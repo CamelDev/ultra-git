@@ -77,14 +77,44 @@ async function document(repo: string, generation: string, file: string, entries:
   const regions: ConflictRegion[] = binary ? [] : deriveConflictRegions({ generation, stageOids: { base: base.oid, current: stage2.oid, incoming: stage3.oid }, modes: { base: base.mode, current: stage2.mode, incoming: stage3.mode }, base: base.bytes, current: stage2.bytes, incoming: stage3.bytes, eol: stage2.eol, hasFinalNewline: stage2.hasFinalNewline })
   return { repoId: fs.realpathSync(repo), path: file, generation, conflictType: kindFor(entries), base, stage2, stage3, regions, isBinary: binary, eol: stage2.eol, hasFinalNewline: stage2.hasFinalNewline }
 }
+
+async function sourceReferences(repo: string, isRebase: boolean, isCherryPick: boolean) {
+  const describe = async (ref: string, fallback: string) => (await run(repo, ['show', '-s', '--format=%h · %s', ref]).catch(() => fallback)).trim()
+  if (isRebase) {
+    // head-name names the branch being rebased, not the branch we are rebasing onto.
+    let onto = ''
+    for (const directory of ['rebase-merge', 'rebase-apply']) {
+      const gitPath = (await run(repo, ['rev-parse', '--git-path', `${directory}/onto`])).trim()
+      onto = (await fs.promises.readFile(path.resolve(repo, gitPath), 'utf8').catch(() => '')).trim()
+      if (onto) break
+    }
+    const refs = onto ? (await run(repo, ['for-each-ref', '--format=%(refname:short)', '--points-at', onto, 'refs/heads', 'refs/remotes']).catch(() => '')).trim().split('\n').filter(Boolean) : []
+    return { current: refs[0] || (onto ? onto.slice(0, 8) : await describe('HEAD', 'Onto version')), incoming: await describe('REBASE_HEAD', 'Replayed commit') }
+  }
+  return {
+    current: (await run(repo, ['symbolic-ref', '--short', 'HEAD']).catch(() => '')).trim() || await describe('HEAD', 'Current version'),
+    incoming: await describe(isCherryPick ? 'CHERRY_PICK_HEAD' : 'MERGE_HEAD', 'Incoming version')
+  }
+}
+
 async function snapshot(repo: string): Promise<OperationSnapshot> {
   const real = fs.realpathSync(repo), status = await gitService.getMergeStatus(real), entries = await stages(real), grouped = new Map<string, Stage[]>()
   for (const e of entries) grouped.set(e.file, [...(grouped.get(e.file) ?? []), e])
-  const generation = hash(JSON.stringify({ status, entries }))
   const conflicts = [...grouped.entries()].map(([p, xs]) => ({ path: p, status: 'UNMERGED', conflictType: kindFor(xs) }))
   const kind = status.isRebase ? 'rebase' : status.isCherryPick ? 'cherry-pick' : 'merge'
-  const phase = conflicts.length ? 'conflicted' : status.inProgress ? 'ready-to-continue' : 'completed'
-  return { repoId: real, generation, kind, phase, roles: { current: status.branchName ?? 'current', incoming: status.currentCommitSubject ?? 'incoming', currentRole: status.isRebase ? 'onto' : 'current', incomingRole: status.isRebase ? 'replayed' : 'incoming' }, currentStep: status.currentStep, totalSteps: status.totalSteps, subject: status.currentCommitSubject, conflicts, nextConflict: conflicts[0]?.path }
+  let phase: OperationSnapshot['phase'] = conflicts.length ? 'conflicted' : status.inProgress ? 'ready-to-continue' : 'completed'
+  let hasUnstagedChanges = false
+  if (status.isCherryPick && conflicts.length === 0) {
+    const staged = await run(real, ['diff', '--no-ext-diff', '--cached', '--name-only', '-z', 'HEAD', '--'])
+    if (!staged) {
+      phase = 'empty'
+      hasUnstagedChanges = !!await run(real, ['diff', '--no-ext-diff', '--name-only', '-z', '--'])
+    }
+  }
+  const cherryPickHead = status.isCherryPick ? (await run(real, ['rev-parse', '--verify', 'CHERRY_PICK_HEAD'])).trim() : undefined
+  const generation = hash(JSON.stringify({ status, entries, phase, hasUnstagedChanges, cherryPickHead }))
+  const references = await sourceReferences(real, status.isRebase, status.isCherryPick)
+  return { repoId: real, generation, kind, phase, roles: { ...references, currentRole: status.isRebase ? 'onto' : 'current', incomingRole: status.isRebase ? 'replayed' : 'incoming' }, currentStep: status.currentStep, totalSteps: status.totalSteps, subject: status.currentCommitSubject, hasUnstagedChanges, conflicts, nextConflict: conflicts[0]?.path }
 }
 async function mutate<T>(repo: string, fn: () => Promise<T>): Promise<T> { return withLock(fs.realpathSync(repo), fn) }
 
@@ -208,10 +238,14 @@ export const conflictService = {
   continue: async (repo: string) => mutate(repo, async () => {
     const s = await snapshot(repo);
     if (s.phase === 'conflicted') throw new ConflictServiceError('PREFLIGHT_FAILED', 'Resolve all conflicts before continuing');
+    // A stale Continue request should reveal the decision state, not repeat Git's error.
+    if (s.phase === 'empty' || s.phase === 'completed' || s.phase === 'aborted') return s;
     const op = s.kind === 'rebase' ? 'rebase' : s.kind === 'cherry-pick' ? 'cherry-pick' : 'merge';
     try {
       await run(repo, ['-c', 'core.editor=true', op, '--continue']);
     } catch (err: any) {
+      const next = await snapshot(repo);
+      if ((s.kind === 'rebase' || s.kind === 'cherry-pick') && (next.phase === 'conflicted' || next.phase === 'empty') && next.generation !== s.generation) return next;
       const msg = err.message || '';
       if (s.kind === 'rebase' && (msg.includes('is now empty') || msg.includes('No changes - did you forget') || msg.includes('patch is empty'))) {
         throw new ConflictServiceError('PREFLIGHT_FAILED', "The current commit is empty. Click 'Skip commit' to continue the rebase.");
@@ -220,7 +254,18 @@ export const conflictService = {
     }
     return snapshot(repo);
   }),
-  skip: async (repo: string) => mutate(repo, async () => { const s = await snapshot(repo); if (s.kind !== 'rebase') throw new ConflictServiceError('PREFLIGHT_FAILED', 'Skip is only available during rebase'); await run(repo, ['rebase', '--skip']); return snapshot(repo) }),
+  skip: async (repo: string) => mutate(repo, async () => {
+    const s = await snapshot(repo);
+    if (s.kind !== 'rebase' && s.kind !== 'cherry-pick') throw new ConflictServiceError('PREFLIGHT_FAILED', 'There is no rebase or cherry-pick to skip');
+    if (s.kind === 'cherry-pick' && (s.phase !== 'empty' || s.hasUnstagedChanges)) throw new ConflictServiceError('PREFLIGHT_FAILED', 'Review and stage your changes before skipping an empty cherry-pick');
+    try { await run(repo, [s.kind, '--skip']); }
+    catch (error) {
+      const next = await snapshot(repo);
+      if ((next.phase === 'conflicted' || next.phase === 'empty') && next.generation !== s.generation) return next;
+      throw error;
+    }
+    return snapshot(repo);
+  }),
   abort: async (repo: string) => mutate(repo, async () => { const s = await snapshot(repo); const command = s.kind === 'rebase' ? ['rebase', '--abort'] : s.kind === 'cherry-pick' ? ['cherry-pick', '--abort'] : ['merge', '--abort']; await run(repo, command); return snapshot(repo) })
   , candidates: conflictCandidateService
 }

@@ -5,7 +5,7 @@
  */
 
 export type OperationKind = 'merge' | 'rebase' | 'cherry-pick'
-export type OperationPhase = 'conflicted' | 'ready-to-continue' | 'completed' | 'aborted'
+export type OperationPhase = 'conflicted' | 'ready-to-continue' | 'empty' | 'completed' | 'aborted'
 export type OperationRole = 'current' | 'incoming' | 'onto' | 'replayed'
 export type ConflictType = 'both-modified' | 'both-added' | 'deleted-by-us' | 'deleted-by-them' | 'added-by-us' | 'added-by-them' | 'other'
 export type EolStyle = 'lf' | 'crlf' | 'mixed' | 'none'
@@ -92,6 +92,7 @@ export interface OperationSnapshot {
   currentStep?: number
   totalSteps?: number
   subject?: string
+  hasUnstagedChanges?: boolean
   conflicts: ConflictFileSummary[]
   nextConflict?: string
 }

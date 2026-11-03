@@ -1,35 +1,44 @@
 import React from 'react'
-import { CheckCircle, Circle } from 'lucide-react'
+import { CheckCircle, Circle, CircleDot, FileCode2 } from 'lucide-react'
 import type { ConflictFileSummary } from '../../../../shared/conflicts'
+import type { ConflictDraft } from '../../store/conflictSession'
+import { getConflictFileState } from './conflictPresentation'
 
-interface Props { files: ConflictFileSummary[]; activePath: string | null; drafts: Record<string, { dirty: boolean; document: { regions: { choice: string }[]; isBinary: boolean }; fileChoice: string }>; onSelect: (path: string) => void }
+interface Props {
+  files: ConflictFileSummary[]
+  activePath: string | null
+  drafts: Record<string, ConflictDraft>
+  onSelect: (path: string) => void
+}
 
 export const ConflictFileList: React.FC<Props> = ({ files, activePath, drafts, onSelect }) => {
-  const isUnresolved = (f: ConflictFileSummary) => {
-    const d = drafts[f.path]
-    if (!d) return true
-    if (d.document.isBinary) return d.fileChoice === 'unresolved'
-    return d.document.regions.some(r => r.choice === 'unresolved')
-  }
-
+  const staged = files.filter(file => getConflictFileState(file, drafts[file.path]) === 'staged').length
   const groups = [
-    ['Unresolved', files.filter(f => isUnresolved(f))],
-    ['Edited', files.filter(f => drafts[f.path]?.dirty)],
-    ['Staged / resolved', files.filter(f => {
-      const d = drafts[f.path]
-      return d && !d.dirty && !isUnresolved(f)
-    })]
+    { label: 'Needs resolution', state: 'unresolved' },
+    { label: 'In progress', state: 'edited' },
+    { label: 'Staged', state: 'staged' }
   ] as const
+
   return <nav className="conflict-file-list" aria-label="Conflict files">
-    <h3>Files ({files.length})</h3>
-    {groups.map(([label, entries]) => entries.length ? <section className="conflict-file-group" key={label} aria-labelledby={`conflict-group-${label}`}>
-      <div className="conflict-file-group-title" id={`conflict-group-${label}`}>{label} ({entries.length})</div>
-      {entries.map(file => {
-        const unresolved = isUnresolved(file)
-        return <button className="conflict-file-row" key={file.path} type="button" role="option" aria-selected={activePath === file.path} title={file.path} data-testid={`conflict-file-${file.path}`} onClick={() => onSelect(file.path)}>
-          <span aria-hidden="true">{unresolved ? <Circle size={13} /> : <CheckCircle size={13} className="lucide-circle-check-big" style={{ color: '#10b981' }} />}</span><span className="path">{file.path}</span><span className="status">{file.status}</span>
-        </button>
+    <div className="conflict-files-heading"><h3><FileCode2 size={15} /> Files <span>{files.length}</span></h3><p>{staged} of {files.length} staged</p><progress value={staged} max={files.length || 1} aria-label="Files staged" /></div>
+    <div className="conflict-files-scroll">
+      {groups.map(({ label, state }) => {
+        const entries = files.filter(file => getConflictFileState(file, drafts[file.path]) === state)
+        return entries.length > 0 && <section className="conflict-file-group" key={state} aria-labelledby={`conflict-group-${state}`}>
+          <div className="conflict-file-group-title" id={`conflict-group-${state}`}>{label}<span>{entries.length}</span></div>
+          {entries.map(file => {
+            const slash = file.path.lastIndexOf('/')
+            const name = file.path.slice(slash + 1)
+            const directory = slash < 0 ? 'Repository root' : file.path.slice(0, slash)
+            return <button className={`conflict-file-row ${state}`} key={file.path} type="button" aria-current={activePath === file.path ? 'true' : undefined} title={file.path} data-testid={`conflict-file-${file.path}`} onClick={() => onSelect(file.path)}>
+              {state === 'staged' ? <CheckCircle size={15} className="lucide-circle-check-big" /> : state === 'edited' ? <CircleDot size={15} /> : <Circle size={15} />}
+              <span className="conflict-file-name"><strong>{name}</strong><span>{directory}</span></span>
+              <span className="sr-only">{label}</span>
+            </button>
+          })}
+        </section>
       })}
-    </section> : null)}
+    </div>
+    <div className="conflict-file-hint">Choose a resolution for each conflict, then stage the file.</div>
   </nav>
 }

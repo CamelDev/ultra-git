@@ -144,7 +144,7 @@ declare global {
         addWorktree: (repoPath: string, newPath: string, branch: string, baseBranch?: string) => Promise<{ success: boolean; error?: string }>;
         removeWorktree: (repoPath: string, targetPath: string) => Promise<{ success: boolean; error?: string }>;
         getBranchCommits: (repoPath: string, branchName: string, maxCount?: number) => Promise<{ success: boolean; data?: any; error?: string }>;
-        cherryPick: (repoPath: string, commitHash: string) => Promise<{ success: boolean; data?: { success: boolean; error?: string; hadConflicts?: boolean }; error?: string }>;
+        cherryPick: (repoPath: string, commitHash: string) => Promise<{ success: boolean; data?: { success: boolean; error?: string; hadConflicts?: boolean; needsResolution?: boolean }; error?: string }>;
         abortCherryPick: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         continueCherryPick: (repoPath: string) => Promise<{ success: boolean; error?: string }>;
         undoCommit: (repoPath: string) => Promise<{ success: boolean; error?: string }>;

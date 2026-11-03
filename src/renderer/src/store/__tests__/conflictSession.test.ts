@@ -21,6 +21,21 @@ const loaded = () => {
 }
 
 describe('conflictSessionReducer', () => {
+  it('offers Skip instead of Continue for an empty cherry-pick, without dropping unstaged edits', () => {
+    let state = createConflictSession('/repo')
+    const empty: OperationSnapshot = { ...snapshot('empty'), kind: 'cherry-pick', phase: 'empty', conflicts: [], nextConflict: undefined }
+    state = conflictSessionReducer(state, { type: 'snapshot', snapshot: empty })
+    expect(conflictSelectors.canContinue(state)).toBe(false)
+    expect(conflictSelectors.canSkip(state)).toBe(true)
+    state = conflictSessionReducer(state, { type: 'snapshot', snapshot: { ...empty, hasUnstagedChanges: true } })
+    expect(conflictSelectors.canSkip(state)).toBe(false)
+    state = conflictSessionReducer(state, { type: 'snapshot', snapshot: empty })
+    state = conflictSessionReducer(state, { type: 'action-start', action: 'skip' })
+    expect(conflictSelectors.canSkip(state)).toBe(false)
+    state = { ...state, pending: null, externalChange: true }
+    expect(conflictSelectors.canSkip(state)).toBe(false)
+  })
+
   it('starts every text region unresolved and viewing does not make it applyable', () => {
     const state = loaded()
     expect(state.drafts['file.txt'].document.regions[0].choice).toBe('unresolved')

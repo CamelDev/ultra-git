@@ -47,6 +47,10 @@ export async function launchElectronApp(options: LaunchOptions = {}): Promise<La
     ULTRA_GIT_TESTING: 'true'
   };
 
+  // Shell pager overrides are irrelevant to the GUI and simple-git rejects them.
+  delete env.GIT_PAGER;
+  delete env.PAGER;
+
   if (disableDefaultTab) {
     env.ULTRA_GIT_DISABLE_DEFAULT_TAB = 'true';
   }

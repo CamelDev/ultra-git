@@ -59,6 +59,7 @@ test.describe('HunkView Result Pane Correctness', () => {
       await page.locator('[data-testid="conflict-both-current-first"]').click()
 
       // Result pane must show BOTH lines, current first
+      await resolver.getByRole('button', { name: 'This conflict', exact: true }).click()
       const resultPane = page.locator('[data-testid="conflict-result-pane"]')
       const resultText = await resultPane.textContent()
 
@@ -71,6 +72,7 @@ test.describe('HunkView Result Pane Correctness', () => {
       expect(bravoIdx).toBeLessThan(alphaIdx)
 
       // Also verify the full-file textarea reflects the same
+      await resolver.getByRole('button', { name: 'Result Editable file', exact: true }).click()
       const resultEditor = page.locator('[data-testid="conflict-result-editor"]')
       await expect(resultEditor).toHaveValue(/Bravo change/)
       await expect(resultEditor).toHaveValue(/Alpha change/)
@@ -111,6 +113,7 @@ test.describe('HunkView Result Pane Correctness', () => {
       await page.locator('[data-testid="conflict-both-incoming-first"]').click()
 
       // Result pane shows incoming before current
+      await resolver.getByRole('button', { name: 'This conflict', exact: true }).click()
       const resultPane = page.locator('[data-testid="conflict-result-pane"]')
       const resultText = await resultPane.textContent()
 

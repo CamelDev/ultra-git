@@ -383,11 +383,14 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
     try {
       const res = await window.api.git.cherryPick(repoPath, selectedCommitHash)
       if (res.success) {
-        if (res.data?.hadConflicts) {
+        if (res.data?.hadConflicts || res.data?.needsResolution) {
           const cfRes = await window.api.git.getConflictedFiles(repoPath)
           if (cfRes.success && cfRes.data) {
             onCherryPickInitiated(cfRes.data, true)
           }
+        } else if (res.data?.success === false) {
+          setCherryPickError(res.data.error || 'Cherry-pick failed')
+          return
         } else {
           onSuccess()
         }

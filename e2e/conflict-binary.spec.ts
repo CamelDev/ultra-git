@@ -72,7 +72,7 @@ test.describe('Binary Conflict Resolution', () => {
 
       // The hunk view should show the binary message instead of text diff panes
       const binaryMsg = page.locator('.conflict-empty')
-      await expect(binaryMsg).toContainText('Binary')
+      await expect(binaryMsg).toContainText('This binary file cannot be compared as text.')
 
       // File-level action buttons should be visible
       const keepCurrentBtn = page.locator('[data-testid="conflict-keep-current"]')
