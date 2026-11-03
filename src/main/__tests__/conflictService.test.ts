@@ -83,6 +83,8 @@ describe('real Git conflict characterization', () => {
     expect(fs.readFileSync(path.join(dir, 'conflict.txt'), 'utf8')).toBe('picked\n');
     expect((await gitService.getMergeStatus(dir)).isCherryPick).toBe(false);
     expect((await conflictService.continue(dir)).phase).toBe('completed');
+    expect((await conflictService.abort(dir)).phase).toBe('completed');
+    expect((await git(dir, ['rev-parse', 'HEAD'])).trim()).toBe(head);
   });
 
   test('keeping the current side can make a cherry-pick empty and supports resolution undo', async () => {

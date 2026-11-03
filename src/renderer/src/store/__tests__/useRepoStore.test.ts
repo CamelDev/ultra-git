@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, mock } from 'bun:test'
 import { useRepoStore } from '../useRepoStore'
+import { conflictSessionReducer, createConflictSession } from '../conflictSession'
+import type { OperationSnapshot } from '../../../../shared/conflicts'
 
 const vi = {
   fn: (impl?: (...args: any[]) => any) => mock(impl || (() => {})),
@@ -19,6 +21,7 @@ const mockApi = {
     getUnpushedTags: vi.fn().mockResolvedValue({ success: true, data: [] }),
     setRepositoryIdentity: vi.fn().mockResolvedValue({ success: true }),
     getMergeStatus: vi.fn().mockResolvedValue({ success: true, data: { inProgress: false } }),
+    conflictSnapshot: vi.fn().mockResolvedValue({ success: false }),
   },
   app: {
     openDirectory: vi.fn(),
@@ -46,7 +49,7 @@ global.localStorage = mockLocalStorage as any
 
 describe('useRepoStore', () => {
   beforeEach(() => {
-    useRepoStore.setState({ repositories: [], activeId: null });
+    useRepoStore.setState({ repositories: [], activeId: null, conflictSessions: {} });
     vi.clearAllMocks();
   });
 
@@ -406,3 +409,69 @@ describe('useRepoStore', () => {
   });
 });
 
+
+describe('background conflict observation', () => {
+  const active: OperationSnapshot = {
+    repoId: '/observed-repo', generation: 'active', kind: 'cherry-pick', phase: 'conflicted',
+    roles: { current: 'main', incoming: 'picked', currentRole: 'current', incomingRole: 'incoming' },
+    conflicts: [{ path: 'file.txt', status: 'UU' }], nextConflict: 'file.txt'
+  }
+  const completed: OperationSnapshot = { ...active, generation: 'finished', kind: 'merge', phase: 'completed', conflicts: [], nextConflict: undefined }
+  let repoId: string
+
+  beforeEach(async () => {
+    useRepoStore.setState({ repositories: [], activeId: null, conflictSessions: {} })
+    await useRepoStore.getState().addRepo('/observed-repo')
+    repoId = useRepoStore.getState().activeId!
+    const session = conflictSessionReducer(createConflictSession(repoId), { type: 'snapshot', snapshot: active })
+    useRepoStore.setState({ conflictSessions: { [repoId]: session } })
+  })
+
+  it('observes external completion without leaving an external-change warning', async () => {
+    mockApi.git.conflictSnapshot.mockResolvedValueOnce({ success: true, data: completed })
+    await useRepoStore.getState().observeConflictSnapshot(repoId)
+    const session = useRepoStore.getState().getConflictSession(repoId)
+    expect(session.snapshot?.phase).toBe('completed')
+    expect(session.error).toBeNull()
+    expect(session.externalChange).toBe(false)
+    expect(session.activePath).toBeNull()
+  })
+
+  it('leaves an unchanged session intact during background reads', async () => {
+    const session = useRepoStore.getState().getConflictSession(repoId)
+    mockApi.git.conflictSnapshot.mockResolvedValueOnce({ success: true, data: active })
+    await useRepoStore.getState().observeConflictSnapshot(repoId)
+    expect(useRepoStore.getState().getConflictSession(repoId)).toBe(session)
+  })
+
+  it('ignores a response that arrives after a user operation starts', async () => {
+    let resolveResponse!: (response: unknown) => void
+    mockApi.git.conflictSnapshot.mockImplementationOnce(() => new Promise(resolve => { resolveResponse = resolve }))
+    const read = useRepoStore.getState().observeConflictSnapshot(repoId)
+    const session = { ...useRepoStore.getState().getConflictSession(repoId), pending: 'apply' }
+    useRepoStore.setState({ conflictSessions: { [repoId]: session } })
+    resolveResponse({ success: true, data: completed })
+    await read
+    expect(useRepoStore.getState().getConflictSession(repoId)).toBe(session)
+  })
+
+  it('ignores a response for an older operation generation', async () => {
+    let resolveResponse!: (response: unknown) => void
+    mockApi.git.conflictSnapshot.mockImplementationOnce(() => new Promise(resolve => { resolveResponse = resolve }))
+    const read = useRepoStore.getState().observeConflictSnapshot(repoId)
+    const session = { ...useRepoStore.getState().getConflictSession(repoId), generation: 'next-operation' }
+    useRepoStore.setState({ conflictSessions: { [repoId]: session } })
+    resolveResponse({ success: true, data: completed })
+    await read
+    expect(useRepoStore.getState().getConflictSession(repoId)).toBe(session)
+  })
+
+  it('does not read or change the session while an operation is pending', async () => {
+    const session = { ...useRepoStore.getState().getConflictSession(repoId), pending: 'continue' }
+    useRepoStore.setState({ conflictSessions: { [repoId]: session } })
+    const calls = mockApi.git.conflictSnapshot.mock.calls.length
+    await useRepoStore.getState().observeConflictSnapshot(repoId)
+    expect(mockApi.git.conflictSnapshot.mock.calls.length).toBe(calls)
+    expect(useRepoStore.getState().getConflictSession(repoId)).toBe(session)
+  })
+})

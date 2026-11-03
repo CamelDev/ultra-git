@@ -86,15 +86,22 @@ const draftFor = (document: ConflictDocument): ConflictDraft => ({
 })
 
 const sameGeneration = (state: ConflictSession, generation: string) => state.generation === generation
+const isFinished = (snapshot: OperationSnapshot | null) => snapshot?.phase === 'completed' || snapshot?.phase === 'aborted'
+const finishSession = (state: ConflictSession, snapshot: OperationSnapshot): ConflictSession => ({
+  ...state, snapshot, generation: snapshot.generation, activePath: null, activeRegionId: null,
+  drafts: {}, undo: null, externalChange: false, pending: null, error: null
+})
 
 export function conflictSessionReducer(state: ConflictSession, action: ConflictSessionAction): ConflictSession {
   switch (action.type) {
     case 'snapshot': {
+      if (isFinished(action.snapshot)) return finishSession(state, action.snapshot)
       const replacing = state.generation !== null && state.generation !== action.snapshot.generation
       const path = action.snapshot.nextConflict ?? state.activePath
       return { ...state, snapshot: action.snapshot, generation: action.snapshot.generation, activePath: path, activeRegionId: replacing ? null : state.activeRegionId, drafts: replacing ? {} : state.drafts, undo: replacing ? null : state.undo, externalChange: false, pending: null, error: null }
     }
     case 'document': {
+      if (isFinished(state.snapshot)) return state
       if (!sameGeneration(state, action.document.generation) || (action.document.repoId !== state.repoId && action.document.repoId !== state.snapshot?.repoId)) return state
       const previous = state.drafts[action.document.path]
       const draft = previous && !state.externalChange ? { ...previous, document: action.document } : draftFor(action.document)
@@ -140,12 +147,14 @@ export function conflictSessionReducer(state: ConflictSession, action: ConflictS
       return { ...state, drafts: { ...state.drafts, [action.path]: { ...draft, fileChoice: action.choice, dirty: true, updatedAt: Date.now() } } }
     }
     case 'external-snapshot': {
+      if (isFinished(action.snapshot)) return finishSession(state, action.snapshot)
       if (state.generation === action.snapshot.generation) return { ...state, snapshot: action.snapshot, externalChange: false }
       return { ...state, snapshot: action.snapshot, generation: action.snapshot.generation, drafts: {}, undo: null, activePath: action.snapshot.nextConflict ?? null, activeRegionId: null, externalChange: true, pending: null, error: 'The conflict operation changed outside UltraGIT. Review the refreshed files before applying.' }
     }
     case 'action-start': return { ...state, pending: action.action, error: null }
     case 'action-result': {
       const snapshot: OperationSnapshot = (action.result as any).snapshot ?? (action.result as any)
+      if (isFinished(snapshot)) return finishSession(state, snapshot)
       const conflictedPaths = new Set(snapshot?.conflicts?.map(c => c.path) ?? [])
       const updatedDrafts = { ...state.drafts }
       for (const [p, d] of Object.entries(updatedDrafts)) {
@@ -163,11 +172,12 @@ export function conflictSessionReducer(state: ConflictSession, action: ConflictS
 }
 
 export const conflictSelectors = {
+  isFinished: (state: ConflictSession) => isFinished(state.snapshot),
   activeDraft: (state: ConflictSession) => state.activePath ? state.drafts[state.activePath] ?? null : null,
   unresolvedCount: (state: ConflictSession) => Object.values(state.drafts).reduce((count, draft) => count + (draft.document.isBinary ? (draft.fileChoice === 'unresolved' ? 1 : 0) : draft.document.regions.filter(region => region.choice === 'unresolved').length), 0),
   dirtyResult: (state: ConflictSession) => Object.values(state.drafts).some(draft => draft.dirty),
-  canApplyFile: (state: ConflictSession) => { const draft = conflictSelectors.activeDraft(state); return !!draft && !state.pending && !state.externalChange && (draft.document.isBinary ? draft.fileChoice !== 'unresolved' : draft.document.regions.every(region => region.choice !== 'unresolved')) },
+  canApplyFile: (state: ConflictSession) => { const draft = conflictSelectors.activeDraft(state); return !!draft && !isFinished(state.snapshot) && !state.pending && !state.externalChange && (draft.document.isBinary ? draft.fileChoice !== 'unresolved' : draft.document.regions.every(region => region.choice !== 'unresolved')) },
   canContinue: (state: ConflictSession) => !!state.snapshot && state.snapshot.phase === 'ready-to-continue' && !state.pending && !state.externalChange,
-  canSkip: (state: ConflictSession) => !!state.snapshot && !state.pending && !state.externalChange && (state.snapshot.kind === 'rebase' || (state.snapshot.kind === 'cherry-pick' && state.snapshot.phase === 'empty' && !state.snapshot.hasUnstagedChanges)),
-  canUndoResolution: (state: ConflictSession) => !!state.undo && !state.pending && !state.externalChange && state.undo.generation === state.generation
+  canSkip: (state: ConflictSession) => !!state.snapshot && !isFinished(state.snapshot) && !state.pending && !state.externalChange && (state.snapshot.kind === 'rebase' || (state.snapshot.kind === 'cherry-pick' && state.snapshot.phase === 'empty' && !state.snapshot.hasUnstagedChanges)),
+  canUndoResolution: (state: ConflictSession) => !!state.undo && !isFinished(state.snapshot) && !state.pending && !state.externalChange && state.undo.generation === state.generation
 }

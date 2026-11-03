@@ -1,0 +1,11 @@
+# Cherry-pick layout and visible code preview
+
+The cherry-pick dialog now stacks the source selector, commit filter, and commit selector vertically. The Commit label sits above the search input, grouping the filter and selector together. Each input has the same bounded full width; long branch names and commit messages truncate inside their controls instead of expanding the dialog. The remote-loading action sits beside the source label, and Cherry Pick stays in a separate footer. The dialog uses more of the available window, while its file sidebar and code preview scroll independently.
+
+The blank diff was a layout defect. The overview ruler had `height: 100%` and could not shrink, but was a sibling of the code scroll pane in a vertical flex container. It occupied the preview height, leaving the code pane with a measured height of zero even though the diff rows contained the correct Git content. A bounded horizontal flex container now places the ruler beside the scroll pane. Explicit minimum sizes allow the preview to shrink within the modal without losing its scroll area. These styles are scoped to the cherry-pick dialog.
+
+Automatic scrolling now recognizes paired replacement rows as well as additions and deletions, so a change in the middle of a file is visible immediately.
+
+The regression test reproduced the zero-height pane before the fix. Electron tests now check actual viewport visibility of old/new package-version lines in a long XML file, initial scrolling to a replacement, added/deleted C# files, ruler position, and full-width controls with long labels at 1200×800 and 900×700. Screenshots cover light and dark themes. The existing branch/search unit tests pass (11), and the affected cherry-pick Electron scenarios pass (9). The production build passes. TypeScript still reports the five previously documented diagnostics in ManageRemotesModal and useRepoStore; none are introduced by this change.
+
+Rebuilt `dist/UltraGIT-1.1.8-arm64.dmg`. The packaged main process, preload, HTML, JavaScript, and CSS match the tested production build byte for byte; the archive reports version 1.1.8 and contains the stacked controls and bounded preview. The DMG checksum verification passes.

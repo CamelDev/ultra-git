@@ -380,7 +380,7 @@ const normalizePath = (p: string) => (p || '').toLowerCase().replace(/\\/g, '/')
           {conflictOpen && activeRepo && (
             <div className="conflict-workbench-overlay">
               <div className="conflict-workbench-window">
-                <ConflictWorkbench repoId={activeRepo.id} onDismiss={() => { dismissedConflictRepo.current = activeRepo.id; setConflictOpen(false); setConflictDismissed(true) }} />
+                <ConflictWorkbench key={activeRepo.id} repoId={activeRepo.id} onDismiss={() => { dismissedConflictRepo.current = activeRepo.id; setConflictOpen(false); setConflictDismissed(true) }} />
               </div>
             </div>
           )}

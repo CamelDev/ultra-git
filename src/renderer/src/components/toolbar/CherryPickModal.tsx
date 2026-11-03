@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { X, FileText, Copy, Check, AlertTriangle, GitCommit, GitBranch } from 'lucide-react'
+import { X, FileText, Copy, Check, AlertTriangle, CloudDownload, GitCommit, GitBranch, Search } from 'lucide-react'
 import { computeDiff, DiffItem } from '../../utils/patchBuilder'
 
 interface WorktreeItem {
@@ -169,7 +169,26 @@ function buildRenderRows(diffItems: DiffItem[]): RenderRow[] {
 
 
 
-export const CherryPickModal: React.FC<CherryPickModalProps> = ({
+export function selectCherryPickBranch(localNames: string[], worktreeRefs: string[], currentBranch: string, previousSelection: string, remoteNames: string[] = []): string {
+  const available = [...worktreeRefs, ...localNames, ...remoteNames].filter(Boolean)
+  if (available.includes(previousSelection)) return previousSelection
+  return available.find(ref => ref !== currentBranch) || available[0] || ''
+}
+
+interface SearchableCommit { hash: string; message: string; author_name?: string; author_email?: string }
+
+export function filterCherryPickCommits<T extends SearchableCommit>(commits: T[], query: string): T[] {
+  const search = query.trim().toLowerCase()
+  if (!search) return commits
+  return commits.filter(commit => [commit.hash, commit.message, commit.author_name, commit.author_email]
+    .some(value => (value || '').toLowerCase().includes(search)))
+}
+
+export const CherryPickModal: React.FC<CherryPickModalProps> = props => props.isOpen
+  ? <CherryPickContent key={props.repoPath} {...props} />
+  : null
+
+const CherryPickContent: React.FC<CherryPickModalProps> = ({
   isOpen,
   onClose,
   repoPath,
@@ -180,7 +199,11 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
   onSuccess
 }) => {
   const [selectedBranch, setSelectedBranch] = useState('')
+  const [remoteBranches, setRemoteBranches] = useState<string[] | null>(null)
+  const [remoteLoading, setRemoteLoading] = useState(false)
+  const [remoteError, setRemoteError] = useState<string | null>(null)
   const [commits, setCommits] = useState<any[]>([])
+  const [commitSearch, setCommitSearch] = useState('')
   const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(null)
   const [commitsLoading, setCommitsLoading] = useState(false)
   const [commitsError, setCommitsError] = useState<string | null>(null)
@@ -198,6 +221,10 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
   const [cherryPickError, setCherryPickError] = useState<string | null>(null)
   const [copiedSide, setCopiedSide] = useState<'left' | 'right' | null>(null)
 
+  const filteredCommits = filterCherryPickCommits(commits, commitSearch)
+  const activeCommitHash = filteredCommits.find(commit => commit.hash === selectedCommitHash)?.hash || filteredCommits[0]?.hash || null
+  const canCherryPick = !!activeCommitHash && !commitsLoading && !commitsError && !cherryPickLoading
+
   const bodyRef = useRef<HTMLDivElement>(null)
 
   // 1. Reset/populate initial branch
@@ -205,17 +232,12 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
     if (!isOpen) return
 
     const localNames = (branches?.local || []).map((b) => (typeof b === 'string' ? b : b.name))
-    const remoteNames = branches?.remote || []
     const wtRefs = (worktrees || []).map((wt) =>
       wt.branch && wt.branch !== '(detached HEAD)' ? wt.branch : wt.hash
     )
-    const all = [...wtRefs, ...localNames, ...remoteNames].filter(Boolean)
-
-    // Select the first branch/ref that is not the current branch
-    const defaultBranch = all.find((b) => b !== currentBranch) || all[0] || ''
-    setSelectedBranch(defaultBranch)
+    setSelectedBranch(previous => selectCherryPickBranch(localNames, wtRefs, currentBranch, previous, remoteBranches || []))
     setCherryPickError(null)
-  }, [isOpen, branches, worktrees, currentBranch])
+  }, [isOpen, branches, worktrees, currentBranch, remoteBranches])
 
   // 2. Fetch commits when selected branch changes
   useEffect(() => {
@@ -228,6 +250,8 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
     let isMounted = true
     setCommitsLoading(true)
     setCommitsError(null)
+    setCommits([])
+    setSelectedCommitHash(null)
 
     window.api.git
       .getBranchCommits(repoPath, selectedBranch, 50)
@@ -258,9 +282,10 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
 
   // 3. Fetch changed files when selected commit changes
   useEffect(() => {
-    if (!isOpen || !selectedCommitHash) {
+    if (!isOpen || !activeCommitHash) {
       setFiles([])
       setSelectedFile(null)
+      setFilesLoading(false)
       return
     }
 
@@ -268,7 +293,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
     setFilesLoading(true)
 
     window.api.git
-      .getCommitFiles(repoPath, selectedCommitHash)
+      .getCommitFiles(repoPath, activeCommitHash)
       .then((res) => {
         if (!isMounted) return
         if (res.success && res.data) {
@@ -294,12 +319,15 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
     return () => {
       isMounted = false
     }
-  }, [isOpen, selectedCommitHash, repoPath])
+  }, [isOpen, activeCommitHash, repoPath])
 
   // 4. Fetch diff for selected file
   useEffect(() => {
-    if (!isOpen || !selectedCommitHash || !selectedFile) {
+    if (!isOpen || !activeCommitHash || !selectedFile) {
       setDiffItems([])
+      setDiffLoading(false)
+      setDiffError(null)
+      setIsBinary(false)
       return
     }
 
@@ -310,7 +338,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
     window.api.git
       .getCommitFileDiff(
         repoPath,
-        selectedCommitHash,
+        activeCommitHash,
         selectedFile.path,
         selectedFile.oldPath,
         selectedFile.status
@@ -339,14 +367,14 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
     return () => {
       isMounted = false
     }
-  }, [isOpen, selectedCommitHash, selectedFile, repoPath])
+  }, [isOpen, activeCommitHash, selectedFile, repoPath])
 
   // 5. Scroll to first diff change
   useEffect(() => {
     if (!diffLoading && diffItems.length > 0) {
       const timer = setTimeout(() => {
         if (bodyRef.current) {
-          const firstChange = bodyRef.current.querySelector('.diff-row.type-add, .diff-row.type-delete')
+          const firstChange = bodyRef.current.querySelector('.diff-row.type-add, .diff-row.type-delete, .diff-row.type-change')
           if (firstChange) {
             firstChange.scrollIntoView({ block: 'center', behavior: 'auto' })
           }
@@ -373,15 +401,29 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
   if (!isOpen) return null
 
   const localNames = (branches?.local || []).map((b) => (typeof b === 'string' ? b : b.name))
-  const remoteNames = branches?.remote || []
+  const remoteNames = remoteBranches || []
+
+  const loadRemoteBranches = async () => {
+    setRemoteLoading(true)
+    setRemoteError(null)
+    try {
+      const response = await window.api.git.getBranches(repoPath)
+      if (!response.success || !response.data) throw new Error(response.error || 'Could not load remote branches')
+      setRemoteBranches(response.data.remote)
+    } catch (error: any) {
+      setRemoteError(error.message || 'Could not load remote branches')
+    } finally {
+      setRemoteLoading(false)
+    }
+  }
 
   const handleCherryPick = async () => {
-    if (!selectedCommitHash) return
+    if (!activeCommitHash || !canCherryPick) return
     setCherryPickLoading(true)
     setCherryPickError(null)
 
     try {
-      const res = await window.api.git.cherryPick(repoPath, selectedCommitHash)
+      const res = await window.api.git.cherryPick(repoPath, activeCommitHash)
       if (res.success) {
         if (res.data?.hadConflicts || res.data?.needsResolution) {
           const cfRes = await window.api.git.getConflictedFiles(repoPath)
@@ -509,17 +551,10 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
   return (
     <div className="diff-modal-overlay" style={{ zIndex: 1100 }} onClick={onClose}>
       <div
-        className="diff-modal-content"
-        style={{
-          width: '85vw',
-          maxWidth: '1000px',
-          height: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-          borderRadius: '10px',
-          overflow: 'hidden',
-          border: '1px solid var(--border)'
-        }}
+        className="diff-modal-content cherry-pick-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cherry-pick-title"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -530,12 +565,13 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: 'var(--bg-secondary)'
+            background: 'var(--bg-secondary)',
+            flexShrink: 0
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Copy size={16} style={{ color: 'var(--accent-light)' }} />
-            <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
+            <h2 id="cherry-pick-title" style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
               Cherry Pick Commit
             </h2>
           </div>
@@ -549,34 +585,27 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
           </button>
         </div>
 
-        {/* Selection Bar */}
-        <div
-          style={{
-            padding: '12px 20px',
-            borderBottom: '1px solid var(--border)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            background: 'var(--bg-primary)',
-            flexWrap: 'wrap'
-          }}
-        >
+        <div className="cherry-pick-controls">
           {/* Branch select */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <GitBranch size={14} style={{ color: 'var(--text-secondary)' }} />
+          <div className="cherry-pick-field">
+            <div className="cherry-pick-field-heading">
+              <label htmlFor="cherry-pick-source"><GitBranch size={14} />Source branch</label>
+              {remoteBranches === null && <button
+                type="button"
+                className="btn-secondary cherry-pick-load-remotes"
+                data-testid="cherry-pick-load-remotes"
+                disabled={remoteLoading}
+                onClick={() => void loadRemoteBranches()}
+              ><CloudDownload size={14} />{remoteLoading ? 'Loading remote branches…' : remoteError ? 'Retry remote branches' : 'Load remote branches'}</button>}
+              {remoteBranches?.length === 0 && <span role="status">No remote branches found</span>}
+            </div>
             <select
+              id="cherry-pick-source"
               value={selectedBranch}
+              title={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
-              style={{
-                border: '1px solid var(--border)',
-                backgroundColor: 'var(--bg-tertiary)',
-                color: 'var(--text-primary)',
-                borderRadius: '6px',
-                padding: '6px 10px',
-                outline: 'none',
-                fontSize: '13px'
-              }}
               data-testid="cherry-pick-branch-select"
+              aria-label="Source branch"
             >
               {worktrees && worktrees.length > 0 && (
                 <optgroup label="Worktrees">
@@ -619,35 +648,40 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
                 </optgroup>
               )}
             </select>
+            {remoteError && <span role="alert" style={{ fontSize: '12px', color: 'var(--conflict-danger, #ef4444)' }}>{remoteError}</span>}
           </div>
 
-          {/* Commit select */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-            <GitCommit size={14} style={{ color: 'var(--text-secondary)' }} />
+          <div className="cherry-pick-field">
+            <div className="cherry-pick-field-heading">
+              <label htmlFor="cherry-pick-commit"><GitCommit size={14} />Commit</label>
+            </div>
+            <div style={{ position: 'relative', minWidth: 0 }}>
+              <Search size={14} aria-hidden="true" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }} />
+              <input
+                type="search"
+                aria-label="Filter commits"
+                data-testid="cherry-pick-commit-search"
+                placeholder="Filter by hash, message, or author…"
+                value={commitSearch}
+                onChange={event => setCommitSearch(event.target.value)}
+                style={{ paddingLeft: '31px' }}
+              />
+            </div>
             {commitsLoading ? (
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Loading commits...</span>
             ) : commitsError ? (
               <span style={{ fontSize: '12px', color: '#f87171' }}>{commitsError}</span>
-            ) : commits.length === 0 ? (
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>No commits found</span>
+            ) : filteredCommits.length === 0 ? (
+              <span role="status" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{commits.length ? 'No commits match your search' : 'No commits found'}</span>
             ) : (
               <select
-                value={selectedCommitHash || ''}
+                id="cherry-pick-commit"
+                value={activeCommitHash || ''}
+                title={filteredCommits.find(commit => commit.hash === activeCommitHash)?.message}
                 onChange={(e) => setSelectedCommitHash(e.target.value)}
-                style={{
-                  border: '1px solid var(--border)',
-                  backgroundColor: 'var(--bg-tertiary)',
-                  color: 'var(--text-primary)',
-                  borderRadius: '6px',
-                  padding: '6px 10px',
-                  outline: 'none',
-                  fontSize: '13px',
-                  flex: 1,
-                  maxWidth: '500px'
-                }}
                 data-testid="cherry-pick-commit-select"
               >
-                {commits.map((c) => (
+                {filteredCommits.map((c) => (
                   <option key={c.hash} value={c.hash}>
                     [{c.hash.substring(0, 7)}] {c.message} (by {c.author_name})
                   </option>
@@ -655,31 +689,6 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
               </select>
             )}
           </div>
-
-          {/* Cherry Pick action */}
-          <button
-            onClick={handleCherryPick}
-            disabled={!selectedCommitHash || cherryPickLoading}
-            data-tooltip="Cherry pick selected commit into current branch"
-            style={{
-              padding: '6px 16px',
-              fontSize: '13px',
-              fontWeight: 600,
-              backgroundColor: 'var(--accent-light)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: (!selectedCommitHash || cherryPickLoading) ? 'not-allowed' : 'pointer',
-              opacity: (!selectedCommitHash || cherryPickLoading) ? 0.6 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              marginLeft: 'auto'
-            }}
-            data-testid="cherry-pick-action-btn"
-          >
-            {cherryPickLoading ? 'Cherry picking...' : 'Cherry Pick'}
-          </button>
         </div>
 
         {/* Error Alert */}
@@ -691,6 +700,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
               borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
               color: '#f87171',
               fontSize: '12px',
+              flexShrink: 0,
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
@@ -703,12 +713,14 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
         )}
 
         {/* Main Body */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: 'var(--bg-secondary)' }}>
+        <div className="cherry-pick-preview">
           {/* File list sidebar */}
           <div
             className="diff-modal-sidebar"
             style={{
-              width: '260px',
+              width: '24%',
+              minWidth: '180px',
+              maxWidth: '260px',
               borderRight: '1px solid var(--border)',
               display: 'flex',
               flexDirection: 'column',
@@ -799,7 +811,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
           </div>
 
           {/* Diff viewer */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div className="cherry-pick-diff">
             {selectedFile && !diffLoading && !diffError && !isBinary && (
               <div
                 style={{
@@ -809,6 +821,7 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
                   alignItems: 'center',
                   justifyContent: 'flex-end',
                   gap: '8px',
+                  flexShrink: 0,
                   background: 'var(--bg-secondary)'
                 }}
               >
@@ -832,86 +845,99 @@ export const CherryPickModal: React.FC<CherryPickModalProps> = ({
                 </button>
               </div>
             )}
-            <div
-              ref={bodyRef}
-              className="diff-modal-scroll"
-              onCopy={handleCopy}
-              style={{ flex: 1, overflowY: 'auto', display: !selectedFile ? 'none' : 'block' }}
-            >
-            {diffLoading && (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                Loading file diff...
-              </div>
-            )}
-            {diffError && (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#f87171' }}>
-                Error: {diffError}
-              </div>
-            )}
-            {!diffLoading && !diffError && isBinary && (
+            <div className="cherry-pick-diff-body">
               <div
-                style={{ padding: '60px', textAlign: 'center', color: 'var(--text-secondary)' }}
-                data-testid="cherry-pick-binary-placeholder"
+                ref={bodyRef}
+                className="diff-modal-scroll"
+                onCopy={handleCopy}
+                style={{ display: !selectedFile ? 'none' : 'block' }}
               >
-                Binary file (diff not available as text)
-              </div>
-            )}
-            {!diffLoading && !diffError && !isBinary && (
-              <div className="diff-table">
-                {renderRows.map((row, idx) => (
-                  <div key={idx} className={`diff-row type-${row.rowType}`}>
-                    <div className={`diff-col left${row.rowType === 'add' ? ' empty-side' : ''}`}>
-                      <span className="diff-line-number">{row.beforeNum || ''}</span>
-                      {row.oldSpans ? (
-                        <InlineContent spans={row.oldSpans} type="delete" />
-                      ) : (
-                        <pre className="diff-line-content">{row.beforeLine ?? ''}</pre>
-                      )}
-                    </div>
-                    <div className={`diff-col right${row.rowType === 'delete' ? ' empty-side' : ''}`}>
-                      <span className="diff-line-number">{row.afterNum || ''}</span>
-                      {row.newSpans ? (
-                        <InlineContent spans={row.newSpans} type="add" />
-                      ) : (
-                        <pre className="diff-line-content">{row.afterLine ?? ''}</pre>
-                      )}
-                    </div>
+                {diffLoading && (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    Loading file diff...
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Scrollbar ruler markers */}
-          {!diffLoading && !diffError && !isBinary && renderRows.length > 0 && (
-            <div className="diff-overview-ruler" onClick={handleRulerClick}>
-              {changeIndexes.map((change) => {
-                const topPct = (change.idx / renderRows.length) * 100
-                const isDelete = change.rowType === 'delete'
-                const isChange = change.rowType === 'change'
-                return (
+                )}
+                {diffError && (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#f87171' }}>
+                    Error: {diffError}
+                  </div>
+                )}
+                {!diffLoading && !diffError && isBinary && (
                   <div
-                    key={change.idx}
-                    className={`diff-ruler-marker type-${change.rowType}`}
-                    style={{
-                      position: 'absolute',
-                      top: `${topPct}%`,
-                      height: '2px',
-                      left: isDelete ? '0' : isChange ? '0' : '50%',
-                      width: isChange ? '100%' : '50%',
-                      background: isChange
-                        ? 'linear-gradient(to right, #f87171 50%, #34d399 50%)'
-                        : isDelete
-                        ? '#f87171'
-                        : '#34d399',
-                      opacity: 0.8
-                    }}
-                  />
-                )
-              })}
+                    style={{ padding: '60px', textAlign: 'center', color: 'var(--text-secondary)' }}
+                    data-testid="cherry-pick-binary-placeholder"
+                  >
+                    Binary file (diff not available as text)
+                  </div>
+                )}
+                {!diffLoading && !diffError && !isBinary && (
+                  <div className="diff-table">
+                    {renderRows.map((row, idx) => (
+                      <div key={idx} className={`diff-row type-${row.rowType}`}>
+                        <div className={`diff-col left${row.rowType === 'add' ? ' empty-side' : ''}`}>
+                          <span className="diff-line-number">{row.beforeNum || ''}</span>
+                          {row.oldSpans ? (
+                            <InlineContent spans={row.oldSpans} type="delete" />
+                          ) : (
+                            <pre className="diff-line-content">{row.beforeLine ?? ''}</pre>
+                          )}
+                        </div>
+                        <div className={`diff-col right${row.rowType === 'delete' ? ' empty-side' : ''}`}>
+                          <span className="diff-line-number">{row.afterNum || ''}</span>
+                          {row.newSpans ? (
+                            <InlineContent spans={row.newSpans} type="add" />
+                          ) : (
+                            <pre className="diff-line-content">{row.afterLine ?? ''}</pre>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Scrollbar ruler markers */}
+              {!diffLoading && !diffError && !isBinary && renderRows.length > 0 && (
+                <div className="diff-overview-ruler" onClick={handleRulerClick}>
+                  {changeIndexes.map((change) => {
+                    const topPct = (change.idx / renderRows.length) * 100
+                    const isDelete = change.rowType === 'delete'
+                    const isChange = change.rowType === 'change'
+                    return (
+                      <div
+                        key={change.idx}
+                        className={`diff-ruler-marker type-${change.rowType}`}
+                        style={{
+                          position: 'absolute',
+                          top: `${topPct}%`,
+                          height: '2px',
+                          left: isDelete ? '0' : isChange ? '0' : '50%',
+                          width: isChange ? '100%' : '50%',
+                          background: isChange
+                            ? 'linear-gradient(to right, #f87171 50%, #34d399 50%)'
+                            : isDelete
+                            ? '#f87171'
+                            : '#34d399',
+                          opacity: 0.8
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          )}
           </div>
+        </div>
+        <div className="cherry-pick-footer">
+          <button
+            onClick={handleCherryPick}
+            disabled={!canCherryPick}
+            data-tooltip="Cherry pick selected commit into current branch"
+            className="cherry-pick-action"
+            data-testid="cherry-pick-action-btn"
+          >
+            {cherryPickLoading ? 'Cherry picking...' : 'Cherry Pick'}
+          </button>
         </div>
       </div>
     </div>

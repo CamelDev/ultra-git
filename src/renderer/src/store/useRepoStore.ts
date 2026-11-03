@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { conflictSessionReducer, createConflictSession, type ConflictSession } from './conflictSession'
+import { conflictSelectors, conflictSessionReducer, createConflictSession, type ConflictSession } from './conflictSession'
 import type { OperationActionResult, RegionChoice } from '../../../shared/conflicts'
 
 export interface StashEntry {
@@ -111,6 +111,7 @@ interface RepoState {
   setRepoIdentity: (repoId: string, identityId: string | undefined) => Promise<void>;
   getConflictSession: (repoId: string) => ConflictSession;
   loadConflictSnapshot: (repoId: string) => Promise<ConflictSession | null>;
+  observeConflictSnapshot: (repoId: string) => Promise<ConflictSession | null>;
   loadConflictDocument: (repoId: string, filePath: string) => Promise<ConflictSession | null>;
   chooseConflictRegion: (repoId: string, filePath: string, regionId: string, choice: RegionChoice, selected?: string) => void;
   editConflictResult: (repoId: string, filePath: string, result: string) => void;
@@ -220,6 +221,27 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       const next = conflictSessionReducer(get().getConflictSession(repoId), { type: 'error', message: error?.message || 'Unable to load conflict operation' });
       set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
       return next;
+    }
+  },
+
+  observeConflictSnapshot: async (repoId: string) => {
+    const repo = get().repositories.find(item => item.id === repoId);
+    const before = get().getConflictSession(repoId);
+    if (!repo || !before.snapshot || before.pending || conflictSelectors.isFinished(before)) return before;
+    const seq = (conflictRequestSeq.get(repoId) ?? 0) + 1;
+    conflictRequestSeq.set(repoId, seq);
+    try {
+      const response = await window.api.git.conflictSnapshot(repo.path);
+      const current = get().getConflictSession(repoId);
+      // Ignore a background read that overlapped a user action or a newer snapshot.
+      if (conflictRequestSeq.get(repoId) !== seq || current.pending || current.generation !== before.generation) return current;
+      if (!response.success || !response.data || (response.data.generation === current.generation && response.data.phase === current.snapshot?.phase)) return current;
+      const next = conflictSessionReducer(current, { type: 'external-snapshot', snapshot: response.data });
+      set({ conflictSessions: { ...get().conflictSessions, [repoId]: next } });
+      return next;
+    } catch {
+      // A transient read failure will be retried while the workbench remains open.
+      return get().getConflictSession(repoId);
     }
   },
 

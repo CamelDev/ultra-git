@@ -21,6 +21,37 @@ const loaded = () => {
 }
 
 describe('conflictSessionReducer', () => {
+  for (const phase of ['completed', 'aborted'] as const) {
+    it(`clears stale conflict state when any snapshot reports ${phase}`, () => {
+      let state = loaded()
+      const regionId = state.drafts['file.txt'].document.regions[0].id
+      state = conflictSessionReducer(state, { type: 'choose-region', path: 'file.txt', regionId, choice: 'current' })
+      state = { ...state, undo: { token: 'undo', generation: 'g1' }, pending: 'continue', externalChange: true, error: 'old error' }
+      const finished: OperationSnapshot = { ...snapshot('finished', phase), conflicts: [], nextConflict: undefined }
+      const actions = [
+        { type: 'snapshot', snapshot: finished },
+        { type: 'external-snapshot', snapshot: finished },
+        { type: 'action-result', result: { snapshot: finished } }
+      ] as const
+      for (const action of actions) {
+        const next = conflictSessionReducer(state, action)
+        expect(conflictSelectors.isFinished(next)).toBe(true)
+        expect(next.drafts).toEqual({})
+        expect(next.activePath).toBeNull()
+        expect(next.activeRegionId).toBeNull()
+        expect(next.undo).toBeNull()
+        expect(next.pending).toBeNull()
+        expect(next.error).toBeNull()
+        expect(next.externalChange).toBe(false)
+        expect(conflictSelectors.canContinue(next)).toBe(false)
+        expect(conflictSelectors.canApplyFile(next)).toBe(false)
+        expect(conflictSelectors.canSkip(next)).toBe(false)
+        expect(conflictSelectors.canUndoResolution(next)).toBe(false)
+        expect(conflictSessionReducer(next, { type: 'document', document: document('finished') }).drafts).toEqual({})
+      }
+    })
+  }
+
   it('offers Skip instead of Continue for an empty cherry-pick, without dropping unstaged edits', () => {
     let state = createConflictSession('/repo')
     const empty: OperationSnapshot = { ...snapshot('empty'), kind: 'cherry-pick', phase: 'empty', conflicts: [], nextConflict: undefined }

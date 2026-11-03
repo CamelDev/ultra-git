@@ -12,6 +12,7 @@ export const ConflictWorkbench: React.FC<Props> = ({ repoId, onDismiss }) => {
   const sessionFromStore = useRepoStore(state => state.conflictSessions[repoId])
   const session = sessionFromStore || createConflictSession(repoId)
   const loadSnapshot = useRepoStore(state => state.loadConflictSnapshot)
+  const observeSnapshot = useRepoStore(state => state.observeConflictSnapshot)
   const loadDocument = useRepoStore(state => state.loadConflictDocument)
   const selectRegion = useRepoStore(state => state.chooseConflictRegion)
   const editResult = useRepoStore(state => state.editConflictResult)
@@ -35,6 +36,29 @@ export const ConflictWorkbench: React.FC<Props> = ({ repoId, onDismiss }) => {
   const activeIndex = Math.max(0, files.findIndex(file => file.path === session.activePath))
   const dialogRef = useRef<HTMLElement>(null)
   const firstFocus = useRef<HTMLButtonElement>(null)
+  const dismissRef = useRef(onDismiss)
+  const finished = conflictSelectors.isFinished(session)
+
+  useEffect(() => { dismissRef.current = onDismiss }, [onDismiss])
+  useEffect(() => {
+    if (!finished) return
+    dismissRef.current?.()
+    void refreshRepo(repoId)
+  }, [finished, repoId, refreshRepo])
+  useEffect(() => {
+    if (finished) return
+    let reading = false
+    const observe = async () => {
+      if (reading) return
+      reading = true
+      try { await observeSnapshot(repoId) }
+      finally { reading = false }
+    }
+    // Git-only changes do not emit the working-tree watcher's file events.
+    const timer = window.setInterval(() => void observe(), 1500)
+    window.addEventListener('focus', observe)
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', observe) }
+  }, [repoId, finished, observeSnapshot])
 
   const chooseFile = useCallback((path: string) => {
     const store = useRepoStore.getState()
@@ -93,13 +117,10 @@ export const ConflictWorkbench: React.FC<Props> = ({ repoId, onDismiss }) => {
   if (session.error && !session.snapshot) return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-labelledby="conflict-title"><div className="conflict-error" role="alert"><h2 id="conflict-title">Unable to load conflict operation</h2><p>{session.error}</p><button className="conflict-workbench-btn" type="button" onClick={() => void loadSnapshot(repoId)}>Retry</button></div></main>
   if (session.pending === 'load' && !session.snapshot) return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-label="Loading conflict operation"><div className="conflict-loading" role="status">Loading conflict operation…</div></main>
   if (!session.snapshot) return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-label="Conflict operation"><div className="conflict-empty" role="status">No active conflict operation.</div></main>
+  if (finished) return <main className="conflict-workbench" role="dialog" aria-modal="true" aria-labelledby="conflict-title" data-testid="conflict-resolver"><section className="conflict-operation-empty"><CheckCircle2 size={36} aria-hidden="true" /><h2 id="conflict-title">No active conflict operation</h2><p>There is no merge, rebase, or cherry-pick left to finish.</p>{onDismiss && <button type="button" className="conflict-workbench-btn primary" onClick={onDismiss}>Close</button>}</section></main>
 
-  const runAndClose = async (operation: 'continue' | 'skip' | 'abort') => {
-    const next = await runOperation(repoId, operation)
-    if (next && !next.error && (next.snapshot?.phase === 'completed' || next.snapshot?.phase === 'aborted')) {
-      await refreshRepo(repoId)
-      onDismiss?.()
-    }
+  const runAction = async (operation: 'continue' | 'skip' | 'abort') => {
+    await runOperation(repoId, operation)
   }
   const setRegion = (id: string | null) => useRepoStore.setState(state => ({ conflictSessions: { ...state.conflictSessions, [repoId]: { ...state.getConflictSession(repoId), activeRegionId: id } } }))
   const setFileChoice = (choice: 'current' | 'incoming') => useRepoStore.setState(state => {
@@ -113,9 +134,9 @@ export const ConflictWorkbench: React.FC<Props> = ({ repoId, onDismiss }) => {
       <div className="conflict-operation-identity"><span className="conflict-operation-icon"><GitMerge size={20} /></span><div><div className="conflict-title-row"><h2 id="conflict-title">{showOperationSummary ? `Finish ${kind}` : 'Resolve conflicts'}</h2><span className="conflict-operation-badge">{operationName}{session.snapshot.currentStep ? ` · ${session.snapshot.currentStep}${session.snapshot.totalSteps ? ` / ${session.snapshot.totalSteps}` : ''}` : ''}</span></div><p id="conflict-description" title={description}>{description}</p></div></div>
       <div className="conflict-operation-actions">
         {conflictSelectors.canUndoResolution(session) && <button type="button" className="conflict-workbench-btn quiet" data-testid="conflict-undo-resolution" onClick={() => void undo(repoId)}><RotateCcw size={14} /> Undo Resolution</button>}
-        <button type="button" className="conflict-workbench-btn quiet danger" data-testid="abort-merge-btn" aria-label="Abort" title={`Abort ${operationName} and restore previous state`} disabled={!!session.pending} onClick={() => void runAndClose('abort')}><XCircle size={14} /> Abort {operationName}</button>
-        {(kind === 'rebase' || emptyCherryPick) && <button type="button" className={`conflict-workbench-btn ${emptyCherryPick ? 'primary' : 'quiet'}`} data-testid="conflict-skip-btn" disabled={!conflictSelectors.canSkip(session)} onClick={() => void runAndClose('skip')}><SkipForward size={14} /> Skip commit</button>}
-        {!emptyCherryPick && <button type="button" className="conflict-workbench-btn primary" data-testid="conflict-continue-btn" disabled={!conflictSelectors.canContinue(session)} title={conflictSelectors.canContinue(session) ? `Continue ${operationName}` : 'Stage all conflicted files to continue'} onClick={() => void runAndClose('continue')}>Continue {operationName}<ArrowRight size={14} /></button>}
+        <button type="button" className="conflict-workbench-btn quiet danger" data-testid="abort-merge-btn" aria-label="Abort" title={`Abort ${operationName} and restore previous state`} disabled={!!session.pending} onClick={() => void runAction('abort')}><XCircle size={14} /> Abort {operationName}</button>
+        {(kind === 'rebase' || emptyCherryPick) && <button type="button" className={`conflict-workbench-btn ${emptyCherryPick ? 'primary' : 'quiet'}`} data-testid="conflict-skip-btn" disabled={!conflictSelectors.canSkip(session)} onClick={() => void runAction('skip')}><SkipForward size={14} /> Skip commit</button>}
+        {!emptyCherryPick && <button type="button" className="conflict-workbench-btn primary" data-testid="conflict-continue-btn" disabled={!conflictSelectors.canContinue(session)} title={conflictSelectors.canContinue(session) ? `Continue ${operationName}` : 'Stage all conflicted files to continue'} onClick={() => void runAction('continue')}>Continue {operationName}<ArrowRight size={14} /></button>}
         {onDismiss && <button ref={firstFocus} type="button" className="conflict-workbench-btn quiet icon-only" onClick={onDismiss} aria-label="Minimize conflict workbench" title="Minimize (Esc)"><Minus size={18} /></button>}
       </div>
     </header>
