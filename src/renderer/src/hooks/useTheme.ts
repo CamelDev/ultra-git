@@ -29,6 +29,8 @@ export function useTheme() {
       } else {
         document.documentElement.classList.add('light-theme')
       }
+
+      window.api?.app?.setTitleBarOverlay?.(isDark)
     }
 
     updateTheme()

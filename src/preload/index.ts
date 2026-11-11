@@ -121,6 +121,7 @@ const api = {
     exists: (repoPath: string) => ipcRenderer.invoke('app:exists', repoPath),
     copyToClipboard: (text: string) => ipcRenderer.invoke('app:copyToClipboard', text),
     showMessageBox: (options: any) => ipcRenderer.invoke('dialog:showMessageBox', options),
+    setTitleBarOverlay: (isDark: boolean) => ipcRenderer.invoke('app:setTitleBarOverlay', isDark),
     isTesting: process.env.ULTRA_GIT_TESTING === 'true',
     disableDefaultTab: process.env.ULTRA_GIT_DISABLE_DEFAULT_TAB === 'true'
   },

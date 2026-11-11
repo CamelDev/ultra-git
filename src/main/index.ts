@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, clipboard } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, clipboard, nativeTheme } from 'electron'
 import { join, resolve } from 'path'
 import { realpathSync, existsSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -18,6 +18,13 @@ fixPath()
 
 let mainWindow: BrowserWindow | null = null
 
+// Isolate development userData so dev instances never collide with installed production builds
+const isTesting = process.env.ULTRA_GIT_TESTING === 'true' || process.env.NODE_ENV === 'test'
+if (is.dev && !isTesting) {
+  const devUserData = join(app.getPath('appData'), 'ultra-git-dev')
+  app.setPath('userData', devUserData)
+}
+
 // Single instance lock — a second launch of UltraGIT focuses the already
 // running instance instead of opening a duplicate window.
 // The `--no-lock` flag bypasses the lock (used by the E2E suite to run
@@ -26,7 +33,6 @@ const skipLock = process.argv.includes('--no-lock')
 const gotTheLock = skipLock ? true : app.requestSingleInstanceLock()
 
 // Detect headless/test mode
-const isTesting = process.env.ULTRA_GIT_TESTING === 'true' || process.env.NODE_ENV === 'test'
 const isHeadful = process.env.ULTRA_GIT_HEADFUL === 'true' || process.env.HEADFUL === 'true'
 const isHeadless = !isHeadful && (isTesting || process.env.ULTRA_GIT_HEADLESS === 'true' || process.env.HEADLESS === 'true' || process.argv.includes('--headless'))
 console.log(`[UltraGIT] Startup flags: isHeadless=${isHeadless}, isHeadful=${isHeadful}, isTesting=${isTesting}, NODE_ENV=${process.env.NODE_ENV}`)
@@ -68,8 +74,8 @@ function createWindow(): void {
     titleBarStyle: 'hidden',
     ...(process.platform === 'win32' ? {
       titleBarOverlay: {
-        color: '#161920',
-        symbolColor: '#94a3b8',
+        color: nativeTheme.shouldUseDarkColors ? '#1a1d28' : '#f1f5f9',
+        symbolColor: nativeTheme.shouldUseDarkColors ? '#94a3b8' : '#334155',
         height: 48
       }
     } : {}),
@@ -673,6 +679,23 @@ app.whenReady().then(() => {
     } catch (error: any) {
       return { success: false, error: error.message }
     }
+  })
+
+  ipcMain.handle('app:setTitleBarOverlay', async (_, isDark: boolean) => {
+    if (process.platform === 'win32' && mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        mainWindow.setTitleBarOverlay({
+          color: isDark ? '#1a1d28' : '#f1f5f9',
+          symbolColor: isDark ? '#94a3b8' : '#334155',
+          height: 48
+        })
+        return { success: true }
+      } catch (err: any) {
+        console.warn('[UltraGIT] Failed to update titleBarOverlay:', err)
+        return { success: false, error: err?.message }
+      }
+    }
+    return { success: false }
   })
 
   ipcMain.handle('app:isTesting', async () => {

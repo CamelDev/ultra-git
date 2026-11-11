@@ -176,6 +176,7 @@ declare global {
           checkboxLabel?: string;
           checkboxChecked?: boolean;
         }) => Promise<{ success: boolean; response?: number; checkboxChecked?: boolean; error?: string }>;
+        setTitleBarOverlay?: (isDark: boolean) => Promise<{ success: boolean; error?: string }>;
         isTesting: boolean;
         disableDefaultTab: boolean;
       };
