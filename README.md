@@ -176,7 +176,7 @@ Navigate between hunks with tab selectors. Once resolved, the code is written ba
 
 | Requirement | Version |
 |-------------|---------|
-| [Node.js](https://nodejs.org/) | v18 or higher |
+| [Node.js](https://nodejs.org/) | v22.12 or higher (required by Electron 45) |
 | [Bun](https://bun.sh/) | v1.x or higher |
 | [GSD](https://www.npmjs.com/package/@opengsd/gsd-core) | Latest (for agent workflows) |
 
@@ -190,12 +190,29 @@ cd ultra-git
 # Initialize GSD (if .agents/ is missing)
 npx @opengsd/gsd-core@latest
 
-# Install dependencies
+# Install dependencies and download the Electron executable
 bun install
 
 # Run development server
 bun run dev
 ```
+
+The project's `postinstall` script runs Electron's `install-electron` command.
+Electron 45 normally downloads its executable on first launch, but `electron-vite`
+requires the executable's `path.txt` file before launching it.
+
+If startup fails with `Error: Electron uninstall` (for example, after installing
+with lifecycle scripts disabled), run this from the repository root:
+
+```bash
+bun run postinstall
+bun run dev
+```
+
+The installer downloads the executable for your platform if needed and reuses a
+valid existing installation. If the download fails, check the reported network or
+proxy error and retry. The `vite:react-swc` recommendation is unrelated to this
+startup error.
 
 ---
 
