@@ -29,6 +29,7 @@ const gotTheLock = skipLock ? true : app.requestSingleInstanceLock()
 const isTesting = process.env.ULTRA_GIT_TESTING === 'true' || process.env.NODE_ENV === 'test'
 const isHeadful = process.env.ULTRA_GIT_HEADFUL === 'true' || process.env.HEADFUL === 'true'
 const isHeadless = !isHeadful && (isTesting || process.env.ULTRA_GIT_HEADLESS === 'true' || process.env.HEADLESS === 'true' || process.argv.includes('--headless'))
+console.log(`[UltraGIT] Startup flags: isHeadless=${isHeadless}, isHeadful=${isHeadful}, isTesting=${isTesting}, NODE_ENV=${process.env.NODE_ENV}`)
 
 if (!gotTheLock) {
   // Another UltraGIT instance is already running — quit immediately.
@@ -61,7 +62,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    show: false,
+    show: !isHeadless,
     autoHideMenuBar: true,
     icon: process.platform === 'win32' ? iconWin : icon,
     titleBarStyle: 'hidden',
@@ -78,11 +79,21 @@ function createWindow(): void {
     }
   })
 
-  mainWindow?.on('ready-to-show', () => {
-    if (!isHeadless) {
-      mainWindow?.show()
+  const showWindow = (): void => {
+    if (!isHeadless && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.log('[UltraGIT] Showing mainWindow...')
+      mainWindow.show()
+      mainWindow.focus()
     }
+  }
+
+  mainWindow?.on('ready-to-show', () => {
+    console.log('[UltraGIT] ready-to-show event fired')
+    showWindow()
   })
+
+  // Fallback to ensure window displays even if ready-to-show is delayed
+  setTimeout(showWindow, 2000)
 
   mainWindow?.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -491,12 +502,23 @@ app.whenReady().then(() => {
         } else {
           headers['Authorization'] = `Bearer ${token}`
         }
+      } else if (provider === 'azure-devops') {
+        url = 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1-preview.1'
+        const authString = Buffer.from(`:${token}`).toString('base64')
+        headers['Authorization'] = `Basic ${authString}`
+        headers['Accept'] = 'application/json'
       } else {
         return { success: false, error: 'Unsupported provider' }
       }
 
       const response = await fetch(url, { headers })
       if (!response.ok) {
+        if (provider === 'azure-devops' && (response.status === 401 || response.status === 403)) {
+          return {
+            success: false,
+            error: 'Azure DevOps authentication failed (401/403). Ensure your Personal Access Token is valid and has at least "User profile (read)" permission.'
+          }
+        }
         return { success: false, error: `API error: ${response.status} ${response.statusText}` }
       }
 
@@ -521,6 +543,11 @@ app.whenReady().then(() => {
         email = data.email || ''
         username = data.username || ''
         avatarUrl = data.links?.avatar?.href || ''
+      } else if (provider === 'azure-devops') {
+        name = data.displayName || data.publicAlias || ''
+        email = data.emailAddress || (emailInput || '')
+        username = data.publicAlias || data.displayName || ''
+        avatarUrl = ''
       }
 
       return {

@@ -1658,7 +1658,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                   ))}
                 </select>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: '0 1 auto' }}>
                 <FileText size={16} style={{ color: 'var(--accent-light)', flexShrink: 0 }} />
                 <div
                   className="diff-file-path"
@@ -1666,15 +1666,21 @@ export const DiffModal: React.FC<DiffModalProps> = ({
                   title={fullDiskPath}
                   style={{
                     fontWeight: 600,
-                    fontSize: '14px',
+                    fontSize: '10px',
+                    lineHeight: 1.35,
                     wordBreak: 'break-all',
-                    whiteSpace: 'nowrap',
+                    overflowWrap: 'anywhere',
+                    whiteSpace: 'normal',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     fontFamily: 'JetBrains Mono, monospace',
                     userSelect: 'text',
                     WebkitUserSelect: 'text',
-                    cursor: 'text'
+                    cursor: 'text',
+                    minWidth: 0
                   }}
                 >
                   {currentFilePath}

@@ -53,3 +53,17 @@ export const Bitbucket: React.FC<BrandIconProps> = ({ size = 16, style, ...props
     <path d="M22.3 3.4c-.2-.4-.6-.7-1-.7H2.7c-.5 0-.9.3-1 .7L.1 19.3c-.1.5.1 1 .5 1.3.3.3.7.4 1.1.4h18.6c.4 0 .8-.2 1-.6l2.1-15.6c.1-.5-.1-1-.4-1.4zM15.4 15H8.6l-1-6.8h8.8l-1 6.8z" />
   </svg>
 )
+
+export const AzureDevops: React.FC<BrandIconProps> = ({ size = 16, style, ...props }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 18 18"
+    fill="currentColor"
+    style={{ flexShrink: 0, ...style }}
+    {...props}
+  >
+    <path d="M17 4v9.74l-4 3.28-6.2-2.26V17L3.29 12.41l10.23.8V4.44Zm-3.41.49L7.85 1V3.29L2.58 4.84 1 6.87v4.61l2.26 1V6.57Z" />
+  </svg>
+)
+

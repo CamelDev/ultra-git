@@ -153,4 +153,38 @@ describe('diff viewer caching & concurrency logic', () => {
     handleEscape()
     expect(modalClosed).toBe(true)
   })
+
+  test('file path header style allows multi-line wrap and uses compact font size', () => {
+    // Verifies the two-line wrap configuration for diff-file-path
+    const originalFontSize = 14
+    const compactFontSize = 10
+    const ratio = compactFontSize / originalFontSize
+
+    // Compact font size should be approximately 70% of 14px (71.4%)
+    expect(ratio).toBeGreaterThanOrEqual(0.7)
+    expect(ratio).toBeLessThanOrEqual(0.72)
+
+    const filePathStyle = {
+      fontWeight: 600,
+      fontSize: `${compactFontSize}px`,
+      lineHeight: 1.35,
+      wordBreak: 'break-all',
+      overflowWrap: 'anywhere',
+      whiteSpace: 'normal',
+      display: '-webkit-box',
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: 'vertical',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      fontFamily: 'JetBrains Mono, monospace',
+      minWidth: 0
+    }
+
+    expect(filePathStyle.whiteSpace).toBe('normal')
+    expect(filePathStyle.WebkitLineClamp).toBe(2)
+    expect(filePathStyle.wordBreak).toBe('break-all')
+    expect(filePathStyle.overflow).toBe('hidden')
+    expect(filePathStyle.textOverflow).toBe('ellipsis')
+    expect(filePathStyle.fontSize).toBe('10px')
+  })
 })

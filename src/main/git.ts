@@ -164,6 +164,7 @@ export function getGitInstance(repoPath: string): SimpleGit {
   if (!gitInstances.has(repoPath)) {
     const allowedGitEnvs = [
       'GIT_EDITOR',
+      'EDITOR',
       'GIT_TERMINAL_PROMPT',
       'GIT_OPTIONAL_LOCKS',
       'GIT_CONFIG_GLOBAL',
@@ -1802,6 +1803,8 @@ export const gitService = {
         helperUsername = identity.username || 'oauth2';
       } else if (identity.provider === 'github') {
         helperUsername = identity.username || 'token';
+      } else if (identity.provider === 'azure-devops') {
+        helperUsername = identity.username || identity.email || 'Personal Access Token';
       } else if (identity.username) {
         helperUsername = identity.username;
       }

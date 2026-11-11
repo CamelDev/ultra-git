@@ -14,7 +14,7 @@ export interface Identity {
   label: string;
   name: string;
   email: string;
-  provider?: 'github' | 'gitlab' | 'bitbucket' | 'custom';
+  provider?: 'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'custom';
   username?: string;
   avatarUrl?: string;
   sshKeyPath?: string;
@@ -410,7 +410,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       if (!response.success || !response.data) throw new Error(response.error || 'Undo Resolution is no longer available');
       const actionResult = (response.data as any).snapshot ? response.data : { snapshot: response.data };
       const currentSession = get().getConflictSession(repoId);
-      const conflictedPaths = new Set((actionResult.snapshot?.conflicts || []).map((c: any) => c.path));
+      const conflictedPaths = new Set<string>((actionResult.snapshot?.conflicts || []).map((c: any) => c.path));
       const cleanedDrafts = { ...currentSession.drafts };
       for (const p of conflictedPaths) {
         delete cleanedDrafts[p];

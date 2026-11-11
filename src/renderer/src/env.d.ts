@@ -69,6 +69,7 @@ declare global {
         push: (repoPath: string, force?: boolean, remote?: string, branch?: string, setUpstream?: boolean) => Promise<{ success: boolean; error?: string }>;
         getRemotes: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ name: string; refs: { fetch: string; push: string } }>; error?: string }>;
         addRemote: (repoPath: string, name: string, url: string) => Promise<{ success: boolean; error?: string }>;
+        removeRemote: (repoPath: string, name: string) => Promise<{ success: boolean; error?: string }>;
         createBranch: (repoPath: string, branchName: string, startPoint?: string) => Promise<{ success: boolean; error?: string }>;
         deleteBranch: (repoPath: string, branchName: string, force?: boolean) => Promise<{ success: boolean; error?: string }>;
         renameBranch: (repoPath: string, oldName: string, newName: string) => Promise<{ success: boolean; error?: string }>;
@@ -112,7 +113,7 @@ declare global {
         resolveConflict: (repoPath: string, filePath: string, resolvedContent: string) => Promise<{ success: boolean; error?: string }>;
         conflictSnapshot: (repoPath: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
         conflictDocument: (repoPath: string, filePath: string, generation: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
-        applyConflictResolution: (repoPath: string, filePath: string, selections: any[], generation: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
+        applyConflictResolution: (repoPath: string, filePath: string, selections: any[], generation: string, options?: { fileChoice?: string; result?: string }) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
         undoConflictResolution: (token: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
         continueConflictOperation: (repoPath: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
         skipConflictOperation: (repoPath: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
@@ -153,6 +154,8 @@ declare global {
         deleteSafetySnapshot: (repoPath: string, snapshotId: string) => Promise<{ success: boolean; error?: string }>;
         getConflictCandidates: (repoPath: string, filePath: string, generation: string) => Promise<{ success: boolean; data?: any[]; code?: string; error?: string }>;
         previewConflictCandidate: (repoPath: string, filePath: string, generation: string, candidateId: string) => Promise<{ success: boolean; data?: any; code?: string; error?: string }>;
+        recordConflictCandidate: (repoPath: string, filePath: string, generation: string, regionId: string, proposedBytes: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+        getConflictCandidateRecords: (repoPath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
         getConflictCandidateSettings: (repoPath: string) => Promise<{ success: boolean; data?: { enabled: boolean }; code?: string; error?: string }>;
         setConflictCandidateEnabled: (repoPath: string, enabled: boolean) => Promise<{ success: boolean; code?: string; error?: string }>;
         forgetConflictCandidateRecords: (repoPath: string, recordId?: string) => Promise<{ success: boolean; code?: string; error?: string }>;

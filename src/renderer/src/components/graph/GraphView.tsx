@@ -857,10 +857,11 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
   const parseGitUrl = (urlStr: string) => {
     const cleanUrl = urlStr.trim().replace(/\.git\/?$/, '')
     
-    let provider: 'github' | 'gitlab' | 'bitbucket' | null = null
+    let provider: 'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | null = null
     if (cleanUrl.includes('github.com')) provider = 'github'
     else if (cleanUrl.includes('gitlab.com')) provider = 'gitlab'
     else if (cleanUrl.includes('bitbucket.org')) provider = 'bitbucket'
+    else if (cleanUrl.includes('dev.azure.com') || cleanUrl.includes('visualstudio.com')) provider = 'azure-devops'
     
     let owner = ''
     let repo = ''
@@ -2639,6 +2640,17 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
                                     data-testid="create-on-gitlab-link"
                                   >
                                     Create on GitLab
+                                  </a>
+                                )}
+                                {(!parsed.provider || parsed.provider === 'azure-devops') && (
+                                  <a
+                                    href="https://dev.azure.com"
+                                    target="_blank"
+                                    className="btn-secondary"
+                                    style={{ fontSize: '11px', padding: '4px 8px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                    data-testid="create-on-azure-devops-link"
+                                  >
+                                    Create on Azure DevOps
                                   </a>
                                 )}
                               </div>

@@ -1010,6 +1010,20 @@ body {
   user-select: text;
   -webkit-user-select: text;
   cursor: text;
+  font-weight: 600;
+  font-size: 10px;
+  line-height: 1.35;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'JetBrains Mono', monospace;
+  min-width: 0;
 }
 
 .diff-copy-file-path-btn {

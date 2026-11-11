@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { X, Plus, Trash2, FolderOpen, Check, Loader2, Pencil, AlertCircle } from 'lucide-react'
-import { Github, Gitlab, Bitbucket } from '../common/BrandIcons'
+import { Github, Gitlab, Bitbucket, AzureDevops } from '../common/BrandIcons'
 import { useRepoStore, Identity } from '../../store/useRepoStore'
 
 interface IdentitiesModalProps {
@@ -12,7 +12,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
   const { identities, addIdentity, removeIdentity, updateIdentity } = useRepoStore()
   
   // Form states
-  const [provider, setProvider] = useState<'github' | 'gitlab' | 'bitbucket' | 'custom'>('github')
+  const [provider, setProvider] = useState<'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'custom'>('github')
   const [label, setLabel] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -108,7 +108,9 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
           setEmail(user.email)
         }
         if (!label) {
-          const capitalizedProvider = provider.charAt(0).toUpperCase() + provider.slice(1)
+          const capitalizedProvider = provider === 'azure-devops'
+            ? 'Azure DevOps'
+            : (provider.charAt(0).toUpperCase() + provider.slice(1))
           setLabel(`${capitalizedProvider} - ${user.username || user.name}`)
         }
       } else {
@@ -179,6 +181,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
     if (provider === 'github') return 'https://github.com/settings/tokens'
     if (provider === 'gitlab') return 'https://gitlab.com/-/user_settings/personal_access_tokens'
     if (provider === 'bitbucket') return 'https://id.atlassian.com/manage-profile/security/api-tokens'
+    if (provider === 'azure-devops') return 'https://aex.dev.azure.com/me'
     return null
   }
 
@@ -190,6 +193,8 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
         return <Gitlab size={size} style={{ color: '#fc6d26' }} />
       case 'bitbucket':
         return <Bitbucket size={size} style={{ color: '#0052cc' }} />
+      case 'azure-devops':
+        return <AzureDevops size={size} style={{ color: '#0078d4' }} />
       default:
         return null
     }
@@ -354,12 +359,13 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
 
             {/* Provider Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', gap: '4px', marginBottom: '20px' }}>
-              {(['github', 'gitlab', 'bitbucket', 'custom'] as const).map((prov) => {
+              {(['github', 'gitlab', 'bitbucket', 'azure-devops', 'custom'] as const).map((prov) => {
                 const isActive = provider === prov
                 let tabName = 'Generic / Custom'
                 if (prov === 'github') tabName = 'GitHub'
                 if (prov === 'gitlab') tabName = 'GitLab'
                 if (prov === 'bitbucket') tabName = 'Bitbucket'
+                if (prov === 'azure-devops') tabName = 'Azure DevOps'
 
                 return (
                   <button
@@ -464,7 +470,13 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <input 
                           type="password" 
-                          placeholder="Paste access token (e.g. ghp_...)" 
+                          placeholder={
+                            provider === 'azure-devops'
+                              ? 'Paste Azure DevOps Personal Access Token (PAT)'
+                              : provider === 'github'
+                              ? 'Paste access token (e.g. ghp_...)'
+                              : 'Paste access token'
+                          } 
                           className="commit-input"
                           style={{ flex: 1, fontSize: '12px' }}
                           value={personalAccessToken}
@@ -484,6 +496,24 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                           <span>{isValidating ? 'Connecting...' : 'Connect'}</span>
                         </button>
                       </div>
+
+                      {provider === 'azure-devops' && (
+                        <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                          <span>Requires a PAT with </span>
+                          <strong style={{ color: 'var(--text-primary)' }}>User Profile (read)</strong>
+                          <span> and </span>
+                          <strong style={{ color: 'var(--text-primary)' }}>Code (read & write)</strong>
+                          <span> permissions. </span>
+                          <a 
+                            href="https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate" 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            style={{ color: 'var(--accent-light)', textDecoration: 'none' }}
+                          >
+                            Docs ↗
+                          </a>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -497,7 +527,7 @@ export const IdentitiesModal: React.FC<IdentitiesModalProps> = ({ isOpen, onClos
                 </label>
                 <input 
                   type="text" 
-                  placeholder="e.g. Personal GitHub" 
+                  placeholder={provider === 'azure-devops' ? 'e.g. Work Azure DevOps' : 'e.g. Personal GitHub'} 
                   className="commit-input" 
                   style={{ width: '100%', boxSizing: 'border-box' }}
                   value={label}
