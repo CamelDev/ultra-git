@@ -57,6 +57,7 @@ export interface Repository {
   };
   tags?: string[];
   unpushedTags?: string[];
+  divergedTags?: string[];
   worktrees?: Array<{ path: string; branch: string; hash: string }>;
   mergeStatus?: MergeStatusInfo;
 }
@@ -768,13 +769,19 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     try {
       const commitLimit = repo.commitLimit || 50;
-      const [statusRes, logRes, stashRes, branchesRes, tagsRes, unpushedTagsRes, worktreesRes, mergeStatusRes] = await Promise.all([
+      const [statusRes, logRes, stashRes, branchesRes, tagsRes, tagSyncRes, worktreesRes, mergeStatusRes] = await Promise.all([
         window.api.git.status(repo.path),
         window.api.git.log(repo.path, commitLimit),
         window.api.git.stashList(repo.path),
         window.api.git.getBranches(repo.path),
         window.api.git.getTags(repo.path),
-        window.api.git.getUnpushedTags(repo.path),
+        window.api.git.getTagSyncStatus
+          ? window.api.git.getTagSyncStatus(repo.path)
+          : window.api.git.getUnpushedTags(repo.path).then(res => ({
+              success: res.success,
+              data: res.data ? { unpushed: res.data, diverged: [] as string[] } : undefined,
+              error: res.error
+            })),
         window.api.git.getWorktrees(repo.path),
         window.api.git.getMergeStatus(repo.path)
       ]);
@@ -823,7 +830,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
               stashes,
               branches: branchesRes.success ? branchesRes.data : (r.branches || { local: [], remote: [] }),
               tags: tagsRes.success ? tagsRes.data : (r.tags || []),
-              unpushedTags: unpushedTagsRes.success ? unpushedTagsRes.data : (r.unpushedTags || []),
+              unpushedTags: (tagSyncRes.success && tagSyncRes.data) ? tagSyncRes.data.unpushed : (r.unpushedTags || []),
+              divergedTags: (tagSyncRes.success && tagSyncRes.data) ? tagSyncRes.data.diverged : (r.divergedTags || []),
               worktrees: wts,
               mergeStatus: (mergeStatusRes.success && mergeStatusRes.data) ? mergeStatusRes.data : {
                 isMerge: false,

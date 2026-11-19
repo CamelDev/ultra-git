@@ -4,6 +4,86 @@ import { join, resolve } from 'path';
 import { execFile } from 'child_process';
 import type { FileHistoryEntry } from '../shared/fileHistory';
 
+export function parseRemoteTagsOutput(output: string): Map<string, string> {
+  const remoteTags = new Map<string, string>();
+  if (!output) return remoteTags;
+
+  output.split(/\r?\n/).forEach(line => {
+    const parts = line.split('\t');
+    if (parts.length !== 2) return;
+    const oid = parts[0].trim();
+    const ref = parts[1].trim();
+    if (!oid || !ref.startsWith('refs/tags/')) return;
+    // Ignore peeled dereference entries (`^{}`) so we compare exact refs/tags/<name> OIDs
+    if (ref.endsWith('^{}')) return;
+    const tagName = ref.substring('refs/tags/'.length);
+    if (tagName) {
+      remoteTags.set(tagName, oid);
+    }
+  });
+
+  return remoteTags;
+}
+
+export function parseLocalTagsOutput(output: string): Map<string, string> {
+  const localTags = new Map<string, string>();
+  if (!output) return localTags;
+
+  output.split(/\r?\n/).forEach(line => {
+    const parts = line.split('\t');
+    if (parts.length !== 2) return;
+    const tagName = parts[0].trim();
+    const oid = parts[1].trim();
+    if (tagName && oid) {
+      localTags.set(tagName, oid);
+    }
+  });
+
+  return localTags;
+}
+
+export function classifyTagSyncStatus(
+  localTags: Map<string, string>,
+  remoteTags: Map<string, string>
+): { unpushed: string[]; diverged: string[] } {
+  const unpushed: string[] = [];
+  const diverged: string[] = [];
+
+  for (const [tagName, localOid] of localTags.entries()) {
+    const remoteOid = remoteTags.get(tagName);
+    if (!remoteOid) {
+      unpushed.push(tagName);
+    } else if (remoteOid !== localOid) {
+      diverged.push(tagName);
+    }
+  }
+
+  return { unpushed, diverged };
+}
+
+async function resolveDefaultRemote(git: SimpleGit, remote?: string): Promise<string | null> {
+  if (remote) return remote;
+  const remotes = await git.getRemotes(true);
+  if (remotes.length === 0) return null;
+  const origin = remotes.find(r => r.name === 'origin');
+  return origin ? origin.name : remotes[0].name;
+}
+
+async function readLocalTagRefs(git: SimpleGit): Promise<Map<string, string>> {
+  const raw = await git.raw(['for-each-ref', '--format=%(refname:short)\t%(objectname)', 'refs/tags']);
+  return parseLocalTagsOutput(raw);
+}
+
+export interface TagSyncStatus {
+  unpushed: string[];
+  diverged: string[];
+}
+
+export interface PushTagsResult {
+  pushed: string[];
+  diverged: string[];
+}
+
 export function parseFileHistoryOutput(raw: string, fallbackFilePath: string): FileHistoryEntry[] {
   if (!raw || !raw.trim()) return [];
   const normalizedFallback = fallbackFilePath.replace(/\\/g, '/').replace(/^\.\//, '');
@@ -2215,49 +2295,48 @@ export const gitService = {
     }
   },
 
-  getUnpushedTags: async (repoPath: string): Promise<string[]> => {
+  getTagSyncStatus: async (repoPath: string): Promise<TagSyncStatus> => {
     const git = getGitInstance(repoPath);
     try {
-      const remotes = await git.getRemotes(true);
-      if (remotes.length === 0) {
-        const tags = await git.tags();
-        return tags.all;
+      const localTags = await readLocalTagRefs(git);
+      if (localTags.size === 0) {
+        return { unpushed: [], diverged: [] };
       }
 
-      const remoteName = remotes[0].name || 'origin';
-      // Pass -c credential.helper= and GIT_TERMINAL_PROMPT=0 to prevent macOS osxkeychain popups
+      const remoteName = await resolveDefaultRemote(git);
+      if (!remoteName) {
+        return { unpushed: Array.from(localTags.keys()), diverged: [] };
+      }
+
+      // Prevent interactive prompts during background refresh; disable osxkeychain helper on macOS only
+      const lsRemoteArgs = process.platform === 'darwin'
+        ? ['-c', 'credential.helper=', 'ls-remote', '--tags', remoteName]
+        : ['ls-remote', '--tags', remoteName];
+
       const lsRemotePromise = git
         .env({ ...baseGitEnv(), GIT_TERMINAL_PROMPT: '0' })
-        .raw(['-c', 'credential.helper=', 'ls-remote', '--tags', remoteName]);
+        .raw(lsRemoteArgs);
       lsRemotePromise.catch(() => {}); // Suppress dangling rejection on timeout
 
-      const lsRemoteResult = await Promise.race([
-        lsRemotePromise,
-        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500))
-      ]);
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<string>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Timeout')), 3000);
+      });
 
-      const remoteTags = new Set<string>();
-      if (lsRemoteResult) {
-        lsRemoteResult.split('\n').forEach(line => {
-          const parts = line.split('\t');
-          if (parts.length === 2) {
-            const ref = parts[1].trim();
-            if (ref.startsWith('refs/tags/')) {
-              let tagName = ref.substring('refs/tags/'.length);
-              if (tagName.endsWith('^{}')) {
-                tagName = tagName.substring(0, tagName.length - 3);
-              }
-              remoteTags.add(tagName);
-            }
-          }
-        });
-      }
+      const lsRemoteResult = await Promise.race([lsRemotePromise, timeoutPromise]).finally(() => {
+        if (timeoutId) clearTimeout(timeoutId);
+      });
 
-      const localTags = await git.tags();
-      return localTags.all.filter(tag => !remoteTags.has(tag));
+      const remoteTags = parseRemoteTagsOutput(lsRemoteResult);
+      return classifyTagSyncStatus(localTags, remoteTags);
     } catch (e) {
-      return [];
+      return { unpushed: [], diverged: [] };
     }
+  },
+
+  getUnpushedTags: async (repoPath: string): Promise<string[]> => {
+    const status = await gitService.getTagSyncStatus(repoPath);
+    return status.unpushed;
   },
 
   createTag: async (repoPath: string, tagName: string, target?: string): Promise<void> => {
@@ -2269,16 +2348,49 @@ export const gitService = {
     }
   },
 
-  pushTags: async (repoPath: string, remote?: string): Promise<void> => {
+  pushTags: async (repoPath: string, remote?: string): Promise<PushTagsResult> => {
     const git = getGitInstance(repoPath);
-    await git.pushTags(remote || 'origin');
+    const remoteName = (await resolveDefaultRemote(git, remote)) || 'origin';
+    const localTags = await readLocalTagRefs(git);
+    if (localTags.size === 0) {
+      return { pushed: [], diverged: [] };
+    }
+
+    let remoteTags: Map<string, string> | null = null;
+    try {
+      const lsRemoteResult = await git.raw(['ls-remote', '--tags', remoteName]);
+      remoteTags = parseRemoteTagsOutput(lsRemoteResult);
+    } catch {
+      // Fall back to standard git push --tags so git surfaces the real network/auth error
+      await git.pushTags(remoteName);
+      return { pushed: Array.from(localTags.keys()), diverged: [] };
+    }
+
+    const { unpushed, diverged } = classifyTagSyncStatus(localTags, remoteTags);
+    if (unpushed.length > 0) {
+      await git.raw(['push', remoteName, ...unpushed.map(tag => `refs/tags/${tag}`)]);
+    }
+    return { pushed: unpushed, diverged };
+  },
+
+  pushTag: async (repoPath: string, tagName: string, remote?: string): Promise<void> => {
+    const git = getGitInstance(repoPath);
+    const remoteName = (await resolveDefaultRemote(git, remote)) || 'origin';
+    await git.raw(['push', remoteName, `refs/tags/${tagName}`]);
+  },
+
+  syncTagFromRemote: async (repoPath: string, tagName: string, remote?: string): Promise<void> => {
+    const git = getGitInstance(repoPath);
+    const remoteName = (await resolveDefaultRemote(git, remote)) || 'origin';
+    await git.raw(['fetch', remoteName, 'tag', tagName, '--force']);
   },
 
   deleteTag: async (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string): Promise<void> => {
     const git = getGitInstance(repoPath);
     await git.tag(['-d', tagName]);
     if (deleteRemote) {
-      await git.raw(['push', remote || 'origin', '--delete', tagName]);
+      const remoteName = (await resolveDefaultRemote(git, remote)) || 'origin';
+      await git.raw(['push', remoteName, '--delete', tagName]);
     }
   },
 

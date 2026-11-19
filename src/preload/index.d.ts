@@ -56,8 +56,11 @@ declare global {
         removeWorktree: (repoPath: string, targetPath: string) => Promise<IpcResponse<void>>;
         getTags: (repoPath: string) => Promise<IpcResponse<string[]>>;
         getUnpushedTags: (repoPath: string) => Promise<IpcResponse<string[]>>;
+        getTagSyncStatus: (repoPath: string) => Promise<IpcResponse<{ unpushed: string[]; diverged: string[] }>>;
         createTag: (repoPath: string, tagName: string, target?: string) => Promise<IpcResponse<void>>;
-        pushTags: (repoPath: string, remote?: string) => Promise<IpcResponse<void>>;
+        pushTags: (repoPath: string, remote?: string) => Promise<IpcResponse<{ pushed: string[]; diverged: string[] }>>;
+        pushTag: (repoPath: string, tagName: string, remote?: string) => Promise<IpcResponse<void>>;
+        syncTagFromRemote: (repoPath: string, tagName: string, remote?: string) => Promise<IpcResponse<void>>;
         deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) => Promise<IpcResponse<void>>;
         undoCommit: (repoPath: string) => Promise<IpcResponse<void>>;
         createSafetySnapshot: (repoPath: string, filePaths?: string[]) => Promise<IpcResponse<void> & { snapshotId?: string }>;

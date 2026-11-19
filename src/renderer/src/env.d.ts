@@ -139,8 +139,11 @@ declare global {
         }>;
         getTags: (repoPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>;
         getUnpushedTags: (repoPath: string) => Promise<{ success: boolean; data?: string[]; error?: string }>;
+        getTagSyncStatus: (repoPath: string) => Promise<{ success: boolean; data?: { unpushed: string[]; diverged: string[] }; error?: string }>;
         createTag: (repoPath: string, tagName: string, target?: string) => Promise<{ success: boolean; error?: string }>;
-        pushTags: (repoPath: string, remote?: string) => Promise<{ success: boolean; error?: string }>;
+        pushTags: (repoPath: string, remote?: string) => Promise<{ success: boolean; data?: { pushed: string[]; diverged: string[] }; error?: string }>;
+        pushTag: (repoPath: string, tagName: string, remote?: string) => Promise<{ success: boolean; error?: string }>;
+        syncTagFromRemote: (repoPath: string, tagName: string, remote?: string) => Promise<{ success: boolean; error?: string }>;
         deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) => Promise<{ success: boolean; error?: string }>;
         getWorktrees: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ path: string; branch: string; hash: string }>; error?: string }>;
         addWorktree: (repoPath: string, newPath: string, branch: string, baseBranch?: string) => Promise<{ success: boolean; error?: string }>;

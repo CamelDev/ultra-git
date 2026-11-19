@@ -739,11 +739,33 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
     try {
       const res = await window.api.git.pushTags(activeRepo.path)
       if (res.success) {
-        addToast({
-          variant: 'success',
-          title: 'Tags Pushed',
-          message: 'All local tags have been successfully pushed to the remote repository.'
-        })
+        const pushed = res.data?.pushed
+        const diverged = res.data?.diverged ?? []
+        if (!res.data || (pushed && pushed.length > 0 && diverged.length === 0)) {
+          addToast({
+            variant: 'success',
+            title: 'Tags Pushed',
+            message: 'All local tags have been successfully pushed to the remote repository.'
+          })
+        } else if (pushed && pushed.length > 0 && diverged.length > 0) {
+          addToast({
+            variant: 'warning',
+            title: 'Tags Pushed (Some Skipped)',
+            message: `Pushed ${pushed.length} tag(s). Skipped diverged tag(s) that differ from remote: ${diverged.join(', ')}.`
+          })
+        } else if (diverged.length > 0) {
+          addToast({
+            variant: 'warning',
+            title: 'Diverged Tags Detected',
+            message: `No new tags to push. Local tag(s) differ from remote: ${diverged.join(', ')}. Sync from remote or delete them locally.`
+          })
+        } else {
+          addToast({
+            variant: 'info',
+            title: 'Tags Up to Date',
+            message: 'All local tags are already pushed to the remote repository.'
+          })
+        }
         await refreshRepo(activeRepo.id)
       } else {
         console.error('Failed to push tags:', res.error)
@@ -761,6 +783,62 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         variant: 'error',
         title: 'Push Failed',
         message: `Error pushing tags: ${err.message || err}`
+      })
+    }
+  }
+
+  const handlePushSingleTag = async (e: React.MouseEvent, tagName: string) => {
+    e.stopPropagation()
+    if (!activeRepo) return
+    try {
+      const res = await window.api.git.pushTag(activeRepo.path, tagName)
+      if (res.success) {
+        addToast({
+          variant: 'success',
+          title: 'Tag Pushed',
+          message: `Tag "${tagName}" has been pushed to the remote repository.`
+        })
+        await refreshRepo(activeRepo.id)
+      } else {
+        addToast({
+          variant: 'error',
+          title: 'Push Tag Failed',
+          message: `Failed to push tag "${tagName}": ${res.error}`
+        })
+      }
+    } catch (err: any) {
+      addToast({
+        variant: 'error',
+        title: 'Push Tag Failed',
+        message: `Error pushing tag "${tagName}": ${err.message || err}`
+      })
+    }
+  }
+
+  const handleSyncTagFromRemote = async (e: React.MouseEvent, tagName: string) => {
+    e.stopPropagation()
+    if (!activeRepo) return
+    try {
+      const res = await window.api.git.syncTagFromRemote(activeRepo.path, tagName)
+      if (res.success) {
+        addToast({
+          variant: 'success',
+          title: 'Tag Synced',
+          message: `Local tag "${tagName}" updated to match the remote repository.`
+        })
+        await refreshRepo(activeRepo.id)
+      } else {
+        addToast({
+          variant: 'error',
+          title: 'Sync Tag Failed',
+          message: `Failed to sync tag "${tagName}": ${res.error}`
+        })
+      }
+    } catch (err: any) {
+      addToast({
+        variant: 'error',
+        title: 'Sync Tag Failed',
+        message: `Error syncing tag "${tagName}": ${err.message || err}`
       })
     }
   }
@@ -1622,10 +1700,18 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                   const refs = (c.refs as string) || '';
                   return refs.split(',').some((r: string) => r.trim() === `tag: ${tag}`);
                 });
-                const isTagUnpushed = (tagCommit && tagCommit.syncStatus === 'local-only') || !!activeRepo?.unpushedTags?.includes(tag);
-                const colorStyle = isTagUnpushed ? 'var(--text-secondary)' : '#ec4899';
+                const isTagDiverged = !!activeRepo?.divergedTags?.includes(tag);
+                const isTagUnpushed = !isTagDiverged && ((tagCommit && tagCommit.syncStatus === 'local-only') || !!activeRepo?.unpushedTags?.includes(tag));
+                const colorStyle = isTagDiverged ? '#f59e0b' : isTagUnpushed ? 'var(--text-secondary)' : '#ec4899';
                 return (
-                  <div key={tag} className="sidebar-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} data-testid={`sidebar-tag-${tag}`}>
+                  <div
+                    key={tag}
+                    className="sidebar-item"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                    data-testid={`sidebar-tag-${tag}`}
+                    data-tag-status={isTagDiverged ? 'diverged' : isTagUnpushed ? 'unpushed' : 'synced'}
+                    data-tooltip={isTagDiverged ? 'Local tag points to a different commit than remote' : undefined}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <Tag 
                         className="sidebar-item-icon" 
@@ -1646,6 +1732,28 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                       </span>
                     </div>
                     <div className="tag-actions" style={{ marginLeft: 'auto', gap: '4px', flexShrink: 0 }}>
+                      {isTagUnpushed && (
+                        <button
+                          className="stash-action-btn"
+                          style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                          onClick={(e) => handlePushSingleTag(e, tag)}
+                          data-tooltip={`Push tag "${tag}" to remote`}
+                          data-testid={`push-tag-btn-${tag}`}
+                        >
+                          <Upload size={12} />
+                        </button>
+                      )}
+                      {isTagDiverged && (
+                        <button
+                          className="stash-action-btn"
+                          style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center", color: '#f59e0b' }}
+                          onClick={(e) => handleSyncTagFromRemote(e, tag)}
+                          data-tooltip={`Sync tag "${tag}" from remote (overwrites local tag)`}
+                          data-testid={`sync-tag-btn-${tag}`}
+                        >
+                          <RefreshCw size={12} />
+                        </button>
+                      )}
                       <button
                         className="stash-action-btn delete"
                         style={{ padding: 0, height: "24px", width: "24px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}

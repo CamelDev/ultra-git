@@ -579,5 +579,88 @@ test.describe('Tag Creation from Latest Local Commit', () => {
       await app.close()
     }
   })
+
+  test('should detect diverged tags, push a single unpushed tag, and sync a diverged tag from remote', async () => {
+    test.setTimeout(120000)
+
+    const remoteSandbox = new GitSandbox()
+    const otherSandbox = new GitSandbox()
+    await remoteSandbox.init()
+    // Re-init remoteSandbox as a bare repo
+    fs.rmSync(remoteSandbox.dir, { recursive: true, force: true })
+    fs.mkdirSync(remoteSandbox.dir, { recursive: true })
+    await remoteSandbox.git.init(true)
+
+    await sandbox.createCommit('file1.txt', 'v1', 'Commit 1')
+    const commit1 = (await sandbox.git.revparse(['HEAD'])).trim()
+    await sandbox.git.addRemote('origin', remoteSandbox.dir)
+    await sandbox.git.raw(['push', '-u', 'origin', 'main'])
+
+    await sandbox.createCommit('file2.txt', 'v2', 'Commit 2')
+    const commit2 = (await sandbox.git.revparse(['HEAD'])).trim()
+    await sandbox.git.raw(['push', 'origin', 'main'])
+
+    // Create diverged tag v1.0.0: local -> commit1, remote -> commit2
+    await sandbox.git.tag(['v1.0.0', commit1])
+    await otherSandbox.git.clone(remoteSandbox.dir, otherSandbox.dir)
+    await otherSandbox.git.tag(['v1.0.0', commit2])
+    await otherSandbox.git.raw(['push', 'origin', 'refs/tags/v1.0.0'])
+
+    // Create new unpushed tag v2.0.0 locally
+    await sandbox.git.tag(['v2.0.0', commit2])
+
+    const { app, page } = await launchElectronApp()
+
+    try {
+      await page.evaluate(() => localStorage.clear())
+      await page.reload()
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(1000)
+
+      await app.evaluate(async ({ ipcMain }, repoPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: repoPath }
+        })
+      }, sandbox.dir)
+
+      await addRepoViaUI(page)
+      const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(2)
+      await tabs.last().click()
+      await page.waitForTimeout(1500)
+
+      // Verify diverged tag v1.0.0 and unpushed tag v2.0.0 statuses
+      const divergedTagRow = page.locator('[data-testid="sidebar-tag-v1.0.0"]')
+      await expect(divergedTagRow).toBeVisible()
+      await expect(divergedTagRow).toHaveAttribute('data-tag-status', 'diverged')
+
+      const unpushedTagRow = page.locator('[data-testid="sidebar-tag-v2.0.0"]')
+      await expect(unpushedTagRow).toBeVisible()
+      await expect(unpushedTagRow).toHaveAttribute('data-tag-status', 'unpushed')
+
+      // Push only v2.0.0 via per-tag push button (should succeed despite diverged v1.0.0)
+      const pushSingleTagBtn = page.locator('[data-testid="push-tag-btn-v2.0.0"]')
+      await pushSingleTagBtn.dispatchEvent('click')
+      await page.waitForTimeout(1000)
+
+      const pushToast = page.locator('[data-testid="toast"][data-variant="success"]').first()
+      await expect(pushToast).toContainText('Tag Pushed')
+      await expect(unpushedTagRow).toHaveAttribute('data-tag-status', 'synced')
+
+      // Sync diverged v1.0.0 from remote
+      const syncTagBtn = page.locator('[data-testid="sync-tag-btn-v1.0.0"]')
+      await syncTagBtn.dispatchEvent('click')
+      await page.waitForTimeout(1000)
+
+      await expect(divergedTagRow).toHaveAttribute('data-tag-status', 'synced')
+      const localV1Oid = (await sandbox.git.revparse(['refs/tags/v1.0.0'])).trim()
+      expect(localV1Oid).toBe(commit2)
+    } finally {
+      await app.close()
+      await remoteSandbox.destroy()
+      await otherSandbox.destroy()
+    }
+  })
 })
 

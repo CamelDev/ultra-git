@@ -99,9 +99,14 @@ const api = {
     getMergeStatus: (repoPath: string) => ipcRenderer.invoke('git:getMergeStatus', repoPath),
     getTags: (repoPath: string) => ipcRenderer.invoke('git:getTags', repoPath),
     getUnpushedTags: (repoPath: string) => ipcRenderer.invoke('git:getUnpushedTags', repoPath),
+    getTagSyncStatus: (repoPath: string) => ipcRenderer.invoke('git:getTagSyncStatus', repoPath),
     createTag: (repoPath: string, tagName: string, target?: string) =>
       ipcRenderer.invoke('git:createTag', repoPath, tagName, target),
     pushTags: (repoPath: string, remote?: string) => ipcRenderer.invoke('git:pushTags', repoPath, remote),
+    pushTag: (repoPath: string, tagName: string, remote?: string) =>
+      ipcRenderer.invoke('git:pushTag', repoPath, tagName, remote),
+    syncTagFromRemote: (repoPath: string, tagName: string, remote?: string) =>
+      ipcRenderer.invoke('git:syncTagFromRemote', repoPath, tagName, remote),
     deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) =>
       ipcRenderer.invoke('git:deleteTag', repoPath, tagName, deleteRemote, remote),
     getWorktrees: (repoPath: string) => ipcRenderer.invoke('git:getWorktrees', repoPath),

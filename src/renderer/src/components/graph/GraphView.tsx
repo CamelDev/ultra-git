@@ -1340,11 +1340,33 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
     try {
       const res = await window.api.git.pushTags(repoPath)
       if (res.success) {
-        addToast({
-          variant: 'success',
-          title: `[${repoName}] Tags Pushed`,
-          message: 'All local tags have been successfully pushed to the remote repository.'
-        })
+        const pushed = res.data?.pushed
+        const diverged = res.data?.diverged ?? []
+        if (!res.data || (pushed && pushed.length > 0 && diverged.length === 0)) {
+          addToast({
+            variant: 'success',
+            title: `[${repoName}] Tags Pushed`,
+            message: 'All local tags have been successfully pushed to the remote repository.'
+          })
+        } else if (pushed && pushed.length > 0 && diverged.length > 0) {
+          addToast({
+            variant: 'warning',
+            title: `[${repoName}] Tags Pushed (Some Skipped)`,
+            message: `Pushed ${pushed.length} tag(s). Skipped diverged tag(s) that differ from remote: ${diverged.join(', ')}.`
+          })
+        } else if (diverged.length > 0) {
+          addToast({
+            variant: 'warning',
+            title: `[${repoName}] Diverged Tags Detected`,
+            message: `No new tags to push. Local tag(s) differ from remote: ${diverged.join(', ')}. Sync from remote or delete them locally.`
+          })
+        } else {
+          addToast({
+            variant: 'info',
+            title: `[${repoName}] Tags Up to Date`,
+            message: 'All local tags are already pushed to the remote repository.'
+          })
+        }
         await refreshRepo(repoId)
       } else {
         console.error('Failed to push tags:', res.error)

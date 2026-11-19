@@ -933,6 +933,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:getTagSyncStatus', async (_, repoPath) => {
+    try {
+      const data = await gitService.getTagSyncStatus(repoPath)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:createTag', async (_, repoPath, tagName, target) => {
     try {
       await gitService.createTag(repoPath, tagName, target)
@@ -944,7 +953,25 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:pushTags', async (_, repoPath, remote) => {
     try {
-      await gitService.pushTags(repoPath, remote)
+      const data = await gitService.pushTags(repoPath, remote)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:pushTag', async (_, repoPath, tagName, remote) => {
+    try {
+      await gitService.pushTag(repoPath, tagName, remote)
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git:syncTagFromRemote', async (_, repoPath, tagName, remote) => {
+    try {
+      await gitService.syncTagFromRemote(repoPath, tagName, remote)
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }
