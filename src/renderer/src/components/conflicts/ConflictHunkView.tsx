@@ -1,8 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, GitBranch, RotateCcw } from 'lucide-react'
 import { ConflictCode, ConflictRawDiffPane } from './ConflictCode'
 import { buildConflictDiffRows } from './conflictDiff'
-import { getSourceExcerpt } from './conflictPresentation'
+import {
+  composePickedLines,
+  getInitialPickedLines,
+  getSourceExcerpt,
+  type PickedConflictLine,
+  togglePickedLine
+} from './conflictPresentation'
 import type { ConflictDocument, ConflictRegion, RegionChoice } from '../../../../shared/conflicts'
 
 interface Props {
@@ -43,6 +49,8 @@ export const ConflictHunkView: React.FC<Props> = ({ document, region, showBase, 
     current: { top: number; left: number } | null
     incoming: { top: number; left: number } | null
   }>({ current: null, incoming: null })
+  const [pickedByRegion, setPickedByRegion] = useState<Record<string, PickedConflictLine[]>>({})
+  const regionKey = region ? `${document.path}::${region.id}` : ''
 
   const handlePaneScroll = useCallback((source: 'current' | 'incoming') => {
     const target = source === 'current' ? 'incoming' : 'current'
@@ -96,27 +104,66 @@ export const ConflictHunkView: React.FC<Props> = ({ document, region, showBase, 
     [codeView, current, incoming]
   )
 
+  const activePicks = useMemo(() => {
+    if (!region) return []
+    if (region.choice === 'selected-range') return pickedByRegion[regionKey] ?? []
+    return getInitialPickedLines(region)
+  }, [region, regionKey, pickedByRegion])
+
+  const currentPickedLines = useMemo(
+    () => new Set(activePicks.filter(pick => pick.side === 'current').map(pick => pick.lineIndex)),
+    [activePicks]
+  )
+  const incomingPickedLines = useMemo(
+    () => new Set(activePicks.filter(pick => pick.side === 'incoming').map(pick => pick.lineIndex)),
+    [activePicks]
+  )
+
+  const handleWholeChoice = useCallback((choice: RegionChoice) => {
+    if (regionKey) {
+      setPickedByRegion(prev => {
+        if (!(regionKey in prev)) return prev
+        const next = { ...prev }
+        delete next[regionKey]
+        return next
+      })
+    }
+    onChoice(choice)
+  }, [regionKey, onChoice])
+
+  const handleToggleLine = useCallback((side: 'current' | 'incoming', lineIndex: number) => {
+    if (!region || readOnly) return
+    const nextPicks = togglePickedLine(activePicks, side, lineIndex)
+    setPickedByRegion(prev => ({ ...prev, [regionKey]: nextPicks }))
+    if (nextPicks.length === 0) {
+      onChoice('unresolved')
+    } else {
+      onChoice('selected-range', composePickedLines(nextPicks, region))
+    }
+  }, [region, readOnly, activePicks, regionKey, onChoice])
+
   if (document.isBinary || !region || !current || !incoming || !base) return <div className="conflict-empty" role="status">Select a conflict to inspect.</div>
 
   return <div className="conflict-source-area">
     <div className="conflict-panes" aria-label="Conflict sources">
-      <SourcePane label={currentLabel} reference={currentRef} side="current" readOnly={readOnly} selected={region.choice === 'current'} onChoose={() => onChoice('current')}>
+      <SourcePane label={currentLabel} reference={currentRef} side="current" readOnly={readOnly} selected={region.choice === 'current'} onChoose={() => handleWholeChoice('current')}>
         {codeView
-          ? <ConflictCode {...current} path={document.path} highlight={region.currentRange} testId="conflict-current-pane" scrollRef={currentScrollRef} onScroll={() => handlePaneScroll('current')} />
-          : <ConflictRawDiffPane rows={diffRows} side="left" testId="conflict-current-pane" scrollRef={currentScrollRef} onScroll={() => handlePaneScroll('current')} />}
+          ? <ConflictCode {...current} path={document.path} highlight={region.currentRange} testId="conflict-current-pane" scrollRef={currentScrollRef} onScroll={() => handlePaneScroll('current')} pickSide="current" pickableRange={region.currentRange} pickedLines={currentPickedLines} pickDisabled={readOnly} onToggleLine={idx => handleToggleLine('current', idx)} />
+          : <ConflictRawDiffPane rows={diffRows} side="left" testId="conflict-current-pane" scrollRef={currentScrollRef} onScroll={() => handlePaneScroll('current')} pickSide="current" pickableRange={region.currentRange} pickedLines={currentPickedLines} pickDisabled={readOnly} onToggleLine={idx => handleToggleLine('current', idx)} />}
       </SourcePane>
-      <SourcePane label={incomingLabel} reference={incomingRef} side="incoming" readOnly={readOnly} selected={region.choice === 'incoming'} onChoose={() => onChoice('incoming')}>
+      <SourcePane label={incomingLabel} reference={incomingRef} side="incoming" readOnly={readOnly} selected={region.choice === 'incoming'} onChoose={() => handleWholeChoice('incoming')}>
         {codeView
-          ? <ConflictCode {...incoming} path={document.path} highlight={region.incomingRange} testId="conflict-incoming-pane" scrollRef={incomingScrollRef} onScroll={() => handlePaneScroll('incoming')} />
-          : <ConflictRawDiffPane rows={diffRows} side="right" testId="conflict-incoming-pane" scrollRef={incomingScrollRef} onScroll={() => handlePaneScroll('incoming')} />}
+          ? <ConflictCode {...incoming} path={document.path} highlight={region.incomingRange} testId="conflict-incoming-pane" scrollRef={incomingScrollRef} onScroll={() => handlePaneScroll('incoming')} pickSide="incoming" pickableRange={region.incomingRange} pickedLines={incomingPickedLines} pickDisabled={readOnly} onToggleLine={idx => handleToggleLine('incoming', idx)} />
+          : <ConflictRawDiffPane rows={diffRows} side="right" testId="conflict-incoming-pane" scrollRef={incomingScrollRef} onScroll={() => handlePaneScroll('incoming')} pickSide="incoming" pickableRange={region.incomingRange} pickedLines={incomingPickedLines} pickDisabled={readOnly} onToggleLine={idx => handleToggleLine('incoming', idx)} />}
       </SourcePane>
     </div>
     {showBase && <section className="conflict-base-context" aria-label="Base source"><div className="conflict-pane-title"><strong>Base</strong><span>Common ancestor · this conflict</span></div><ConflictCode {...base} path={document.path} highlight={region.baseRange} testId="conflict-base-pane" emptyLabel="No base content for this conflict." /></section>}
     <div className="conflict-combine-bar" aria-label="Conflict region choices">
       <span>Keep both</span>
-      <button className="conflict-workbench-btn" type="button" disabled={readOnly} aria-pressed={region.choice === 'both-current-first'} data-testid="conflict-both-current-first" onClick={() => onChoice('both-current-first')}>{currentLabel} first</button>
-      <button className="conflict-workbench-btn" type="button" disabled={readOnly} aria-pressed={region.choice === 'both-incoming-first'} data-testid="conflict-both-incoming-first" onClick={() => onChoice('both-incoming-first')}>{incomingLabel} first</button>
-      <button className="conflict-workbench-btn quiet conflict-reset" type="button" disabled={readOnly || region.choice === 'unresolved'} onClick={() => onChoice('unresolved')}><RotateCcw size={13} /> Reset choice</button>
+      <button className="conflict-workbench-btn" type="button" disabled={readOnly} aria-pressed={region.choice === 'both-current-first'} data-testid="conflict-both-current-first" onClick={() => handleWholeChoice('both-current-first')}>{currentLabel} first</button>
+      <button className="conflict-workbench-btn" type="button" disabled={readOnly} aria-pressed={region.choice === 'both-incoming-first'} data-testid="conflict-both-incoming-first" onClick={() => handleWholeChoice('both-incoming-first')}>{incomingLabel} first</button>
+      {region.choice === 'selected-range' && <span className="conflict-picked-summary" data-testid="conflict-picked-summary">{activePicks.length} line{activePicks.length === 1 ? '' : 's'} picked</span>}
+      <button className="conflict-workbench-btn quiet conflict-reset" type="button" disabled={readOnly || region.choice === 'unresolved'} onClick={() => handleWholeChoice('unresolved')}><RotateCcw size={13} /> Reset choice</button>
     </div>
   </div>
 }

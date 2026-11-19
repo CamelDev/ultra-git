@@ -233,3 +233,127 @@ test('conflict resolver supports synced scrolling, raw diff toggle, text selecti
     await sandbox.destroy()
   }
 })
+
+async function createMultiChunkSandbox(): Promise<GitSandbox> {
+  const sandbox = new GitSandbox()
+  await sandbox.init()
+  await sandbox.git.branch(['-M', 'main'])
+
+  const makeFile = (variant: 'base' | 'current' | 'incoming') => [
+    '// Section 1',
+    `const s1a = "${variant}-1a"`,
+    `const s1b = "${variant}-1b"`,
+    '// spacer 1',
+    '// spacer 2',
+    '// spacer 3',
+    '// spacer 4',
+    '// Section 2',
+    `const s2 = "${variant}-2"`,
+    '// spacer 5',
+    '// spacer 6',
+    '// spacer 7',
+    '// spacer 8',
+    '// Section 3',
+    `const s3 = "${variant}-3"`,
+    ''
+  ].join('\n')
+
+  const filePath = 'src/multiChunk.ts'
+  const write = (variant: 'base' | 'current' | 'incoming') => {
+    const full = path.join(sandbox.dir, filePath)
+    fs.mkdirSync(path.dirname(full), { recursive: true })
+    fs.writeFileSync(full, makeFile(variant))
+  }
+
+  write('base')
+  await sandbox.git.add('.')
+  await sandbox.git.commit('Base multi-chunk')
+
+  await sandbox.createBranch('feature/multi-incoming')
+  write('incoming')
+  await sandbox.git.add('.')
+  await sandbox.git.commit('Incoming multi-chunk')
+
+  await sandbox.checkoutBranch('main')
+  write('current')
+  await sandbox.git.add('.')
+  await sandbox.git.commit('Current multi-chunk')
+
+  await sandbox.git.merge(['feature/multi-incoming']).catch(() => {})
+  expect((await sandbox.git.status()).conflicted).toContain(filePath)
+  return sandbox
+}
+
+test('conflict resolver supports line-by-line picking, A/D and arrow chunk navigation, and auto-advance to next unresolved chunk', async () => {
+  const sandbox = await createMultiChunkSandbox()
+  const { app, page } = await launchElectronApp({ disableDefaultTab: true })
+  try {
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1400, 900))
+    await app.evaluate(({ ipcMain }, repoPath) => {
+      ipcMain.removeHandler('dialog:openDirectory')
+      ipcMain.handle('dialog:openDirectory', () => ({ canceled: false, path: repoPath }))
+    }, sandbox.dir)
+
+    await addRepoViaUI(page)
+    const resolver = page.getByTestId('conflict-resolver')
+    await expect(resolver).toBeVisible()
+
+    const tabs = resolver.getByRole('tab', { name: /Conflict \d+:/ })
+    await expect(tabs).toHaveCount(3)
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+
+    // 1. Line-by-line picking from both sides on Conflict 1
+    await resolver.getByTestId('conflict-pick-current-0').click()
+    await resolver.getByTestId('conflict-pick-incoming-1').click()
+    await expect(resolver.getByTestId('conflict-picked-summary')).toHaveText('2 lines picked')
+    // Line picking stays on Conflict 1 so the user can continue picking lines
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+
+    const resultEditor = resolver.getByTestId('conflict-result-editor')
+    const pickedResult = await resultEditor.inputValue()
+    expect(pickedResult).toContain('const s1a = "current-1a"')
+    expect(pickedResult).toContain('const s1b = "incoming-1b"')
+    expect(pickedResult).not.toContain('const s1b = "current-1b"')
+    expect(pickedResult).not.toContain('const s1a = "incoming-1a"')
+
+    // Verify line picking also works in Raw diff view
+    await resolver.getByTestId('conflict-code-view-toggle').click()
+    await expect(resolver.getByTestId('conflict-pick-current-0')).toHaveAttribute('aria-pressed', 'true')
+    await expect(resolver.getByTestId('conflict-pick-incoming-1')).toHaveAttribute('aria-pressed', 'true')
+    await resolver.getByTestId('conflict-code-view-toggle').click()
+
+    // 2. Navigate chunks using D, ArrowRight, A, ArrowLeft
+    await page.keyboard.press('d')
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+
+    await page.keyboard.press('ArrowRight')
+    await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true')
+
+    await page.keyboard.press('a')
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+
+    await page.keyboard.press('ArrowLeft')
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+
+    // Shortcuts must NOT hijack typing inside the editable result textarea
+    await resultEditor.focus()
+    await page.keyboard.press('d')
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
+    // Move focus back to workbench button before continuing
+    await resolver.getByRole('button', { name: 'Next conflict' }).focus()
+
+    // 3. Selecting Use Current on Conflict 2 auto-switches to Conflict 3 (next unresolved)
+    await page.keyboard.press('d')
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true')
+    await resolver.getByTestId('conflict-current').click()
+    await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true')
+
+    // Selecting Use Incoming on the last remaining unresolved chunk keeps focus there and enables Apply & Stage
+    await resolver.getByTestId('conflict-incoming').click()
+    await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true')
+    await expect(resolver.getByTestId('conflict-apply-stage')).toBeEnabled()
+  } finally {
+    await app.close()
+    await sandbox.destroy()
+  }
+})

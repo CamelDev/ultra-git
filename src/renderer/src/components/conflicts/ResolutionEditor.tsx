@@ -7,7 +7,9 @@ import { ConflictCode } from './ConflictCode'
 import {
   CONFLICT_CODE_VIEW_PREFERENCE_KEY,
   CONFLICT_RESULT_SYNTAX_PREFERENCE_KEY,
+  findNextUnresolvedRegionId,
   readConflictBooleanPreference,
+  resolveChunkNavigationDelta,
   writeConflictBooleanPreference
 } from './conflictPresentation'
 
@@ -81,6 +83,35 @@ export const ResolutionEditor: React.FC<Props> = ({ document, result, activeRegi
     }
   }, [showSyntaxOverlay])
 
+  useEffect(() => {
+    if (document.isBinary || document.regions.length <= 1) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target) {
+        const tag = target.tagName
+        if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || target.isContentEditable) return
+        if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && target.closest('[role="tablist"]')) return
+      }
+      const delta = resolveChunkNavigationDelta(event)
+      if (delta === 0) return
+      const nextIndex = Math.min(document.regions.length - 1, Math.max(0, regionIndex + delta))
+      event.preventDefault()
+      if (nextIndex !== regionIndex) {
+        onRegion(document.regions[nextIndex].id)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [document.isBinary, document.regions, regionIndex, onRegion])
+
+  const handleRegionChoice = (regionId: string, choice: RegionChoice, selected?: string) => {
+    onChoice(regionId, choice, selected)
+    if (choice === 'current' || choice === 'incoming' || choice === 'both-current-first' || choice === 'both-incoming-first') {
+      const nextUnresolvedId = findNextUnresolvedRegionId(document.regions, regionId)
+      if (nextUnresolvedId) onRegion(nextUnresolvedId)
+    }
+  }
+
   const resize = (event: React.PointerEvent<HTMLDivElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
@@ -116,7 +147,7 @@ export const ResolutionEditor: React.FC<Props> = ({ document, result, activeRegi
       </div>
     </div>
     <div className="conflict-editor-split" ref={editorRef} style={{ gridTemplateRows: `minmax(100px, ${sourcePercent}fr) 8px minmax(100px, ${100 - sourcePercent}fr)` }}>
-      <ConflictHunkView document={document} region={region} readOnly={staged} showBase={showBase} codeView={codeView} currentLabel={currentLabel} incomingLabel={incomingLabel} currentRef={currentRef} incomingRef={incomingRef} onChoice={(choice, selected) => onChoice(region.id, choice, selected)} />
+      <ConflictHunkView document={document} region={region} readOnly={staged} showBase={showBase} codeView={codeView} currentLabel={currentLabel} incomingLabel={incomingLabel} currentRef={currentRef} incomingRef={incomingRef} onChoice={(choice, selected) => handleRegionChoice(region.id, choice, selected)} />
       <div className="conflict-editor-resizer" role="separator" aria-label="Resize source and result panes" aria-orientation="horizontal" aria-valuemin={25} aria-valuemax={75} aria-valuenow={Math.round(sourcePercent)} tabIndex={0} onPointerDown={resize} onPointerMove={moveResize} onPointerUp={event => event.currentTarget.releasePointerCapture(event.pointerId)} onKeyDown={event => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); setSourcePercent(value => Math.min(75, Math.max(25, value + (event.key === 'ArrowUp' ? -5 : 5)))) } }}><GripHorizontal size={16} /></div>
       <section className="conflict-result-area" aria-label="Resolution result">
         <div className="conflict-result-heading">

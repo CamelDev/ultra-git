@@ -1,9 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  composePickedLines,
   CONFLICT_CODE_VIEW_PREFERENCE_KEY,
+  findNextUnresolvedRegionId,
   getConflictFileState,
+  getInitialPickedLines,
   getSourceExcerpt,
   readConflictBooleanPreference,
+  resolveChunkNavigationDelta,
+  togglePickedLine,
   writeConflictBooleanPreference
 } from '../conflictPresentation'
 
@@ -55,5 +60,73 @@ describe('Conflict view preferences', () => {
     store.set(CONFLICT_CODE_VIEW_PREFERENCE_KEY, 'unexpected')
     expect(readConflictBooleanPreference(CONFLICT_CODE_VIEW_PREFERENCE_KEY, true, storage)).toBe(true)
     expect(readConflictBooleanPreference(CONFLICT_CODE_VIEW_PREFERENCE_KEY, false, undefined)).toBe(false)
+  })
+})
+
+describe('Line-by-line conflict picking', () => {
+  const sampleRegion = {
+    choice: 'unresolved' as const,
+    current: 'const a = 1\nconst b = 2',
+    incoming: 'const a = 10\nconst c = 30',
+    currentRange: { start: 4, end: 6 },
+    incomingRange: { start: 4, end: 6 }
+  }
+
+  test('derives initial picked lines from whole-region choices', () => {
+    expect(getInitialPickedLines(sampleRegion)).toEqual([])
+    expect(getInitialPickedLines({ ...sampleRegion, choice: 'current' })).toEqual([
+      { side: 'current', lineIndex: 0 },
+      { side: 'current', lineIndex: 1 }
+    ])
+    expect(getInitialPickedLines({ ...sampleRegion, choice: 'incoming' })).toEqual([
+      { side: 'incoming', lineIndex: 0 },
+      { side: 'incoming', lineIndex: 1 }
+    ])
+    expect(getInitialPickedLines({ ...sampleRegion, choice: 'both-current-first' })).toEqual([
+      { side: 'current', lineIndex: 0 },
+      { side: 'current', lineIndex: 1 },
+      { side: 'incoming', lineIndex: 0 },
+      { side: 'incoming', lineIndex: 1 }
+    ])
+  })
+
+  test('toggles and composes picked lines from both sides in selection order', () => {
+    let picks = togglePickedLine([], 'current', 0)
+    picks = togglePickedLine(picks, 'incoming', 1)
+    picks = togglePickedLine(picks, 'current', 1)
+    expect(composePickedLines(picks, sampleRegion)).toBe('const a = 1\nconst c = 30\nconst b = 2')
+
+    // Unpicking removes the specific line while preserving remaining order
+    picks = togglePickedLine(picks, 'incoming', 1)
+    expect(composePickedLines(picks, sampleRegion)).toBe('const a = 1\nconst b = 2')
+  })
+})
+
+describe('Auto-advance & chunk navigation shortcuts', () => {
+  test('findNextUnresolvedRegionId advances forward and wraps around', () => {
+    const regions = [
+      { id: 'r1', choice: 'unresolved' as const },
+      { id: 'r2', choice: 'current' as const },
+      { id: 'r3', choice: 'unresolved' as const },
+      { id: 'r4', choice: 'unresolved' as const }
+    ]
+    expect(findNextUnresolvedRegionId(regions, 'r1')).toBe('r3')
+    expect(findNextUnresolvedRegionId(regions, 'r3')).toBe('r4')
+    expect(findNextUnresolvedRegionId(regions, 'r4')).toBe('r1')
+    expect(findNextUnresolvedRegionId([{ id: 'r1', choice: 'current' }], 'r1')).toBeNull()
+  })
+
+  test('resolveChunkNavigationDelta handles A/D and Left/Right while ignoring modifiers', () => {
+    expect(resolveChunkNavigationDelta({ key: 'a' })).toBe(-1)
+    expect(resolveChunkNavigationDelta({ key: 'A' })).toBe(-1)
+    expect(resolveChunkNavigationDelta({ key: 'ArrowLeft' })).toBe(-1)
+    expect(resolveChunkNavigationDelta({ key: 'd' })).toBe(1)
+    expect(resolveChunkNavigationDelta({ key: 'D' })).toBe(1)
+    expect(resolveChunkNavigationDelta({ key: 'ArrowRight' })).toBe(1)
+    expect(resolveChunkNavigationDelta({ key: 'ArrowRight', altKey: true })).toBe(0)
+    expect(resolveChunkNavigationDelta({ key: 'd', ctrlKey: true })).toBe(0)
+    expect(resolveChunkNavigationDelta({ key: 'a', metaKey: true })).toBe(0)
+    expect(resolveChunkNavigationDelta({ key: 'ArrowLeft', defaultPrevented: true })).toBe(0)
+    expect(resolveChunkNavigationDelta({ key: 'w' })).toBe(0)
   })
 })

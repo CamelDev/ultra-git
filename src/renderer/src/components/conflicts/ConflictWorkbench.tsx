@@ -158,7 +158,7 @@ export const ConflictWorkbench: React.FC<Props> = ({ repoId, onDismiss }) => {
       </>}</section>
       </>}
     </div>
-    <footer className="conflict-status-bar"><span><span className="conflict-status-dot" /><span data-testid="conflict-unresolved-count">{session.pending ? `${session.pending}…` : emptyCherryPick ? 'Cherry-pick paused' : showOperationSummary ? 'Ready to continue' : `${conflictFiles.length} file${conflictFiles.length === 1 ? '' : 's'} left to stage`}</span></span><span><kbd>Alt</kbd> + <kbd>←</kbd> <kbd>→</kbd> switch file <span className="conflict-shortcut-divider" /><kbd>Esc</kbd> minimize</span>{!showOperationSummary && <span>File {files.length ? activeIndex + 1 : 0} of {files.length}</span>}</footer>
+    <footer className="conflict-status-bar"><span><span className="conflict-status-dot" /><span data-testid="conflict-unresolved-count">{session.pending ? `${session.pending}…` : emptyCherryPick ? 'Cherry-pick paused' : showOperationSummary ? 'Ready to continue' : `${conflictFiles.length} file${conflictFiles.length === 1 ? '' : 's'} left to stage`}</span></span><span><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> switch conflict <span className="conflict-shortcut-divider" /><kbd>Alt</kbd> + <kbd>←</kbd> <kbd>→</kbd> switch file <span className="conflict-shortcut-divider" /><kbd>Esc</kbd> minimize</span>{!showOperationSummary && <span>File {files.length ? activeIndex + 1 : 0} of {files.length}</span>}</footer>
   </main>
 }
 
