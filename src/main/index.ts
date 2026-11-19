@@ -308,6 +308,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:getFileHistory', async (_, repoPath, filePath, maxCount) => {
+    try {
+      const data = await gitService.getFileHistory(repoPath, filePath, maxCount)
+      return { success: true, data }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('git:add', async (_, repoPath, filePath, force) => {
     try {
       await gitService.add(repoPath, filePath, force)

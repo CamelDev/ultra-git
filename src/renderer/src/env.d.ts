@@ -79,6 +79,7 @@ declare global {
         removeIndexLock: (repoPath: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         getCommitFiles: (repoPath: string, commitHash: string) => Promise<{ success: boolean; data?: any; error?: string }>;
         getCommitFileDiff: (repoPath: string, commitHash: string, filePath: string, oldPath?: string, status?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+        getFileHistory: (repoPath: string, filePath: string, maxCount?: number) => Promise<{ success: boolean; data?: import('../../shared/fileHistory').FileHistoryEntry[]; error?: string }>;
         add: (repoPath: string, filePath: string | string[], force?: boolean) => Promise<{ success: boolean; error?: string; isIgnoredTracked?: boolean; files?: string[] }>;
         untrack: (repoPath: string, filePath: string | string[]) => Promise<{ success: boolean; error?: string }>;
         addToGitignore: (repoPath: string, pattern: string) => Promise<{ success: boolean; data?: { pattern: string; alreadyExisted: boolean }; error?: string }>;

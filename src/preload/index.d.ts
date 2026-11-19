@@ -37,6 +37,7 @@ declare global {
         renameBranch: (repoPath: string, oldName: string, newName: string) => Promise<IpcResponse<any>>;
         getBranches: (repoPath: string) => Promise<IpcResponse<{ current: string, local: Array<{ name: string, ahead: number, behind: number }>, remote: string[] }>>;
         getCommitFiles: (repoPath: string, commitHash: string) => Promise<IpcResponse<any[]>>;
+        getFileHistory: (repoPath: string, filePath: string, maxCount?: number) => Promise<IpcResponse<import('../shared/fileHistory').FileHistoryEntry[]>>;
         getCommitFileDiff: (
           repoPath: string,
           commitHash: string,

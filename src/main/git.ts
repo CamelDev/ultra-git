@@ -2,6 +2,63 @@ import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';
 import fs from 'fs';
 import { join, resolve } from 'path';
 import { execFile } from 'child_process';
+import type { FileHistoryEntry } from '../shared/fileHistory';
+
+export function parseFileHistoryOutput(raw: string, fallbackFilePath: string): FileHistoryEntry[] {
+  if (!raw || !raw.trim()) return [];
+  const normalizedFallback = fallbackFilePath.replace(/\\/g, '/').replace(/^\.\//, '');
+  const records = raw.split('\x1e').filter(Boolean);
+  const entries: FileHistoryEntry[] = [];
+
+  for (const record of records) {
+    const parts = record.split('\x1f');
+    if (parts.length < 5) continue;
+
+    const hash = parts[0].trim();
+    if (!hash) continue;
+    const authorName = parts[1].trim();
+    const authorEmail = parts[2].trim();
+    const date = parts[3].trim();
+    const message = parts[4].trim();
+    const nameStatusBlock = parts.slice(5).join('\x1f');
+
+    let status = 'M';
+    let entryFilePath = normalizedFallback;
+    let oldPath: string | undefined;
+
+    const statusLines = nameStatusBlock
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (statusLines.length > 0) {
+      const cols = statusLines[0].split('\t');
+      if (cols.length >= 2) {
+        const rawStatus = cols[0].trim();
+        status = rawStatus.charAt(0) || 'M';
+        if ((status === 'R' || status === 'C') && cols.length >= 3) {
+          oldPath = cols[1].trim();
+          entryFilePath = cols[2].trim();
+        } else {
+          entryFilePath = cols[1].trim();
+        }
+      }
+    }
+
+    entries.push({
+      hash,
+      authorName,
+      authorEmail,
+      date,
+      message,
+      status,
+      filePath: entryFilePath,
+      ...(oldPath ? { oldPath } : {})
+    });
+  }
+
+  return entries;
+}
 
 export interface ConflictedFile {
   path: string;
@@ -1121,6 +1178,38 @@ export const gitService = {
       after: isBinary ? '' : after, 
       isBinary 
     };
+  },
+
+  getFileHistory: async (repoPath: string, filePath: string, maxCount = 200): Promise<FileHistoryEntry[]> => {
+    const git = getGitInstance(repoPath);
+    const normalizedPath = filePath.replace(/\\/g, '/').replace(/^\.\//, '');
+    if (!normalizedPath) return [];
+    const safeMaxCount = Math.max(1, Math.min(Math.floor(maxCount) || 200, 1000));
+
+    try {
+      const raw = await git.raw([
+        '-c',
+        'core.quotepath=false',
+        'log',
+        '--follow',
+        '--name-status',
+        `-n`,
+        String(safeMaxCount),
+        '--format=%x1e%H%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f',
+        '--',
+        normalizedPath
+      ]);
+      return parseFileHistoryOutput(raw, normalizedPath);
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      if (
+        msg.includes('does not have any commits yet') ||
+        msg.includes('unknown revision or path not in the working tree')
+      ) {
+        return [];
+      }
+      throw err;
+    }
   },
 
   add: async (repoPath: string, filePath: string | string[], force = false) => {
