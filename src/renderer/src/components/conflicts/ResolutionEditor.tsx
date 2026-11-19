@@ -139,7 +139,7 @@ export const ResolutionEditor: React.FC<Props> = ({ document, result, activeRegi
         event.preventDefault()
         onRegion(document.regions[next].id)
         ;(event.currentTarget.children[next] as HTMLElement).focus()
-      }}>{document.regions.map((r, i) => <button key={r.id} type="button" role="tab" tabIndex={r.id === region.id ? 0 : -1} aria-selected={r.id === region.id} aria-label={`Conflict ${i + 1}: ${r.choice === 'unresolved' ? 'unresolved' : 'resolved'}`} className={`conflict-region-tab${r.choice !== 'unresolved' ? ' resolved' : ''}`} onClick={() => onRegion(r.id)}>{r.choice !== 'unresolved' ? <Check size={12} /> : i + 1}</button>)}</div>
+      }}>{document.regions.map((r, i) => <button key={r.id} type="button" role="tab" tabIndex={r.id === region.id ? 0 : -1} aria-selected={r.id === region.id} aria-label={`Conflict ${i + 1}: ${r.choice === 'unresolved' ? 'unresolved' : r.autoResolved ? 'auto-resolved (identical on both sides)' : 'resolved'}`} title={r.autoResolved ? 'Auto-resolved: identical changes on both sides' : undefined} className={`conflict-region-tab${r.choice !== 'unresolved' ? ' resolved' : ''}`} onClick={() => onRegion(r.id)}>{r.choice !== 'unresolved' ? <Check size={12} /> : i + 1}</button>)}</div>
       <div className="conflict-view-options">
         <button type="button" className="conflict-workbench-btn quiet" aria-pressed={codeView} data-testid="conflict-code-view-toggle" title={codeView ? 'Switch to raw diff view' : 'Switch to code view'} onClick={toggleCodeView}><Code2 size={14} /> Code view</button>
         <button type="button" className="conflict-workbench-btn quiet" aria-pressed={showBase} onClick={() => setShowBase(!showBase)}>Base</button>

@@ -66,4 +66,45 @@ describe('Git-derived conflict regions', () => {
     deriveConflictRegions(input)
     expect(JSON.stringify(input)).toBe(before)
   })
+
+  test('auto-resolves regions with identical changes on both sides while leaving conflicting and one-sided regions unresolved', () => {
+    const base = 'line1\nshared\nline3\nreal\nline5\nonesided\nline7\n'
+    const current = 'line1\nsame-edit\nline3\ncurrent-edit\nline5\nonesided\nline7\n'
+    const incoming = 'line1\nsame-edit\nline3\nincoming-edit\nline5\nincoming-only\nline7\n'
+    const regions = deriveConflictRegions(derive(base, current, incoming))
+    expect(regions).toHaveLength(3)
+
+    // Region 0: identical on both sides -> auto-resolved
+    expect(regions[0].current).toBe('same-edit')
+    expect(regions[0].incoming).toBe('same-edit')
+    expect(regions[0].choice).toBe('current')
+    expect(regions[0].autoResolved).toBe(true)
+    expect(() => validateRegionSelection(regions[0], 'generation-1', { choice: regions[0].choice })).not.toThrow()
+
+    // Region 1: genuinely conflicting -> unresolved
+    expect(regions[1].choice).toBe('unresolved')
+    expect(regions[1].autoResolved).toBeUndefined()
+
+    // Region 2: one-sided change (current === base) -> still unresolved
+    expect(regions[2].choice).toBe('unresolved')
+    expect(regions[2].autoResolved).toBeUndefined()
+
+    // Composes without needing an explicit override for the auto-resolved region
+    const doc = { generation: 'generation-1', regions, base: { bytes: base } as any, eol: 'lf' as const, hasFinalNewline: true }
+    const result = composeConflictResult(doc, {
+      [regions[1].id]: { choice: 'current' },
+      [regions[2].id]: { choice: 'incoming' }
+    })
+    expect(result).toBe('line1\nsame-edit\nline3\ncurrent-edit\nline5\nincoming-only\nline7\n')
+  })
+
+  test('auto-resolves identical deletions on both sides', () => {
+    const base = 'keep1\nremove-me\nkeep2\n'
+    const regions = deriveConflictRegions(derive(base, 'keep1\nkeep2\n', 'keep1\nkeep2\n'))
+    expect(regions).toHaveLength(1)
+    expect(regions[0].choice).toBe('current')
+    expect(regions[0].autoResolved).toBe(true)
+    const doc = { generation: 'generation-1', regions, base: { bytes: base } as any, eol: 'lf' as const, hasFinalNewline: true }
+    expect(composeConflictResult(doc)).toBe('keep1\nkeep2\n')
+  })
 })

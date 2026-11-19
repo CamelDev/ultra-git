@@ -69,7 +69,8 @@ export const ConflictWorkbench: React.FC<Props> = ({ repoId, onDismiss }) => {
       if (current.activePath !== path) void loadDocument(repoId, path)
       return
     }
-    useRepoStore.setState({ conflictSessions: { ...store.conflictSessions, [repoId]: { ...current, activePath: path, activeRegionId: draft.document.regions[0]?.id ?? null } } })
+    const nextRegionId = draft.document.regions.find(region => region.choice === 'unresolved')?.id ?? draft.document.regions[0]?.id ?? null
+    useRepoStore.setState({ conflictSessions: { ...store.conflictSessions, [repoId]: { ...current, activePath: path, activeRegionId: nextRegionId } } })
   }, [repoId, loadDocument])
 
   useEffect(() => { if (!session.snapshot && !session.pending) void loadSnapshot(repoId) }, [repoId, session.snapshot, session.pending, loadSnapshot])

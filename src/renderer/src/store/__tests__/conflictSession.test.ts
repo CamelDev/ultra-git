@@ -132,4 +132,54 @@ describe('conflictSessionReducer', () => {
     expect(state.drafts['file.txt'].dirty).toBe(true)
     expect(state.undo).toBeNull()
   })
+
+  it('focuses the first unresolved region when earlier regions are auto-resolved and pre-composes Result', () => {
+    const base = 'a\nshared\nb\nconflict\nc\n'
+    const current = 'a\nsame-fix\nb\ncurrent-val\nc\n'
+    const incoming = 'a\nsame-fix\nb\nincoming-val\nc\n'
+    const regions = deriveConflictRegions({ generation: 'g1', base, current, incoming, eol: 'lf', hasFinalNewline: true })
+    const doc: ConflictDocument = {
+      repoId: '/repo', path: 'file.txt', generation: 'g1', conflictType: 'both-modified',
+      base: { bytes: base, hash: 'b', byteLength: base.length, eol: 'lf', hasFinalNewline: true, isBinary: false },
+      regions, isBinary: false, eol: 'lf', hasFinalNewline: true
+    }
+
+    let state = createConflictSession('/repo')
+    state = conflictSessionReducer(state, { type: 'snapshot', snapshot: snapshot('g1') })
+    state = conflictSessionReducer(state, { type: 'document', document: doc })
+
+    expect(regions[0].autoResolved).toBe(true)
+    expect(regions[0].choice).toBe('current')
+    expect(regions[1].choice).toBe('unresolved')
+    expect(state.activeRegionId).toBe(regions[1].id)
+    expect(conflictSelectors.unresolvedCount(state)).toBe(1)
+    expect(conflictSelectors.canApplyFile(state)).toBe(false)
+    expect(state.drafts['file.txt'].result).toContain('same-fix')
+
+    // Resetting an auto-resolved region clears autoResolved and marks it unresolved
+    state = conflictSessionReducer(state, { type: 'choose-region', path: 'file.txt', regionId: regions[0].id, choice: 'unresolved' })
+    expect(state.drafts['file.txt'].document.regions[0].autoResolved).toBe(false)
+    expect(conflictSelectors.unresolvedCount(state)).toBe(2)
+  })
+
+  it('pre-composes full Result and enables Apply when all regions are auto-resolved', () => {
+    const base = 'a\nshared\nb\n'
+    const current = 'a\nsame-fix\nb\n'
+    const incoming = 'a\nsame-fix\nb\n'
+    const regions = deriveConflictRegions({ generation: 'g1', base, current, incoming, eol: 'lf', hasFinalNewline: true })
+    const doc: ConflictDocument = {
+      repoId: '/repo', path: 'file.txt', generation: 'g1', conflictType: 'both-modified',
+      base: { bytes: base, hash: 'b', byteLength: base.length, eol: 'lf', hasFinalNewline: true, isBinary: false },
+      regions, isBinary: false, eol: 'lf', hasFinalNewline: true
+    }
+
+    let state = createConflictSession('/repo')
+    state = conflictSessionReducer(state, { type: 'snapshot', snapshot: snapshot('g1') })
+    state = conflictSessionReducer(state, { type: 'document', document: doc })
+
+    expect(state.activeRegionId).toBe(regions[0].id)
+    expect(conflictSelectors.unresolvedCount(state)).toBe(0)
+    expect(conflictSelectors.canApplyFile(state)).toBe(true)
+    expect(state.drafts['file.txt'].result).toBe('a\nsame-fix\nb\n')
+  })
 })

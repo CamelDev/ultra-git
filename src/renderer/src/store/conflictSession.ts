@@ -76,14 +76,22 @@ const compose = (doc: ConflictDocument, choices: Record<string, { choice: Region
   return result ? result.replace(/\n/g, eol) + (doc.hasFinalNewline ? eol : '') : (doc.hasFinalNewline ? eol : '')
 }
 
-const draftFor = (document: ConflictDocument): ConflictDraft => ({
-  document,
-  result: document.result?.bytes ?? document.workingResult?.bytes ?? '',
-  dirty: false,
-  fileChoice: document.isBinary || document.regions.length === 0 ? 'unresolved' : 'unresolved',
-  updatedAt: Date.now()
-  , candidates: [], previewedCandidateId: null, acceptedCandidateId: null
-})
+const initialRegionId = (regions: ConflictRegion[]) =>
+  regions.find(region => region.choice === 'unresolved')?.id ?? regions[0]?.id ?? null
+
+const draftFor = (document: ConflictDocument): ConflictDraft => {
+  const hasPreResolved = !document.isBinary && document.regions.length > 0 && document.regions.some(region => region.choice !== 'unresolved')
+  return {
+    document,
+    result: document.result?.bytes ?? document.workingResult?.bytes ?? (hasPreResolved ? compose(document, {}) : ''),
+    dirty: false,
+    fileChoice: document.isBinary || document.regions.length === 0 ? 'unresolved' : 'unresolved',
+    updatedAt: Date.now(),
+    candidates: [],
+    previewedCandidateId: null,
+    acceptedCandidateId: null
+  }
+}
 
 const sameGeneration = (state: ConflictSession, generation: string) => state.generation === generation
 const isFinished = (snapshot: OperationSnapshot | null) => snapshot?.phase === 'completed' || snapshot?.phase === 'aborted'
@@ -105,14 +113,14 @@ export function conflictSessionReducer(state: ConflictSession, action: ConflictS
       if (!sameGeneration(state, action.document.generation) || (action.document.repoId !== state.repoId && action.document.repoId !== state.snapshot?.repoId)) return state
       const previous = state.drafts[action.document.path]
       const draft = previous && !state.externalChange ? { ...previous, document: action.document } : draftFor(action.document)
-      return { ...state, drafts: { ...state.drafts, [action.document.path]: draft }, activePath: action.document.path, activeRegionId: draft.document.regions[0]?.id ?? null, externalChange: false, error: null }
+      return { ...state, drafts: { ...state.drafts, [action.document.path]: draft }, activePath: action.document.path, activeRegionId: initialRegionId(draft.document.regions), externalChange: false, error: null }
     }
-    case 'select-file': return { ...state, activePath: action.path, activeRegionId: state.drafts[action.path]?.document.regions[0]?.id ?? null }
+    case 'select-file': return { ...state, activePath: action.path, activeRegionId: state.drafts[action.path] ? initialRegionId(state.drafts[action.path].document.regions) : null }
     case 'select-region': return { ...state, activeRegionId: action.regionId }
     case 'choose-region': {
       if (!sameGeneration(state, state.generation ?? '') || !state.drafts[action.path]) return state
       const draft = state.drafts[action.path]
-      const regions = draft.document.regions.map((region: ConflictRegion) => region.id === action.regionId ? { ...region, choice: action.choice, selected: action.selected } : region)
+      const regions = draft.document.regions.map((region: ConflictRegion) => region.id === action.regionId ? { ...region, choice: action.choice, selected: action.selected, autoResolved: false } : region)
       const document = { ...draft.document, regions }
       const choices = Object.fromEntries(regions.map(region => [region.id, { choice: region.choice, selected: region.selected }]))
       return { ...state, drafts: { ...state.drafts, [action.path]: { ...draft, document, result: compose(document, choices), dirty: true, updatedAt: Date.now() } }, error: null }

@@ -41,6 +41,7 @@ export interface ConflictRegion extends ConflictRegionIdentity {
   incoming: string
   choice: RegionChoice
   selected?: string
+  autoResolved?: boolean
 }
 
 export interface ConflictDocument {

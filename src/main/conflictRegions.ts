@@ -120,7 +120,14 @@ export function deriveConflictRegions(input: ConflictRegionInput): ConflictRegio
     item.incomingEnd = mapBoundary(incomingEdits, item.baseEnd, false)
     const values = { base: slice(base.lines, item.baseStart, item.baseEnd), current: slice(current.lines, item.currentStart, item.currentEnd), incoming: slice(incoming.lines, item.incomingStart, item.incomingEnd) }
     const identity = regionIdentity(input, values.base, values.current, values.incoming, range(item.baseStart, item.baseEnd), range(item.currentStart, item.currentEnd), range(item.incomingStart, item.incomingEnd))
-    return { ...identity, id: regionId(identity), ...values, choice: 'unresolved' as RegionChoice }
+    const identical = values.current === values.incoming
+    return {
+      ...identity,
+      id: regionId(identity),
+      ...values,
+      choice: (identical ? 'current' : 'unresolved') as RegionChoice,
+      ...(identical ? { autoResolved: true } : {})
+    }
   })
 }
 

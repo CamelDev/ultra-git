@@ -163,6 +163,7 @@ export const ConflictHunkView: React.FC<Props> = ({ document, region, showBase, 
       <button className="conflict-workbench-btn" type="button" disabled={readOnly} aria-pressed={region.choice === 'both-current-first'} data-testid="conflict-both-current-first" onClick={() => handleWholeChoice('both-current-first')}>{currentLabel} first</button>
       <button className="conflict-workbench-btn" type="button" disabled={readOnly} aria-pressed={region.choice === 'both-incoming-first'} data-testid="conflict-both-incoming-first" onClick={() => handleWholeChoice('both-incoming-first')}>{incomingLabel} first</button>
       {region.choice === 'selected-range' && <span className="conflict-picked-summary" data-testid="conflict-picked-summary">{activePicks.length} line{activePicks.length === 1 ? '' : 's'} picked</span>}
+      {region.autoResolved && <span className="conflict-picked-summary" data-testid="conflict-auto-resolved-badge">Identical on both sides · auto-resolved</span>}
       <button className="conflict-workbench-btn quiet conflict-reset" type="button" disabled={readOnly || region.choice === 'unresolved'} onClick={() => handleWholeChoice('unresolved')}><RotateCcw size={13} /> Reset choice</button>
     </div>
   </div>
