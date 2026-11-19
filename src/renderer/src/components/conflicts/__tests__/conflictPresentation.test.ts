@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { getConflictFileState, getSourceExcerpt } from '../conflictPresentation'
+import {
+  CONFLICT_CODE_VIEW_PREFERENCE_KEY,
+  getConflictFileState,
+  getSourceExcerpt,
+  readConflictBooleanPreference,
+  writeConflictBooleanPreference
+} from '../conflictPresentation'
 
 describe('Conflict file presentation', () => {
   test('an edited unresolved file belongs to one group until it is staged', () => {
@@ -30,5 +36,24 @@ describe('Source context', () => {
     expect(getSourceExcerpt('one\r\ntwo\r\n', 'one', { start: 0, end: 1 })).toEqual({ content: 'one\ntwo', startLine: 1 })
     expect(getSourceExcerpt(undefined, '', { start: 0, end: 0 })).toEqual({ content: '', startLine: 1 })
     expect(getSourceExcerpt('', '', { start: 0, end: 0 })).toEqual({ content: '', startLine: 1 })
+  })
+})
+
+describe('Conflict view preferences', () => {
+  test('reads and writes boolean preferences with safe defaults', () => {
+    const store = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value) }
+    }
+    expect(readConflictBooleanPreference(CONFLICT_CODE_VIEW_PREFERENCE_KEY, true, storage)).toBe(true)
+    writeConflictBooleanPreference(CONFLICT_CODE_VIEW_PREFERENCE_KEY, false, storage)
+    expect(readConflictBooleanPreference(CONFLICT_CODE_VIEW_PREFERENCE_KEY, true, storage)).toBe(false)
+    writeConflictBooleanPreference(CONFLICT_CODE_VIEW_PREFERENCE_KEY, true, storage)
+    expect(readConflictBooleanPreference(CONFLICT_CODE_VIEW_PREFERENCE_KEY, false, storage)).toBe(true)
+
+    store.set(CONFLICT_CODE_VIEW_PREFERENCE_KEY, 'unexpected')
+    expect(readConflictBooleanPreference(CONFLICT_CODE_VIEW_PREFERENCE_KEY, true, storage)).toBe(true)
+    expect(readConflictBooleanPreference(CONFLICT_CODE_VIEW_PREFERENCE_KEY, false, undefined)).toBe(false)
   })
 })
