@@ -422,17 +422,19 @@ test.describe('Git Worktrees Integration', () => {
       const deleteWtBtn = page.locator('[data-testid="delete-worktree-btn-feature/wt-test"]');
       await deleteWtBtn.dispatchEvent('click');
 
-      console.log('[Worktree Delete Test] 5. Verifying custom AppDialog is shown and confirming...');
-      const confirmDialog = page.locator('[data-testid="remove-worktree-confirm-dialog"]');
-      await expect(confirmDialog).toBeVisible();
+      console.log('[Worktree Delete Test] 5. Verifying DeleteWorktreesModal is shown with pre-selected worktree and confirming...');
+      const deleteModal = page.locator('[data-testid="delete-worktrees-modal"]');
+      await expect(deleteModal).toBeVisible();
 
-      const confirmBtn = page.locator('[data-testid="remove-worktree-confirm-dialog-action-confirm"]');
-      await expect(confirmBtn).toBeVisible();
+      const wtCheckbox = deleteModal.locator('[data-testid="worktree-checkbox-feature/wt-test"]');
+      await expect(wtCheckbox).toBeChecked();
+
+      const confirmBtn = deleteModal.locator('[data-testid="confirm-delete-worktrees-btn"]');
+      await expect(confirmBtn).toBeEnabled();
       await confirmBtn.click();
 
       console.log('[Worktree Delete Test] 6. Verifying worktree is removed from sidebar UI...');
-      const blockingOverlay = page.locator('[data-testid="sidebar-blocking-overlay"]');
-      await expect(blockingOverlay).toBeHidden();
+      await expect(deleteModal).toBeHidden();
       await expect(extraWtItem).not.toBeVisible();
 
       console.log('[Worktree Delete Test] 7. Verifying worktree directory is removed from disk...');
@@ -443,6 +445,77 @@ test.describe('Git Worktrees Integration', () => {
       expect(worktreesList).not.toContain(wtPath);
       console.log('[Worktree Delete Test] Worktree delete E2E verified successfully!');
 
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('should support force-removing a locked worktree via DeleteWorktreesModal', async () => {
+    // Ensure wtPath2 exists even if run in isolation, then lock and dirty it to mirror stale Orca worktrees
+    if (!fs.existsSync(wtPath2)) {
+      await sandbox.git.raw(['worktree', 'add', '-b', 'feature/wt-from-base', wtPath2]);
+    }
+    await sandbox.git.raw(['worktree', 'lock', '--reason', 'orca-create-preparation:v1', wtPath2]);
+    fs.writeFileSync(path.join(wtPath2, 'untracked-dirty.txt'), 'dirty');
+
+    const { app, page } = await launchElectronApp();
+
+    try {
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory');
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath };
+        });
+      }, sandbox.dir);
+
+      await addRepoViaUI(page);
+
+      const tabs = page.locator('[data-testid="repo-tab"]');
+      await expect(tabs).toHaveCount(2);
+      await tabs.last().click();
+      await page.waitForTimeout(500);
+
+      const worktreeSection = page.locator('.sidebar-section:has-text("Worktree")');
+      await expect(worktreeSection).toBeVisible();
+
+      // Open the modal via the header bulk remove button
+      const bulkDeleteBtn = page.locator('[data-testid="bulk-delete-worktrees-btn"]');
+      await expect(bulkDeleteBtn).toBeVisible();
+      await bulkDeleteBtn.click();
+
+      const deleteModal = page.locator('[data-testid="delete-worktrees-modal"]');
+      await expect(deleteModal).toBeVisible();
+
+      // Verify locked badge is rendered
+      const lockedBadge = deleteModal.locator('[data-testid="worktree-locked-badge-feature/wt-from-base"]');
+      await expect(lockedBadge).toBeVisible();
+
+      // Select the locked worktree
+      const wtCheckbox = deleteModal.locator('[data-testid="worktree-checkbox-feature/wt-from-base"]');
+      await wtCheckbox.check();
+      await expect(wtCheckbox).toBeChecked();
+
+      const forceCheckbox = deleteModal.locator('[data-testid="force-delete-worktrees-checkbox"]');
+      await expect(forceCheckbox).not.toBeChecked();
+
+      // Attempt removal without force -> should fail, show errors, and auto-check force
+      const confirmBtn = deleteModal.locator('[data-testid="confirm-delete-worktrees-btn"]');
+      await confirmBtn.click();
+
+      const errorBanner = deleteModal.locator('[data-testid="delete-worktrees-errors"]');
+      await expect(errorBanner).toBeVisible();
+      await expect(forceCheckbox).toBeChecked();
+
+      // Retry removal with force checked -> should succeed and close modal
+      await confirmBtn.click();
+      await expect(deleteModal).toBeHidden();
+
+      const lockedWtItem = worktreeSection.locator('.sidebar-item').filter({ hasText: 'feature/wt-from-base' });
+      await expect(lockedWtItem).not.toBeVisible();
+      expect(fs.existsSync(wtPath2)).toBe(false);
+
+      const worktreesList = await sandbox.git.raw(['worktree', 'list']);
+      expect(worktreesList).not.toContain(wtPath2);
     } finally {
       await app.close();
     }

@@ -1008,9 +1008,9 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:removeWorktree', async (_, repoPath, targetPath) => {
+  ipcMain.handle('git:removeWorktree', async (_, repoPath, targetPath, force = false) => {
     try {
-      await gitService.removeWorktree(repoPath, targetPath)
+      await gitService.removeWorktree(repoPath, targetPath, Boolean(force))
       return { success: true }
     } catch (error: any) {
       console.error('Failed to remove worktree:', error)

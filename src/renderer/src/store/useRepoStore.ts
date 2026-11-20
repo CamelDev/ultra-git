@@ -58,7 +58,7 @@ export interface Repository {
   tags?: string[];
   unpushedTags?: string[];
   divergedTags?: string[];
-  worktrees?: Array<{ path: string; branch: string; hash: string }>;
+  worktrees?: Array<{ path: string; branch: string; hash: string; locked?: boolean; lockReason?: string; prunable?: boolean; prunableReason?: string }>;
   mergeStatus?: MergeStatusInfo;
 }
 

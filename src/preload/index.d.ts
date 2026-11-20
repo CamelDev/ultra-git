@@ -51,9 +51,9 @@ declare global {
         discardChanges: (repoPath: string, filePath: string | string[], isStaged: boolean) => Promise<IpcResponse<void>>;
         resetToCommit: (repoPath: string, commitHash: string, mode: 'hard' | 'soft') => Promise<IpcResponse<void>>;
         squashCommits: (repoPath: string, commitHash: string, message: string) => Promise<IpcResponse<void>>;
-        getWorktrees: (repoPath: string) => Promise<IpcResponse<Array<{ path: string; branch: string; hash: string }>>>;
+        getWorktrees: (repoPath: string) => Promise<IpcResponse<Array<{ path: string; branch: string; hash: string; locked?: boolean; lockReason?: string; prunable?: boolean; prunableReason?: string }>>>;
         addWorktree: (repoPath: string, newPath: string, branch: string, baseBranch?: string) => Promise<IpcResponse<void>>;
-        removeWorktree: (repoPath: string, targetPath: string) => Promise<IpcResponse<void>>;
+        removeWorktree: (repoPath: string, targetPath: string, force?: boolean) => Promise<IpcResponse<void>>;
         getTags: (repoPath: string) => Promise<IpcResponse<string[]>>;
         getUnpushedTags: (repoPath: string) => Promise<IpcResponse<string[]>>;
         getTagSyncStatus: (repoPath: string) => Promise<IpcResponse<{ unpushed: string[]; diverged: string[] }>>;

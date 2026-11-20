@@ -145,9 +145,9 @@ declare global {
         pushTag: (repoPath: string, tagName: string, remote?: string) => Promise<{ success: boolean; error?: string }>;
         syncTagFromRemote: (repoPath: string, tagName: string, remote?: string) => Promise<{ success: boolean; error?: string }>;
         deleteTag: (repoPath: string, tagName: string, deleteRemote?: boolean, remote?: string) => Promise<{ success: boolean; error?: string }>;
-        getWorktrees: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ path: string; branch: string; hash: string }>; error?: string }>;
+        getWorktrees: (repoPath: string) => Promise<{ success: boolean; data?: Array<{ path: string; branch: string; hash: string; locked?: boolean; lockReason?: string; prunable?: boolean; prunableReason?: string }>; error?: string }>;
         addWorktree: (repoPath: string, newPath: string, branch: string, baseBranch?: string) => Promise<{ success: boolean; error?: string }>;
-        removeWorktree: (repoPath: string, targetPath: string) => Promise<{ success: boolean; error?: string }>;
+        removeWorktree: (repoPath: string, targetPath: string, force?: boolean) => Promise<{ success: boolean; error?: string }>;
         getBranchCommits: (repoPath: string, branchName: string, maxCount?: number) => Promise<{ success: boolean; data?: any; error?: string }>;
         cherryPick: (repoPath: string, commitHash: string) => Promise<{ success: boolean; data?: { success: boolean; error?: string; hadConflicts?: boolean; needsResolution?: boolean }; error?: string }>;
         abortCherryPick: (repoPath: string) => Promise<{ success: boolean; error?: string }>;

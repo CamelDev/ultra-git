@@ -111,7 +111,7 @@ const api = {
       ipcRenderer.invoke('git:deleteTag', repoPath, tagName, deleteRemote, remote),
     getWorktrees: (repoPath: string) => ipcRenderer.invoke('git:getWorktrees', repoPath),
     addWorktree: (repoPath: string, newPath: string, branch: string, baseBranch?: string) => ipcRenderer.invoke('git:addWorktree', repoPath, newPath, branch, baseBranch),
-    removeWorktree: (repoPath: string, targetPath: string) => ipcRenderer.invoke('git:removeWorktree', repoPath, targetPath),
+    removeWorktree: (repoPath: string, targetPath: string, force?: boolean) => ipcRenderer.invoke('git:removeWorktree', repoPath, targetPath, force),
     getBranchCommits: (repoPath: string, branchName: string, maxCount?: number) => ipcRenderer.invoke('git:getBranchCommits', repoPath, branchName, maxCount),
     cherryPick: (repoPath: string, commitHash: string) => ipcRenderer.invoke('git:cherryPick', repoPath, commitHash),
     abortCherryPick: (repoPath: string) => ipcRenderer.invoke('git:abortCherryPick', repoPath),

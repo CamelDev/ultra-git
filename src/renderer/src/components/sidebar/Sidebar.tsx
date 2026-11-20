@@ -1,9 +1,10 @@
 import React, { useState } from "react"
-import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, Check, ChevronRight, ChevronDown, Search, LogIn, HardDrive, RefreshCw } from "lucide-react"
+import { GitBranch, Layers, Package, AlertTriangle, Trash2, List, X, Edit2, GitMerge, GitCommit, Tag, Upload, Download, Folder, Plus, Copy, Check, ChevronRight, ChevronDown, Search, LogIn, HardDrive, RefreshCw, Lock } from "lucide-react"
 import { useRepoStore } from "../../store/useRepoStore"
 import { DiffModal } from "../details/DiffModal"
 import { MergeRebaseModal, MergeOperation, MergeStrategy } from "./MergeRebaseModal"
 import { DeleteBranchesModal } from "./DeleteBranchesModal"
+import { DeleteWorktreesModal } from "./DeleteWorktreesModal"
 import { AppDialog } from "../dialogs/AppDialog"
 import { useToaster } from "../toaster/ToasterContext"
 
@@ -137,7 +138,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
 
   const [deletingWorktreePath, setDeletingWorktreePath] = useState<string | null>(null)
   const [amusingMessageIndex, setAmusingMessageIndex] = useState(0)
-  const [worktreePathToDelete, setWorktreeToDeletePath] = useState<string | null>(null)
+  const [isDeleteWorktreesModalOpen, setIsDeleteWorktreesModalOpen] = useState(false)
+  const [initialWorktreeToDelete, setInitialWorktreeToDelete] = useState<string | undefined>(undefined)
 
   const [checkoutRemoteTarget, setCheckoutRemoteTarget] = useState<{
     remoteBranchName: string
@@ -870,7 +872,64 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
   const handleDeleteWorktree = (e: React.MouseEvent, path: string) => {
     e.stopPropagation()
     if (!activeRepo) return
-    setWorktreeToDeletePath(path)
+    setInitialWorktreeToDelete(path)
+    setIsDeleteWorktreesModalOpen(true)
+  }
+
+  const handleDeleteWorktreesConfirm = async (
+    worktreePaths: string[],
+    force: boolean
+  ): Promise<{
+    success: boolean
+    errors?: string[]
+    deletedWorktrees: string[]
+    failedWorktrees: string[]
+  }> => {
+    if (!activeRepo) {
+      return { success: false, errors: ["No active repository."], deletedWorktrees: [], failedWorktrees: [] }
+    }
+
+    const errors: string[] = []
+    const deletedWorktrees: string[] = []
+    const failedWorktrees: string[] = []
+
+    try {
+      for (const wtPath of worktreePaths) {
+        const label = wtPath.split(/[/\\]/).pop() || wtPath
+        try {
+          const res = await window.api.git.removeWorktree(activeRepo.path, wtPath, force)
+          if (res.success) {
+            deletedWorktrees.push(wtPath)
+          } else {
+            errors.push(`Worktree '${label}': ${res.error || 'Unknown error'}`)
+            failedWorktrees.push(wtPath)
+          }
+        } catch (err: any) {
+          errors.push(`Worktree '${label}': ${err.message || err}`)
+          failedWorktrees.push(wtPath)
+        }
+      }
+    } finally {
+      try {
+        await refreshRepo(activeRepo.id)
+      } catch (refreshErr) {
+        console.error('Failed to refresh repo after worktree removal:', refreshErr)
+      }
+    }
+
+    if (deletedWorktrees.length > 0 && errors.length === 0) {
+      addToast({
+        variant: 'success',
+        title: 'Worktrees Removed',
+        message: `Successfully removed ${deletedWorktrees.length} worktree${deletedWorktrees.length > 1 ? 's' : ''}.`
+      })
+    }
+
+    if (errors.length > 0) {
+      return { success: false, errors, deletedWorktrees, failedWorktrees }
+    }
+
+    return { success: true, deletedWorktrees, failedWorktrees: [] }
   }
 
   const handleAddWorktreeSubmit = async () => {
@@ -1366,8 +1425,26 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
               )}
               <span>Worktree Branches</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={(e) => e.stopPropagation()}>
               <span>{filterText ? `${filteredWorktrees.length}/${worktrees.length}` : worktrees.length}</span>
+              {worktrees.some((wt) => {
+                const isMain = normalizePath(wt.path) === normalizePath(mainWtPath ?? '')
+                const isAct = normalizePath(wt.path) === normalizePath(activeRepo?.path ?? '')
+                return !isMain && !isAct
+              }) && (
+                <button
+                  className="stash-action-btn delete"
+                  style={{ padding: 2, height: 20, width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                  onClick={() => {
+                    setInitialWorktreeToDelete(undefined)
+                    setIsDeleteWorktreesModalOpen(true)
+                  }}
+                  data-tooltip="Remove worktrees"
+                  data-testid="bulk-delete-worktrees-btn"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
               <button
                 className="stash-action-btn"
                 style={{ padding: 2, height: 20, width: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1420,6 +1497,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
                     <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <HardDrive className="sidebar-item-icon" size={14} style={{ flexShrink: 0 }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortPath} <span style={{ color: 'var(--text-secondary)' }}>({wt.branch})</span></span>
+                      {wt.locked && (
+                        <span
+                          title={wt.lockReason ? `Locked: ${wt.lockReason}` : 'Locked worktree'}
+                          style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '5px', color: '#fbbf24', flexShrink: 0 }}
+                        >
+                          <Lock size={11} />
+                        </span>
+                      )}
                     </div>
                     <div className="tag-actions" style={{ marginLeft: 'auto', gap: '4px', flexShrink: 0 }}>
                       {!isActiveRepo && (
@@ -1803,6 +1888,19 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         />
       )}
 
+      {isDeleteWorktreesModalOpen && activeRepo && (
+        <DeleteWorktreesModal
+          isOpen={isDeleteWorktreesModalOpen}
+          onClose={() => {
+            setIsDeleteWorktreesModalOpen(false)
+            setInitialWorktreeToDelete(undefined)
+          }}
+          activeRepo={activeRepo}
+          initialWorktreePath={initialWorktreeToDelete}
+          onConfirm={handleDeleteWorktreesConfirm}
+        />
+      )}
+
       {mergeModalOpen && (
         <MergeRebaseModal
           isOpen={mergeModalOpen}
@@ -2146,57 +2244,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onMergeConflicts }) => {
         variant={pushTagsAlert.variant}
         testId="push-tags-alert-dialog"
         onCancel={() => setPushTagsAlert((prev) => ({ ...prev, open: false }))}
-      />
-
-      {/* Worktree deletion confirmation dialog (in-app, replaces native confirm) */}
-      <AppDialog
-        isOpen={worktreePathToDelete !== null}
-        title="Remove Worktree"
-        message={`Are you sure you want to remove the worktree at ${worktreePathToDelete}? Uncommitted changes might be lost.`}
-        variant="warning"
-        icon={<Trash2 size={16} />}
-        testId="remove-worktree-confirm-dialog"
-        actions={[
-          {
-            label: 'Cancel',
-            value: 'cancel',
-            variant: 'secondary'
-          },
-          {
-            label: 'Remove',
-            value: 'confirm',
-            variant: 'danger',
-            icon: <Trash2 size={13} />,
-            setsBusy: true
-          }
-        ]}
-        onResolve={async (value) => {
-          if (value === 'confirm' && worktreePathToDelete) {
-            const path = worktreePathToDelete
-            setWorktreeToDeletePath(null)
-            
-            setDeletingWorktreePath(path)
-            try {
-              const res = await window.api.git.removeWorktree(activeRepo!.path, path)
-              if (res.success) {
-                await refreshRepo(activeRepo!.id)
-              } else {
-                addToast({
-                  variant: 'error',
-                  title: 'Error',
-                  message: `Failed to remove worktree: ${res.error}`
-                })
-              }
-            } catch (err: any) {
-              console.error('Error removing worktree:', err)
-            } finally {
-              setDeletingWorktreePath(null)
-            }
-          } else {
-            setWorktreeToDeletePath(null)
-          }
-        }}
-        onCancel={() => setWorktreeToDeletePath(null)}
       />
 
       {/* Checkout Remote Branch confirmation dialog (in-app custom window) */}

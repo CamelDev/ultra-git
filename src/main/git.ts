@@ -4,6 +4,59 @@ import { join, resolve } from 'path';
 import { execFile } from 'child_process';
 import type { FileHistoryEntry } from '../shared/fileHistory';
 
+export interface WorktreeInfo {
+  path: string;
+  branch: string;
+  hash: string;
+  locked?: boolean;
+  lockReason?: string;
+  prunable?: boolean;
+  prunableReason?: string;
+}
+
+export function parseWorktreeListPorcelain(output: string): WorktreeInfo[] {
+  if (!output) return [];
+  const worktrees: WorktreeInfo[] = [];
+  const lines = output.split(/\r?\n/);
+
+  let currentWorktree: WorktreeInfo | null = null;
+  const pushCurrent = () => {
+    if (currentWorktree && currentWorktree.path) {
+      if (!currentWorktree.branch) currentWorktree.branch = '(detached HEAD)';
+      worktrees.push(currentWorktree);
+    }
+  };
+
+  for (const line of lines) {
+    if (line.startsWith('worktree ')) {
+      pushCurrent();
+      currentWorktree = { path: line.substring(9).trim(), branch: '', hash: '' };
+    } else if (line.startsWith('HEAD ')) {
+      if (currentWorktree) currentWorktree.hash = line.substring(5).trim();
+    } else if (line.startsWith('branch ')) {
+      let branchName = line.substring(7).trim();
+      if (branchName.startsWith('refs/heads/')) {
+        branchName = branchName.substring(11);
+      }
+      if (currentWorktree) currentWorktree.branch = branchName;
+    } else if (line === 'locked' || line.startsWith('locked ')) {
+      if (currentWorktree) {
+        currentWorktree.locked = true;
+        const reason = line.substring(6).trim();
+        if (reason) currentWorktree.lockReason = reason;
+      }
+    } else if (line === 'prunable' || line.startsWith('prunable ')) {
+      if (currentWorktree) {
+        currentWorktree.prunable = true;
+        const reason = line.substring(8).trim();
+        if (reason) currentWorktree.prunableReason = reason;
+      }
+    }
+  }
+  pushCurrent();
+  return worktrees;
+}
+
 export function parseRemoteTagsOutput(output: string): Map<string, string> {
   const remoteTags = new Map<string, string>();
   if (!output) return remoteTags;
@@ -2394,36 +2447,11 @@ export const gitService = {
     }
   },
 
-  getWorktrees: async (repoPath: string): Promise<Array<{ path: string; branch: string; hash: string }>> => {
+  getWorktrees: async (repoPath: string): Promise<WorktreeInfo[]> => {
     const git = getGitInstance(repoPath);
     try {
       const output = await git.raw(['worktree', 'list', '--porcelain']);
-      const worktrees: Array<{ path: string; branch: string; hash: string }> = [];
-      const lines = output.split('\n');
-      
-      let currentWorktree: any = null;
-      for (const line of lines) {
-        if (line.startsWith('worktree ')) {
-          if (currentWorktree && currentWorktree.path) {
-            if (!currentWorktree.branch) currentWorktree.branch = '(detached HEAD)';
-            worktrees.push(currentWorktree);
-          }
-          currentWorktree = { path: line.substring(9).trim(), branch: '', hash: '' };
-        } else if (line.startsWith('HEAD ')) {
-          if (currentWorktree) currentWorktree.hash = line.substring(5).trim();
-        } else if (line.startsWith('branch ')) {
-          let branchName = line.substring(7).trim();
-          if (branchName.startsWith('refs/heads/')) {
-            branchName = branchName.substring(11);
-          }
-          if (currentWorktree) currentWorktree.branch = branchName;
-        }
-      }
-      if (currentWorktree && currentWorktree.path) {
-        if (!currentWorktree.branch) currentWorktree.branch = '(detached HEAD)';
-        worktrees.push(currentWorktree);
-      }
-      return worktrees;
+      return parseWorktreeListPorcelain(output);
     } catch (e) {
       console.error('Error fetching worktrees:', e);
       return [];
@@ -2447,9 +2475,29 @@ export const gitService = {
     }
   },
 
-  removeWorktree: async (repoPath: string, targetPath: string): Promise<void> => {
+  removeWorktree: async (repoPath: string, targetPath: string, force = false): Promise<void> => {
     const git = getGitInstance(repoPath);
-    await git.raw(['worktree', 'remove', targetPath]);
+    if (!force) {
+      await git.raw(['worktree', 'remove', targetPath]);
+      return;
+    }
+
+    try {
+      // Passing --force twice removes both dirty (modified/untracked) and locked worktrees
+      await git.raw(['worktree', 'remove', '--force', '--force', targetPath]);
+    } catch (err) {
+      // If the worktree folder was already deleted externally and locked, unlock & prune it
+      if (!fs.existsSync(targetPath)) {
+        try {
+          await git.raw(['worktree', 'unlock', targetPath]);
+        } catch {
+          // Ignore if not locked
+        }
+        await git.raw(['worktree', 'prune']);
+        return;
+      }
+      throw err;
+    }
   },
 
   getBranchCommits: async (repoPath: string, branchName: string, maxCount = 100) => {
