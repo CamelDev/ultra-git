@@ -479,6 +479,14 @@ test.describe('Multi-Repo Tab System', () => {
       await expect(tabs).toHaveCount(1);
       const firstTab = tabs.first();
 
+      // Wait for initial refreshRepo() to finish so it doesn't overwrite synthetic status updates below
+      await expect.poll(() =>
+        page.evaluate(() => {
+          const repo = (window as any).useRepoStore?.getState?.()?.repositories?.[0];
+          return Boolean(repo && !repo.isLoading && repo.status !== null);
+        })
+      ).toBe(true);
+
       // 1. Verify active tab has class active and dash height is 6px
       await expect(firstTab).toHaveClass(/active/);
       const afterHeight = await page.evaluate(() => {
