@@ -67,7 +67,9 @@ test.describe('Git Identities Feature', () => {
       const selectDropdown = page.locator('[data-testid="repo-identity-select"]')
       await expect(selectDropdown).toBeVisible()
       // Since it's the only identity, it should be auto-assigned
-      await expect(selectDropdown).toHaveValue(/^[a-z0-9]+$/) // should be a random ID string
+      await expect(selectDropdown).toHaveAttribute('data-selected-identity', /^[a-z0-9]+$/) // should be a random ID string
+      await expect(selectDropdown).toContainText('Personal Profile')
+      await expect(selectDropdown).toContainText('(GH)')
 
       // 4. Open modal again to add a second profile
       await cogBtn.click()
@@ -82,7 +84,11 @@ test.describe('Git Identities Feature', () => {
       await page.waitForTimeout(500)
 
       // 5. Select "None" in the dropdown to trigger the selection required state
-      await selectDropdown.selectOption('')
+      await selectDropdown.click()
+      await expect(page.locator('[data-testid="repo-identity-menu"]')).toBeVisible()
+      await expect(page.locator('[data-testid="log-manage-identities-btn"]')).toBeVisible()
+      await page.locator('[data-testid="identity-option-none"]').click()
+      await expect(selectDropdown).toContainText('(SYS)')
       
       // Write an unstaged file to trigger rendering of ActiveChanges and Toolbar commit panels
       fs.writeFileSync(path.join(sandbox.dir, 'some-change.txt'), 'some content')
@@ -101,19 +107,33 @@ test.describe('Git Identities Feature', () => {
       await expect(commitBtn).toBeDisabled()
 
       // 6. Select "Work Profile" from the dropdown
-      const workOptionValue = await page.evaluate(() => {
-        const select = document.querySelector('[data-testid="repo-identity-select"]') as HTMLSelectElement
-        const options = Array.from(select.options)
-        const workOpt = options.find(o => o.text.includes('Work Profile'))
-        return workOpt ? workOpt.value : ''
-      })
-
-      await selectDropdown.selectOption(workOptionValue)
+      await selectDropdown.click()
+      await page.locator('[data-identity-label="Work Profile"]').click()
       await page.waitForTimeout(500)
 
       // Warning banner and text should disappear
       await expect(warningBanner).not.toBeVisible()
       await expect(warningText).not.toBeVisible()
+      await expect(selectDropdown).toContainText('Work Profile')
+
+      // 7. Clicking the cog button at the top of the identity dropdown opens the Identities modal
+      await selectDropdown.click()
+      await page.locator('[data-testid="log-manage-identities-btn"]').click()
+      await expect(page.locator('[data-testid="identities-close-btn"]')).toBeVisible()
+      await page.click('[data-testid="identities-close-btn"]')
+
+      // 8. Verify identity dropdown stays pinned to the right edge of the sync toolbar when narrow
+      await page.setViewportSize({ width: 720, height: 700 })
+      await page.waitForTimeout(200)
+      await expect(selectDropdown).toBeVisible()
+      const panelBox = await page.locator('[data-testid="sync-actions-panel"]').boundingBox()
+      const triggerBox = await selectDropdown.boundingBox()
+      expect(panelBox).not.toBeNull()
+      expect(triggerBox).not.toBeNull()
+      if (panelBox && triggerBox) {
+        expect(triggerBox.x + triggerBox.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 1)
+        expect(triggerBox.x + triggerBox.width).toBeGreaterThanOrEqual(panelBox.x + panelBox.width - 24)
+      }
 
     } finally {
       await app.close()
@@ -214,7 +234,8 @@ test.describe('Git Identities Feature', () => {
       // Since it is the only profile, verify auto-assignment & config updates
       const selectDropdown = page.locator('[data-testid="repo-identity-select"]')
       await expect(selectDropdown).toBeVisible()
-      await expect(selectDropdown).toHaveValue(/^[a-z0-9]+$/)
+      await expect(selectDropdown).toHaveAttribute('data-selected-identity', /^[a-z0-9]+$/)
+      await expect(selectDropdown).toHaveAttribute('data-provider-acronym', 'GH')
 
       // Check native git config using sandbox
       let userName = await sandbox.git.raw(['config', '--local', 'user.name'])
@@ -388,7 +409,8 @@ test.describe('Git Identities Feature', () => {
       // Since it is the only profile, verify auto-assignment & config updates
       const selectDropdown = page.locator('[data-testid="repo-identity-select"]')
       await expect(selectDropdown).toBeVisible()
-      await expect(selectDropdown).toHaveValue(/^[a-z0-9]+$/)
+      await expect(selectDropdown).toHaveAttribute('data-selected-identity', /^[a-z0-9]+$/)
+      await expect(selectDropdown).toHaveAttribute('data-provider-acronym', 'BB')
 
       // Poll to check that the Git config uses the dynamic username
       let helperSet = false

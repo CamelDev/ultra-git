@@ -7,6 +7,7 @@ import { IdentitiesModal } from '../details/IdentitiesModal'
 import { AppDialog, AppDialogAction } from '../dialogs/AppDialog'
 import { useToaster } from '../toaster/ToasterContext'
 import { ManageRemotesModal } from '../remotes/ManageRemotesModal'
+import { IdentityDropdown } from './IdentityDropdown'
 
 interface GraphViewProps {
   onOpenConflictResolver?: () => void
@@ -1396,14 +1397,18 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
           style={{
             display: 'flex',
             alignItems: 'center',
-            padding: '10px 20px',
+            padding: '10px 14px',
             backgroundColor: 'var(--bg-secondary)',
             borderBottom: '1px solid var(--border)',
-            gap: '12px',
-            flexShrink: 0
+            flexShrink: 0,
+            minWidth: 0,
+            width: '100%',
+            boxSizing: 'border-box',
+            position: 'relative'
           }}
           data-testid="sync-actions-panel"
         >
+          <div className="sync-actions-left">
           <button
             className="btn-secondary btn-icon"
             onClick={() => setIsManageRemotesOpen(true)}
@@ -1810,7 +1815,9 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
               display: 'flex', 
               alignItems: 'center', 
               position: 'relative', 
-              marginRight: '12px' 
+              flex: '0 1 180px',
+              minWidth: 0,
+              maxWidth: '180px'
             }} 
             data-testid="commit-search-container"
           >
@@ -1837,8 +1844,9 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
                 borderRadius: '4px',
                 padding: '4px 24px 4px 26px',
                 fontSize: '11px',
-                width: '180px',
-                height: '24px',
+                width: '100%',
+                minWidth: 0,
+                height: '28px',
                 outline: 'none',
                 boxSizing: 'border-box',
                 transition: 'all 0.2s ease'
@@ -1859,50 +1867,16 @@ const GraphView: React.FC<GraphViewProps> = ({ onOpenConflictResolver, onConflic
               />
             )}
           </div>
+          </div>
 
-          {/* Identity Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>Identity:</span>
-            <select
-              value={activeRepo.identityId || ''}
-              onChange={(e) => setRepoIdentity(activeRepo.id, e.target.value || undefined)}
-              style={{
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                border: !activeRepo.identityId && identities.length > 1 ? '1px solid #f59e0b' : '1px solid var(--border)',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                fontSize: '11px',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-              data-testid="repo-identity-select"
-            >
-              <option value="">None (system default)</option>
-              {identities.map(id => (
-                <option key={id.id} value={id.id}>{id.label} ({id.name})</option>
-              ))}
-            </select>
-            <Settings 
-              size={14} 
-              className="settings-cog-log"
-              onClick={() => setIdentitiesModalOpen(true)}
-              data-tooltip="Manage Git Identities"
-              data-testid="log-manage-identities-btn"
-              style={{ flexShrink: 0 }}
+          {/* Identity Selector — pinned to the right edge */}
+          <div className="identity-dropdown-dock">
+            <IdentityDropdown
+              identities={identities}
+              activeIdentityId={activeRepo.identityId}
+              onSelectIdentity={(identityId) => setRepoIdentity(activeRepo.id, identityId)}
+              onManageIdentities={() => setIdentitiesModalOpen(true)}
             />
-            {!activeRepo.identityId && identities.length > 1 && (
-              <span 
-                style={{ 
-                  color: '#f59e0b', 
-                  fontSize: '10px', 
-                  fontWeight: 700 
-                }}
-                data-testid="identity-warning-badge"
-              >
-                Required *
-              </span>
-            )}
           </div>
         </div>
       )}
