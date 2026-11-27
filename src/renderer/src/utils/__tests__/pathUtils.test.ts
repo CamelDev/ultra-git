@@ -3,23 +3,23 @@ import { getFullFilePath } from '../pathUtils'
 
 describe('getFullFilePath', () => {
   it('combines POSIX repoPath and relative filePath', () => {
-    const full = getFullFilePath('/Users/kamil/projects/ultra-git', 'src/renderer/DiffModal.tsx')
-    expect(full).toBe('/Users/kamil/projects/ultra-git/src/renderer/DiffModal.tsx')
+    const full = getFullFilePath('/Users/InTheLoop.pro/projects/ultra-git', 'src/renderer/DiffModal.tsx')
+    expect(full).toBe('/Users/InTheLoop.pro/projects/ultra-git/src/renderer/DiffModal.tsx')
   })
 
   it('handles trailing slash on repoPath and leading slash on filePath', () => {
-    const full = getFullFilePath('/Users/kamil/projects/ultra-git/', '/src/renderer/DiffModal.tsx')
-    expect(full).toBe('/Users/kamil/projects/ultra-git/src/renderer/DiffModal.tsx')
+    const full = getFullFilePath('/Users/InTheLoop.pro/projects/ultra-git/', '/src/renderer/DiffModal.tsx')
+    expect(full).toBe('/Users/InTheLoop.pro/projects/ultra-git/src/renderer/DiffModal.tsx')
   })
 
   it('handles Windows backslash paths', () => {
-    const full = getFullFilePath('C:\\Users\\Kamil\\projects\\ultra-git', 'src/renderer/DiffModal.tsx')
-    expect(full).toBe('C:\\Users\\Kamil\\projects\\ultra-git\\src\\renderer\\DiffModal.tsx')
+    const full = getFullFilePath('C:\\Users\\InTheLoop.pro\\projects\\ultra-git', 'src/renderer/DiffModal.tsx')
+    expect(full).toBe('C:\\Users\\InTheLoop.pro\\projects\\ultra-git\\src\\renderer\\DiffModal.tsx')
   })
 
   it('handles Windows paths with trailing backslash and mixed slashes', () => {
-    const full = getFullFilePath('C:\\Users\\Kamil\\projects\\ultra-git\\', 'src/components\\details\\DiffModal.tsx')
-    expect(full).toBe('C:\\Users\\Kamil\\projects\\ultra-git\\src\\components\\details\\DiffModal.tsx')
+    const full = getFullFilePath('C:\\Users\\InTheLoop.pro\\projects\\ultra-git\\', 'src/components\\details\\DiffModal.tsx')
+    expect(full).toBe('C:\\Users\\InTheLoop.pro\\projects\\ultra-git\\src\\components\\details\\DiffModal.tsx')
   })
 
   it('returns filePath unchanged if it is already an absolute Windows path on another drive', () => {
@@ -28,8 +28,8 @@ describe('getFullFilePath', () => {
   })
 
   it('returns filePath unchanged if it already begins with repoPath', () => {
-    const full = getFullFilePath('/Users/kamil/projects/ultra-git', '/Users/kamil/projects/ultra-git/README.md')
-    expect(full).toBe('/Users/kamil/projects/ultra-git/README.md')
+    const full = getFullFilePath('/Users/InTheLoop.pro/projects/ultra-git', '/Users/InTheLoop.pro/projects/ultra-git/README.md')
+    expect(full).toBe('/Users/InTheLoop.pro/projects/ultra-git/README.md')
   })
 
   it('handles root directory repoPath properly', () => {
@@ -49,7 +49,7 @@ describe('getFullFilePath', () => {
   })
 
   it('handles paths with spaces properly', () => {
-    const full = getFullFilePath('/Users/kamil/My Documents/Project', 'sub folder/my file.txt')
-    expect(full).toBe('/Users/kamil/My Documents/Project/sub folder/my file.txt')
+    const full = getFullFilePath('/Users/InTheLoop.pro/My Documents/Project', 'sub folder/my file.txt')
+    expect(full).toBe('/Users/InTheLoop.pro/My Documents/Project/sub folder/my file.txt')
   })
 })

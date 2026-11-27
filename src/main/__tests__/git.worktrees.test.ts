@@ -20,12 +20,12 @@ describe('parseWorktreeListPorcelain', () => {
       'HEAD c49d6f114045efe8cd94b1ea7bec352fa3eeee4b',
       'branch refs/heads/main',
       '',
-      'worktree C:/Users/Kamil/orca/workspaces/.orca-preparing/6900-abc',
+      'worktree C:/Users/InTheLoop.pro/orca/workspaces/.orca-preparing/6900-abc',
       'HEAD ec6587eb9fd00fa71721d287b2516d0dab1de546',
       'detached',
       'locked orca-create-preparation:v1:6900',
       '',
-      'worktree C:/Users/Kamil/temp/old-wt',
+      'worktree C:/Users/InTheLoop.pro/temp/old-wt',
       'HEAD 1111111111111111111111111111111111111111',
       'branch refs/heads/feature/old',
       'locked',
@@ -43,7 +43,7 @@ describe('parseWorktreeListPorcelain', () => {
     });
 
     expect(result[1]).toEqual({
-      path: 'C:/Users/Kamil/orca/workspaces/.orca-preparing/6900-abc',
+      path: 'C:/Users/InTheLoop.pro/orca/workspaces/.orca-preparing/6900-abc',
       branch: '(detached HEAD)',
       hash: 'ec6587eb9fd00fa71721d287b2516d0dab1de546',
       locked: true,
@@ -51,7 +51,7 @@ describe('parseWorktreeListPorcelain', () => {
     });
 
     expect(result[2]).toEqual({
-      path: 'C:/Users/Kamil/temp/old-wt',
+      path: 'C:/Users/InTheLoop.pro/temp/old-wt',
       branch: 'feature/old',
       hash: '1111111111111111111111111111111111111111',
       locked: true,

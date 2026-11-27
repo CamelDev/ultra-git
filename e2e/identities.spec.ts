@@ -166,8 +166,8 @@ test.describe('Git Identities Feature', () => {
             return {
               success: true,
               data: {
-                name: 'Kamil Camel',
-                email: 'kamil@cameldev.com',
+                name: 'InTheLoop.pro',
+                email: 'human@intheloop.pro',
                 username: 'CamelDev',
                 avatarUrl: 'https://avatars.githubusercontent.com/u/123456'
               }
@@ -211,13 +211,13 @@ test.describe('Git Identities Feature', () => {
 
       const connectionCard = page.locator('[data-testid="connected-account-card"]')
       await expect(connectionCard).toBeVisible()
-      await expect(connectionCard).toContainText('Kamil Camel')
+      await expect(connectionCard).toContainText('InTheLoop.pro')
       await expect(connectionCard).toContainText('CamelDev')
 
       // Fields should be pre-filled automatically
       await expect(page.locator('[data-testid="label-input"]')).toHaveValue('Github - CamelDev')
-      await expect(page.locator('[data-testid="name-input"]')).toHaveValue('Kamil Camel')
-      await expect(page.locator('[data-testid="email-input"]')).toHaveValue('kamil@cameldev.com')
+      await expect(page.locator('[data-testid="name-input"]')).toHaveValue('InTheLoop.pro')
+      await expect(page.locator('[data-testid="email-input"]')).toHaveValue('human@intheloop.pro')
 
       // Add profile
       await page.click('button[data-testid="save-profile-btn"]')
@@ -225,7 +225,7 @@ test.describe('Git Identities Feature', () => {
       // Profile should be listed on the left
       const profileRow = page.locator('[data-testid="profile-row-Github - CamelDev"]')
       await expect(profileRow).toBeVisible()
-      await expect(profileRow).toContainText('Kamil Camel')
+      await expect(profileRow).toContainText('InTheLoop.pro')
 
       // Close modal
       await page.click('[data-testid="identities-close-btn"]')
@@ -242,8 +242,8 @@ test.describe('Git Identities Feature', () => {
       let userEmail = await sandbox.git.raw(['config', '--local', 'user.email'])
       let credHelper = await sandbox.git.raw(['config', '--local', 'credential.helper'])
 
-      expect(userName.trim()).toBe('Kamil Camel')
-      expect(userEmail.trim()).toBe('kamil@cameldev.com')
+      expect(userName.trim()).toBe('InTheLoop.pro')
+      expect(userEmail.trim()).toBe('human@intheloop.pro')
       expect(credHelper.trim()).toContain('valid_token')
 
       // 3. Re-open modal and test Edit mode

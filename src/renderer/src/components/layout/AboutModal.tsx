@@ -114,7 +114,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, onCheck
             </div>
             <div className="about-info-card">
               <h4>Author</h4>
-              <p>Kamil Dabrowski</p>
+              <p>InTheLoop.pro</p>
             </div>
           </div>
 

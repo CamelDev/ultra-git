@@ -33,15 +33,15 @@ describe('IdentityDropdown helpers', () => {
       const githubIdentity: Identity = {
         id: 'id-gh',
         label: 'CamelDev',
-        name: 'Kamil D',
-        email: 'kamil@example.com',
+        name: 'InTheLoop.pro',
+        email: 'human@intheloop.pro',
         provider: 'github'
       }
       const display = getIdentityButtonDisplay(githubIdentity)
       expect(display.label).toBe('CamelDev')
       expect(display.acronym).toBe('GH')
       expect(display.formatted).toBe('CamelDev (GH)')
-      expect(display.tooltip).toBe('Identity: CamelDev (Kamil D <kamil@example.com>)')
+      expect(display.tooltip).toBe('Identity: CamelDev (InTheLoop.pro <human@intheloop.pro>)')
     })
 
     it('falls back to identity name when label is blank', () => {

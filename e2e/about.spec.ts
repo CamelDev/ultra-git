@@ -25,7 +25,7 @@ test.describe('About Modal System', () => {
       // Verify text inside About modal
       const appName = aboutModal.locator('.about-app-name');
       await expect(appName).toContainText('UltraGIT');
-      const authorText = aboutModal.locator('.about-info-card >> text=Kamil Dabrowski');
+      const authorText = aboutModal.locator('.about-info-card >> text=InTheLoop.pro');
       await expect(authorText).toBeVisible();
 
       // Close the modal by clicking the Close button in the header

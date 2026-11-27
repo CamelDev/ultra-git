@@ -2,7 +2,7 @@
   "name": "ultra-git",
   "version": "1.2.1",
   "description": "UltraGIT - The ultimate git client",
-  "author": "Kamil",
+  "author": "InTheLoop.pro",
   "main": "./out/main/index.js",
   "scripts": {
     "postinstall": "install-electron",
