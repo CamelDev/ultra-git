@@ -28,8 +28,7 @@ export interface IdentityButtonDisplay {
 }
 
 export function getIdentityButtonDisplay(
-  activeIdentity: Identity | undefined,
-  isRequiredWarning = false
+  activeIdentity: Identity | undefined
 ): IdentityButtonDisplay {
   if (!activeIdentity) {
     const label = 'Default'
@@ -38,9 +37,7 @@ export function getIdentityButtonDisplay(
       label,
       acronym,
       formatted: `${label} (${acronym})`,
-      tooltip: isRequiredWarning
-        ? 'Identity required — select a Git identity'
-        : 'Identity: None (system default)'
+      tooltip: 'Identity: None (system default)'
     }
   }
 
@@ -77,8 +74,7 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
   const activeIdentity = activeIdentityId
     ? identities.find((id) => id.id === activeIdentityId)
     : undefined
-  const isRequiredWarning = !activeIdentity && identities.length > 1
-  const display = getIdentityButtonDisplay(activeIdentity, isRequiredWarning)
+  const display = getIdentityButtonDisplay(activeIdentity)
 
   useEffect(() => {
     if (!isOpen) return
@@ -117,7 +113,7 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
     <div ref={containerRef} className="identity-dropdown-container">
       <button
         type="button"
-        className={`identity-dropdown-trigger${isRequiredWarning ? ' is-warning' : ''}${isOpen ? ' is-open' : ''}`}
+        className={`identity-dropdown-trigger${isOpen ? ' is-open' : ''}`}
         onClick={() => setIsOpen((prev) => !prev)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -126,15 +122,6 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
         data-provider-acronym={display.acronym}
         data-tooltip={display.tooltip}
       >
-        {isRequiredWarning && (
-          <span
-            className="identity-dropdown-warning-dot"
-            data-testid="identity-warning-badge"
-            aria-label="Identity selection required"
-          >
-            *
-          </span>
-        )}
         <span className="identity-dropdown-label" data-testid="repo-identity-label">
           {display.label}
         </span>
@@ -156,7 +143,7 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
         >
           <div className="identity-dropdown-header">
             <span className="identity-dropdown-header-title">
-              Identity{isRequiredWarning ? ' · Required' : ''}
+              Identity
             </span>
             <button
               type="button"

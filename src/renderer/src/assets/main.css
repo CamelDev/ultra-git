@@ -2813,18 +2813,6 @@ mark.diff-search-highlight.active {
   background-color: var(--hover);
 }
 
-.identity-dropdown-trigger.is-warning {
-  border-color: #f59e0b;
-}
-
-.identity-dropdown-warning-dot {
-  color: #f59e0b;
-  font-weight: 700;
-  font-size: 12px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
 .identity-dropdown-label {
   overflow: hidden;
   text-overflow: ellipsis;

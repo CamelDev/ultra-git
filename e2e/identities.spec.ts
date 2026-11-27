@@ -16,14 +16,15 @@ test.describe('Git Identities Feature', () => {
     await sandbox.destroy()
   })
 
-  test('should support creating profiles, auto-assigning single profile, and dropdown selection', async () => {
-    const { app, page } = await launchElectronApp()
-    
+  test('should default new tabs to system credentials (SYS) and support profile selection', async () => {
+    const { app, page } = await launchElectronApp({ disableDefaultTab: true })
+    let secondSandbox: GitSandbox | null = null
+
     try {
       await page.evaluate(() => localStorage.clear())
       await page.reload()
       await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(500)
 
       // Mock openDirectory dialog to load sandbox repo
       await app.evaluate(async ({ ipcMain }, sandboxPath) => {
@@ -38,6 +39,7 @@ test.describe('Git Identities Feature', () => {
 
       // Switch to repo tab
       const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(1)
       await tabs.last().click()
       await page.waitForTimeout(1000)
 
@@ -63,11 +65,18 @@ test.describe('Git Identities Feature', () => {
       await page.click('[data-testid="identities-close-btn"]')
       await page.waitForTimeout(500)
 
-      // 3. Verify single profile auto-assignment
+      // 3. Verify existing tab stays on Default (SYS) when a single profile is added
       const selectDropdown = page.locator('[data-testid="repo-identity-select"]')
       await expect(selectDropdown).toBeVisible()
-      // Since it's the only identity, it should be auto-assigned
-      await expect(selectDropdown).toHaveAttribute('data-selected-identity', /^[a-z0-9]+$/) // should be a random ID string
+      await expect(selectDropdown).toHaveAttribute('data-selected-identity', '')
+      await expect(selectDropdown).toHaveAttribute('data-provider-acronym', 'SYS')
+      await expect(selectDropdown).toContainText('Default')
+      await expect(selectDropdown).toContainText('(SYS)')
+
+      // Select Personal Profile explicitly
+      await selectDropdown.click()
+      await page.locator('[data-identity-label="Personal Profile"]').click()
+      await expect(selectDropdown).toHaveAttribute('data-selected-identity', /^[a-z0-9]+$/)
       await expect(selectDropdown).toContainText('Personal Profile')
       await expect(selectDropdown).toContainText('(GH)')
 
@@ -83,47 +92,68 @@ test.describe('Git Identities Feature', () => {
       await page.click('[data-testid="identities-close-btn"]')
       await page.waitForTimeout(500)
 
-      // 5. Select "None" in the dropdown to trigger the selection required state
+      // 5. Select "None (system default)" in the dropdown — commits must remain allowed without warnings
       await selectDropdown.click()
       await expect(page.locator('[data-testid="repo-identity-menu"]')).toBeVisible()
       await expect(page.locator('[data-testid="log-manage-identities-btn"]')).toBeVisible()
       await page.locator('[data-testid="identity-option-none"]').click()
+      await expect(selectDropdown).toHaveAttribute('data-selected-identity', '')
+      await expect(selectDropdown).toHaveAttribute('data-provider-acronym', 'SYS')
+      await expect(selectDropdown).toContainText('Default')
       await expect(selectDropdown).toContainText('(SYS)')
       
       // Write an unstaged file to trigger rendering of ActiveChanges and Toolbar commit panels
       fs.writeFileSync(path.join(sandbox.dir, 'some-change.txt'), 'some content')
       await page.waitForTimeout(2000) // Wait for FS watcher to refresh status
 
-      // Warning banner and missing warn message should appear
-      const warningBanner = page.locator('[data-testid="identity-required-banner"]')
-      await expect(warningBanner).toBeVisible()
+      // No warning badge, banner, or missing-identity warning should appear
+      await expect(page.locator('[data-testid="identity-warning-badge"]')).not.toBeVisible()
+      await expect(page.locator('[data-testid="identity-required-banner"]')).not.toBeVisible()
+      await expect(page.locator('[data-testid="identity-missing-warning"]')).not.toBeVisible()
 
-      const warningText = page.locator('[data-testid="identity-missing-warning"]')
-      await expect(warningText).toBeVisible()
-      await expect(warningText).toContainText('Select identity in log sync panel')
-
-      // Commit button should be disabled
+      // Commit input and button should remain enabled using system credentials
+      const commitInput = page.locator('[data-testid="commit-message-input"]')
+      await expect(commitInput).toBeEnabled()
+      await commitInput.fill('Commit using sys credentials')
       const commitBtn = page.locator('[data-testid="commit-btn"]')
-      await expect(commitBtn).toBeDisabled()
+      await expect(commitBtn).toBeEnabled()
 
-      // 6. Select "Work Profile" from the dropdown
+      // 6. Open a brand new repo tab while multiple profiles exist — it must default to Default (SYS)
+      secondSandbox = new GitSandbox()
+      await secondSandbox.init()
+      await app.evaluate(async ({ ipcMain }, sandboxPath) => {
+        ipcMain.removeHandler('dialog:openDirectory')
+        ipcMain.handle('dialog:openDirectory', async () => {
+          return { canceled: false, path: sandboxPath }
+        })
+      }, secondSandbox.dir)
+
+      const tabCountBefore = await tabs.count()
+      await addRepoViaUI(page)
+      await expect(tabs).toHaveCount(tabCountBefore + 1)
+      await tabs.last().click()
+      await page.waitForTimeout(500)
+
+      await expect(selectDropdown).toHaveAttribute('data-selected-identity', '')
+      await expect(selectDropdown).toHaveAttribute('data-provider-acronym', 'SYS')
+      await expect(selectDropdown).toContainText('Default')
+      await expect(selectDropdown).toContainText('(SYS)')
+      await expect(page.locator('[data-testid="identity-warning-badge"]')).not.toBeVisible()
+
+      // 7. Select "Work Profile" from the dropdown on the new tab
       await selectDropdown.click()
       await page.locator('[data-identity-label="Work Profile"]').click()
       await page.waitForTimeout(500)
-
-      // Warning banner and text should disappear
-      await expect(warningBanner).not.toBeVisible()
-      await expect(warningText).not.toBeVisible()
       await expect(selectDropdown).toContainText('Work Profile')
 
-      // 7. Clicking the cog button at the top of the identity dropdown opens the Identities modal
+      // 8. Clicking the cog button at the top of the identity dropdown opens the Identities modal
       await selectDropdown.click()
       await page.locator('[data-testid="log-manage-identities-btn"]').click()
       await expect(page.locator('[data-testid="identities-close-btn"]')).toBeVisible()
       await page.click('[data-testid="identities-close-btn"]')
 
-      // 8. Verify identity dropdown stays pinned to the right edge of the sync toolbar when narrow
-      await page.setViewportSize({ width: 720, height: 700 })
+      // 9. Verify identity dropdown stays pinned to the right edge of the sync toolbar when narrow
+      await page.setViewportSize({ width: 1080, height: 700 })
       await page.waitForTimeout(200)
       await expect(selectDropdown).toBeVisible()
       const panelBox = await page.locator('[data-testid="sync-actions-panel"]').boundingBox()
@@ -137,11 +167,14 @@ test.describe('Git Identities Feature', () => {
 
     } finally {
       await app.close()
+      if (secondSandbox) {
+        await secondSandbox.destroy()
+      }
     }
   })
 
   test('should support Git provider token connection, editing profiles, and setting credentials.helper', async () => {
-    const { app, page } = await launchElectronApp()
+    const { app, page } = await launchElectronApp({ disableDefaultTab: true })
     page.on('console', msg => console.log('BROWSER LOG:', msg.text()))
     app.process().stdout?.on('data', data => console.log('MAIN PROCESS STDOUT:', data.toString()))
     app.process().stderr?.on('data', data => console.log('MAIN PROCESS STDERR:', data.toString()))
@@ -150,7 +183,7 @@ test.describe('Git Identities Feature', () => {
       await page.evaluate(() => localStorage.clear())
       await page.reload()
       await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(500)
 
       // Mock openDirectory dialog to load sandbox repo
       await app.evaluate(async ({ ipcMain }, sandboxPath) => {
@@ -182,6 +215,7 @@ test.describe('Git Identities Feature', () => {
 
       // Switch to repo tab
       const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(1)
       await tabs.last().click()
       await page.waitForTimeout(1000)
 
@@ -231,9 +265,19 @@ test.describe('Git Identities Feature', () => {
       await page.click('[data-testid="identities-close-btn"]')
       await page.waitForTimeout(500)
 
-      // Since it is the only profile, verify auto-assignment & config updates
+      // Verify dropdown stays on Default (SYS) and local credential.helper is NOT set until selected
       const selectDropdown = page.locator('[data-testid="repo-identity-select"]')
       await expect(selectDropdown).toBeVisible()
+      await expect(selectDropdown).toHaveAttribute('data-selected-identity', '')
+      await expect(selectDropdown).toHaveAttribute('data-provider-acronym', 'SYS')
+      const initialCredHelper = await sandbox.git.raw(['config', '--local', 'credential.helper']).catch(() => '')
+      expect(initialCredHelper.trim()).toBe('')
+
+      // Select Github - CamelDev explicitly from the dropdown
+      await selectDropdown.click()
+      await page.locator('[data-identity-label="Github - CamelDev"]').click()
+      await page.waitForTimeout(500)
+
       await expect(selectDropdown).toHaveAttribute('data-selected-identity', /^[a-z0-9]+$/)
       await expect(selectDropdown).toHaveAttribute('data-provider-acronym', 'GH')
 
@@ -312,7 +356,7 @@ test.describe('Git Identities Feature', () => {
   })
 
   test('should support Bitbucket token connection requiring email and configuring credential.helper with dynamic username', async () => {
-    const { app, page } = await launchElectronApp()
+    const { app, page } = await launchElectronApp({ disableDefaultTab: true })
     page.on('console', msg => console.log('BROWSER LOG:', msg.text()))
     app.process().stdout?.on('data', data => console.log('MAIN PROCESS STDOUT:', data.toString()))
     app.process().stderr?.on('data', data => console.log('MAIN PROCESS STDERR:', data.toString()))
@@ -321,7 +365,7 @@ test.describe('Git Identities Feature', () => {
       await page.evaluate(() => localStorage.clear())
       await page.reload()
       await page.waitForLoadState('domcontentloaded')
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(500)
 
       // Mock openDirectory dialog to load sandbox repo
       await app.evaluate(async ({ ipcMain }, sandboxPath) => {
@@ -358,6 +402,7 @@ test.describe('Git Identities Feature', () => {
 
       // Switch to repo tab
       const tabs = page.locator('[data-testid="repo-tab"]')
+      await expect(tabs).toHaveCount(1)
       await tabs.last().click()
       await page.waitForTimeout(1000)
 
@@ -406,9 +451,16 @@ test.describe('Git Identities Feature', () => {
       await page.click('[data-testid="identities-close-btn"]')
       await page.waitForTimeout(500)
 
-      // Since it is the only profile, verify auto-assignment & config updates
+      // Verify dropdown stays on Default (SYS), then select Bitbucket - bb_camel explicitly
       const selectDropdown = page.locator('[data-testid="repo-identity-select"]')
       await expect(selectDropdown).toBeVisible()
+      await expect(selectDropdown).toHaveAttribute('data-selected-identity', '')
+      await expect(selectDropdown).toHaveAttribute('data-provider-acronym', 'SYS')
+
+      await selectDropdown.click()
+      await page.locator('[data-identity-label="Bitbucket - bb_camel"]').click()
+      await page.waitForTimeout(500)
+
       await expect(selectDropdown).toHaveAttribute('data-selected-identity', /^[a-z0-9]+$/)
       await expect(selectDropdown).toHaveAttribute('data-provider-acronym', 'BB')
 

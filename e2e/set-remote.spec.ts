@@ -285,8 +285,11 @@ test.describe('Set Remote on Push', () => {
 
       // Select identity in UI toolbar
       console.log('5.1. Selecting seeded identity from selector...')
-      const select = page.locator('.sync-actions-panel select')
-      await select.selectOption('mock-identity-github')
+      const identitySelect = page.locator('[data-testid="repo-identity-select"]')
+      await expect(identitySelect).toBeVisible()
+      await identitySelect.click()
+      await page.locator('[data-testid="identity-option-mock-identity-github"]').click()
+      await expect(identitySelect).toHaveAttribute('data-selected-identity', 'mock-identity-github')
       await page.waitForTimeout(500)
 
       // Add a commit locally to have something to push

@@ -523,26 +523,14 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     const repoIdentities = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('repo-identities') || '{}') : {};
     const globalIdList = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [];
+    const knownIdentities: Identity[] = get().identities.length > 0 ? get().identities : globalIdList;
     const repoCustomizations = getRepoCustomizations();
     const normalized = normalizePath(resolvedPath);
     const customData = repoCustomizations[normalized] || {};
-    let identityId = repoIdentities[normalized];
-
-    if (!identityId && globalIdList.length === 1) {
-      identityId = globalIdList[0].id;
-      repoIdentities[normalized] = identityId;
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('repo-identities', JSON.stringify(repoIdentities));
-      }
-      window.api.git.setRepositoryIdentity(resolvedPath, {
-        name: globalIdList[0].name,
-        email: globalIdList[0].email,
-        sshKeyPath: globalIdList[0].sshKeyPath,
-        personalAccessToken: globalIdList[0].personalAccessToken,
-        username: globalIdList[0].username,
-        provider: globalIdList[0].provider
-      }).catch(console.error);
-    }
+    const savedIdentityId: string | undefined = repoIdentities[normalized];
+    const identityId = savedIdentityId && knownIdentities.some(i => i.id === savedIdentityId)
+      ? savedIdentityId
+      : undefined;
 
     const newRepo: Repository = {
       id,
@@ -649,6 +637,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     const repoIdentities = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('repo-identities') || '{}') : {};
     const globalIdList = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('global-identities') || '[]') : [];
+    const knownIdentities: Identity[] = get().identities.length > 0 ? get().identities : globalIdList;
     const repoCustomizations = getRepoCustomizations();
 
     // Build Repository objects
@@ -666,23 +655,10 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       const id = Math.random().toString(36).substring(7);
       const normalized = normalizePath(p);
       const customData = repoCustomizations[normalized] || {};
-      let identityId = repoIdentities[normalized];
-
-      if (!identityId && globalIdList.length === 1) {
-        identityId = globalIdList[0].id;
-        repoIdentities[normalized] = identityId;
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem('repo-identities', JSON.stringify(repoIdentities));
-        }
-        window.api.git.setRepositoryIdentity(p, {
-          name: globalIdList[0].name,
-          email: globalIdList[0].email,
-          sshKeyPath: globalIdList[0].sshKeyPath,
-          personalAccessToken: globalIdList[0].personalAccessToken,
-          username: globalIdList[0].username,
-          provider: globalIdList[0].provider
-        }).catch(console.error);
-      }
+      const savedIdentityId: string | undefined = repoIdentities[normalized];
+      const identityId = savedIdentityId && knownIdentities.some(i => i.id === savedIdentityId)
+        ? savedIdentityId
+        : undefined;
 
       return {
         id,
@@ -970,14 +946,6 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     set({ identities: updated });
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('global-identities', JSON.stringify(updated));
-    }
-
-    // If this is the only identity, auto-assign it to all open repositories!
-    if (updated.length === 1) {
-      const repos = get().repositories;
-      for (const r of repos) {
-        get().setRepoIdentity(r.id, id);
-      }
     }
   },
 

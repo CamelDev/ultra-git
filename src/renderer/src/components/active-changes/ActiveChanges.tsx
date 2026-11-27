@@ -231,7 +231,7 @@ export const ActiveChanges: React.FC<ActiveChangesProps> = ({
   initialUnstagedViewMode,
   initialStagedViewMode
 }) => {
-  const { getActiveRepo, refreshRepo, identities } = useRepoStore()
+  const { getActiveRepo, refreshRepo } = useRepoStore()
   const { addToast } = useToaster()
   const activeRepo = getActiveRepo()
 
@@ -683,8 +683,6 @@ export const ActiveChanges: React.FC<ActiveChangesProps> = ({
       : Math.max(0, unstagedFiles.findIndex((f) => f.path === selectedFileForDiff.path))
   }, [selectedFileForDiff, stagedFiles, unstagedFiles])
 
-  const isIdentityRequiredAndMissing = !!(activeRepo && identities.length > 1 && !activeRepo.identityId)
-
   const discardMessage = discardTarget
     ? discardTarget.filePaths.length === 1
       ? `Are you sure you want to discard changes in "${discardTarget.filePaths[0]}"? This operation cannot be undone.`
@@ -697,28 +695,6 @@ export const ActiveChanges: React.FC<ActiveChangesProps> = ({
 
   return (
     <div className="active-changes-panel" data-testid="active-changes-panel">
-      {isIdentityRequiredAndMissing && (
-        <div 
-          className="pull-conflict-banner" 
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 16px',
-            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-            borderBottom: '1px solid rgba(245, 158, 11, 0.2)',
-            fontSize: '12px',
-            color: '#f59e0b',
-            fontWeight: 500,
-            boxSizing: 'border-box'
-          }}
-          data-testid="identity-required-banner"
-        >
-          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-          <span>Multiple Git identities configured. Please select the identity profile you wish to use for this repository from the Sync Panel dropdown above.</span>
-        </div>
-      )}
-
       <div className="active-changes-columns">
         {/* Unstaged (Changed files) column */}
         <div className="active-changes-column unstaged-column">

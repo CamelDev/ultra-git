@@ -18,7 +18,7 @@ interface ToolbarProps {
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResolver, onConflictOperation, changesViewMode, onToggleChangesViewMode }) => {
-  const { getActiveRepo, refreshRepo, identities, setRepoCommitMessage } = useRepoStore()
+  const { getActiveRepo, refreshRepo, setRepoCommitMessage } = useRepoStore()
   const {
     restoredCommitMessage,
     clearRestoredCommitMessage,
@@ -51,7 +51,6 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResol
   const conflictedFiles = (activeRepo?.status?.conflicted || []) as any[]
   const hasConflicts = conflictedFiles.length > 0
 
-  const isIdentityRequiredAndMissing = !!(activeRepo && identities.length > 1 && !activeRepo.identityId)
   const mainWtPath = activeRepo?.worktrees?.[0]?.path;
   const isCurrentRepoWorktree = mainWtPath ? normalizePath(activeRepo.path) !== normalizePath(mainWtPath) : false;
 
@@ -623,14 +622,6 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResol
                 </button>
 
                 <div className="commit-section" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  {isIdentityRequiredAndMissing && (
-                    <span 
-                      style={{ color: '#f59e0b', fontSize: '11px', fontWeight: 600, marginRight: '8px' }}
-                      data-testid="identity-missing-warning"
-                    >
-                      Select identity in log sync panel
-                    </span>
-                  )}
                   <input
                     type="text"
                     className="commit-input"
@@ -643,23 +634,17 @@ const Toolbar: React.FC<ToolbarProps> = ({ onMergeConflicts, onOpenConflictResol
                         handleCommit()
                       }
                     }}
-                    disabled={isIdentityRequiredAndMissing}
-                    style={{
-                      opacity: isIdentityRequiredAndMissing ? 0.6 : 1,
-                      cursor: isIdentityRequiredAndMissing ? 'not-allowed' : 'text'
-                    }}
                     data-testid="commit-message-input"
                   />
                   <button
                     className="btn-primary"
                     onClick={handleCommit}
-                    disabled={commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing}
+                    disabled={commitMessage.trim().length <= 2}
                     style={{ 
-                      opacity: (commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing) ? 0.5 : 1, 
-                      cursor: (commitMessage.trim().length <= 2 || isIdentityRequiredAndMissing) ? 'not-allowed' : 'pointer' 
+                      opacity: commitMessage.trim().length <= 2 ? 0.5 : 1, 
+                      cursor: commitMessage.trim().length <= 2 ? 'not-allowed' : 'pointer' 
                     }}
                     data-testid="commit-btn"
-                    data-tooltip={isIdentityRequiredAndMissing ? "Please select a Git identity to enable committing" : undefined}
                   >
                     Commit
                   </button>

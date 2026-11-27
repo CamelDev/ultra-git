@@ -475,3 +475,123 @@ describe('background conflict observation', () => {
     expect(useRepoStore.getState().getConflictSession(repoId)).toBe(session)
   })
 })
+
+describe('useRepoStore identity defaults', () => {
+  beforeEach(() => {
+    mockLocalStorage.clear();
+    useRepoStore.setState({ repositories: [], activeId: null, identities: [], conflictSessions: {} });
+    mockApi.git.setRepositoryIdentity.mockClear();
+  });
+
+  it('keeps open tabs on system credentials when adding the first identity', async () => {
+    const { addRepo, addIdentity } = useRepoStore.getState();
+    await addRepo('/repo-open-first');
+
+    addIdentity({
+      label: 'Personal Profile',
+      name: 'Jane Personal',
+      email: 'jane@example.com',
+      provider: 'github'
+    });
+
+    const state = useRepoStore.getState();
+    expect(state.identities).toHaveLength(1);
+    expect(state.repositories[0].identityId).toBeUndefined();
+    expect(mockApi.git.setRepositoryIdentity).not.toHaveBeenCalled();
+    expect(localStore['repo-identities']).toBeUndefined();
+  });
+
+  it('defaults new tabs to system credentials regardless of how many identities exist', async () => {
+    const { addIdentity, addRepo } = useRepoStore.getState();
+    addIdentity({
+      label: 'Personal Profile',
+      name: 'Jane Personal',
+      email: 'jane@example.com',
+      provider: 'github'
+    });
+
+    await addRepo('/repo-one-identity');
+    expect(useRepoStore.getState().repositories[0].identityId).toBeUndefined();
+
+    addIdentity({
+      label: 'Work Profile',
+      name: 'Jane Work',
+      email: 'jane@work.com',
+      provider: 'gitlab'
+    });
+
+    await addRepo('/repo-two-identities');
+    expect(useRepoStore.getState().repositories[1].identityId).toBeUndefined();
+    expect(mockApi.git.setRepositoryIdentity).not.toHaveBeenCalled();
+    expect(localStore['repo-identities']).toBeUndefined();
+  });
+
+  it('defaults unmapped repos on initializeRepos, restores valid mappings, and drops stale mappings', async () => {
+    const validIdentity = {
+      id: 'id-valid',
+      label: 'Valid Profile',
+      name: 'Valid User',
+      email: 'valid@example.com',
+      provider: 'github' as const
+    };
+    localStore['global-identities'] = JSON.stringify([validIdentity]);
+    localStore['repo-identities'] = JSON.stringify({
+      '/repo-mapped': 'id-valid',
+      '/repo-stale': 'id-deleted'
+    });
+    useRepoStore.setState({ identities: [validIdentity] });
+
+    await useRepoStore.getState().initializeRepos(
+      ['/repo-unmapped', '/repo-mapped', '/repo-stale'],
+      '/repo-unmapped'
+    );
+
+    const repos = useRepoStore.getState().repositories;
+    expect(repos.find(r => r.path === '/repo-unmapped')?.identityId).toBeUndefined();
+    expect(repos.find(r => r.path === '/repo-mapped')?.identityId).toBe('id-valid');
+    expect(repos.find(r => r.path === '/repo-stale')?.identityId).toBeUndefined();
+    expect(mockApi.git.setRepositoryIdentity).not.toHaveBeenCalled();
+  });
+
+  it('persists explicit setRepoIdentity selection and clears it back to system default', async () => {
+    const identity = {
+      id: 'id-work',
+      label: 'Work Profile',
+      name: 'Jane Work',
+      email: 'jane@work.com',
+      provider: 'bitbucket' as const,
+      username: 'jwork',
+      personalAccessToken: 'tok-123'
+    };
+    localStore['global-identities'] = JSON.stringify([identity]);
+    useRepoStore.setState({ identities: [identity] });
+
+    await useRepoStore.getState().addRepo('/repo-explicit');
+    const repoId = useRepoStore.getState().repositories[0].id;
+    expect(useRepoStore.getState().repositories[0].identityId).toBeUndefined();
+
+    await useRepoStore.getState().setRepoIdentity(repoId, 'id-work');
+    expect(useRepoStore.getState().repositories[0].identityId).toBe('id-work');
+    expect(JSON.parse(localStore['repo-identities'])).toEqual({ '/repo-explicit': 'id-work' });
+    expect(mockApi.git.setRepositoryIdentity).toHaveBeenCalledWith('/repo-explicit', {
+      name: 'Jane Work',
+      email: 'jane@work.com',
+      sshKeyPath: undefined,
+      personalAccessToken: 'tok-123',
+      username: 'jwork',
+      provider: 'bitbucket'
+    });
+
+    await useRepoStore.getState().setRepoIdentity(repoId, undefined);
+    expect(useRepoStore.getState().repositories[0].identityId).toBeUndefined();
+    expect(JSON.parse(localStore['repo-identities'])).toEqual({});
+    expect(mockApi.git.setRepositoryIdentity).toHaveBeenLastCalledWith('/repo-explicit', {
+      name: '',
+      email: '',
+      sshKeyPath: undefined,
+      personalAccessToken: undefined,
+      username: undefined,
+      provider: undefined
+    });
+  });
+});

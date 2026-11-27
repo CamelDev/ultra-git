@@ -23,12 +23,6 @@ describe('IdentityDropdown helpers', () => {
       expect(display.tooltip).toBe('Identity: None (system default)')
     })
 
-    it('shows required warning tooltip when no identity is active and required', () => {
-      const display = getIdentityButtonDisplay(undefined, true)
-      expect(display.formatted).toBe('Default (SYS)')
-      expect(display.tooltip).toContain('Identity required')
-    })
-
     it('formats active identity with provider acronym and rich tooltip', () => {
       const githubIdentity: Identity = {
         id: 'id-gh',
